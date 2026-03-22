@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Firms</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" />
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+  <!-- Common Styles -->
+  <link rel="stylesheet" href="admin-common.css" />
+
+  <!-- Page-specific overrides: firms.html (indigo-purple theme) -->
+  <style>
+    :root {
+      --grad-from:       #4f46e5;
+      --grad-to:         #7c3aed;
+      --accent:          #4f46e5;
+      --accent-focus:    rgba(79, 70, 229, 0.10);
+      --accent-btn-glow: rgba(79, 70, 229, 0.30);
+    }
+    html, body { background: #f8fafc; }
+
+    /* Excel-style Column Filter Panel */
+    .dt-filter-icon {
+      cursor: pointer;
+      margin-left: 8px;
+      color: #64748b;
+      font-size: 12px;
+      opacity: 0.75;
+      transition: all 0.15s;
+    }
+    .dt-filter-icon:hover {
+      color: #4f46e5;
+      opacity: 1;
+      transform: scale(1.1);
+    }
+    #dtColumnFilterPanel {
+      position: absolute;
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      z-index: 9999;
+      width: 260px;
+      padding: 14px;
+      display: none;
+      font-size: 12px;
+    }
+    #dtColumnFilterPanel input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    #filterList {
+      max-height: 260px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 6px;
+      background: #f8fafc;
+    }
+    #filterList label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      margin: 2px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    #filterList label:hover {
+      background: #f1f5f9;
+    }
+    #filterList input[type="checkbox"] {
+      accent-color: #4f46e5;
+      width: 16px;
+      height: 16px;
+    }
+    #dtColumnFilterPanel .panel-footer button {
+      flex: 1;
+      padding: 7px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+  </style>
+</head>
+<body>
+
+<div style="padding:12px;">
+<div style="width:100%;">
+
+  <!-- Card -->
+  <div style="background:white; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.08); overflow:hidden;">
+
+    <!-- Header -->
+    <div style="padding:14px 20px; background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h2 style="margin:0; font-size:18px; font-weight:700; display:flex; gap:8px; align-items:center;">
+          <i class="fas fa-building"></i> Firms Directory
+        </h2>
+        <p style="margin:3px 0 0; font-size:11px; opacity:0.9;">Full CRUD &middot; DataTables &middot; Exports &middot; Column toggle &middot; Bulk delete</p>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button id="refreshBtn" style="display:flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(255,255,255,0.18);border:none;color:white;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          <i id="refreshIcon" class="fas fa-sync-alt"></i> Refresh
+        </button>
+        <button onclick="openCreateModal()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(255,255,255,0.9);border:none;color:#4f46e5;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;">
+          <i class="fas fa-plus"></i> New Firm
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div style="padding:8px 20px; background:linear-gradient(to right,#eef2ff,#f0f9ff); border-bottom:1px solid #e5e7eb; display:flex; gap:20px; flex-wrap:wrap; font-size:12px; align-items:center;">
+      <span><i class="fas fa-layer-group" style="color:#4f46e5;margin-right:5px;"></i>Total: <strong id="s-total" style="color:#4f46e5;">0</strong></span>
+      <span><i class="fas fa-check-circle" style="color:#10b981;margin-right:5px;"></i>Approved: <strong id="s-approved" style="color:#10b981;">0</strong></span>
+      <span><i class="fas fa-clock" style="color:#f59e0b;margin-right:5px;"></i>Pending: <strong id="s-pending" style="color:#f59e0b;">0</strong></span>
+      <span><i class="fas fa-ban" style="color:#ef4444;margin-right:5px;"></i>Rejected: <strong id="s-rejected" style="color:#ef4444;">0</strong></span>
+      <span id="s-filter-wrap" style="display:none;"><i class="fas fa-filter" style="color:#6366f1;margin-right:5px;"></i>Filtered: <strong id="s-filtered" style="color:#6366f1;">0</strong></span>
+    </div>
+
+    <!-- Toolbar -->
+    <div style="padding:10px 14px; background:#f9fafb; border-bottom:1px solid #e5e7eb; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="gSearch" placeholder="🔍  Search any field..."
+        style="flex:1;min-width:200px;padding:6px 11px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;outline:none;" />
+      <select id="statusFilter" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;background:white;color:#374151;outline:none;">
+        <option value="">All Status</option>
+        <option value="approved">Approved</option>
+        <option value="pending">Pending</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <div style="position:relative;" id="cvWrap">
+        <button id="cvBtn" style="display:flex;align-items:center;gap:5px;padding:6px 11px;border:1px solid #c7d2fe;border-radius:7px;background:#eef2ff;color:#4338ca;font-size:12px;font-weight:600;cursor:pointer;">
+          <i class="fas fa-columns"></i> Columns
+        </button>
+        <div id="cvMenu" style="display:none;position:absolute;right:0;top:calc(100%+4px);width:170px;background:white;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.1);z-index:200;padding:6px 0;font-size:12px;"></div>
+      </div>
+    </div>
+
+    <!-- Bulk bar -->
+    <div id="bulkBar" style="display:none;padding:9px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;font-size:12px;font-weight:600;align-items:center;gap:10px;">
+      <i class="fas fa-check-square"></i>
+      <span id="bulkCount">0</span> selected
+      <button onclick="bulkDeleteSelected()" style="padding:4px 11px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;background:rgba(239,68,68,0.25);color:white;border:1px solid rgba(239,68,68,0.5);">
+        <i class="fas fa-trash" style="margin-right:4px;"></i>Delete Selected
+      </button>
+      <button onclick="clearSelection()" style="margin-left:auto;padding:4px 11px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3);">
+        <i class="fas fa-times" style="margin-right:4px;"></i>Clear
+      </button>
+    </div>
+
+    <!-- Export row -->
+    <div style="padding:7px 14px; border-bottom:1px solid #f0f0f0; display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
+      <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-right:2px;">Export:</span>
+      <button onclick="exportToCSV()"   class="abtn abtn-view"><i class="fas fa-file-csv" style="margin-right:3px;"></i>CSV</button>
+      <button onclick="exportToExcel()" class="abtn abtn-edit"><i class="fas fa-file-excel" style="margin-right:3px;"></i>Excel</button>
+      <button onclick="exportToPDF()"   class="abtn abtn-del"><i class="fas fa-file-pdf" style="margin-right:3px;"></i>PDF</button>
+      <button onclick="exportToPrint()" class="abtn" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-print" style="margin-right:3px;"></i>Print</button>
+    </div>
+
+    <!-- DataTable -->
+    <div style="overflow-x:auto;">
+      <table id="firmsTable" style="width:100%;">
+        <thead>
+          <tr>
+            <th></th><th>#</th><th>Firm Name</th><th>Code</th><th>City</th><th>State</th>
+            <th>Phone</th><th>Email</th><th>GST No.</th><th>PAN No.</th>
+            <th>Business Type</th><th>Status</th><th>Registered</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- DT Footer -->
+    <div style="padding:10px 14px; background:#f9fafb; border-top:1px solid #e5e7eb; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
+      <div id="ft-length"></div>
+      <div id="ft-info" style="font-size:12px;color:#9ca3af;"></div>
+      <div id="ft-pages"></div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CREATE / EDIT MODAL (shared form, tabbed)
+══════════════════════════════════════════════ -->
+<div id="crudModal" class="modal">
+  <div class="mc mc-xl">
+    <div class="mh mh-primary" id="crudModalHeader">
+      <h2 id="crudModalTitle"><i class="fas fa-building"></i> Create Firm</h2>
+      <button class="mclose" onclick="closeModal('crudModal')"><i class="fas fa-times"></i></button>
+    </div>
+
+    <!-- Modal tabs -->
+    <div class="mtab-nav" id="modalTabNav">
+      <button class="mtab-btn active" onclick="switchModalTab('basic')">Basic Info</button>
+      <button class="mtab-btn" onclick="switchModalTab('location')">Location &amp; Contact</button>
+      <button class="mtab-btn" onclick="switchModalTab('compliance')">Compliance</button>
+      <button class="mtab-btn" onclick="switchModalTab('financial')">Financial &amp; Settings</button>
+      <button class="mtab-btn" id="adminTabBtn" onclick="switchModalTab('admin')" style="display:none;">Admin Account</button>
+    </div>
+
+    <form id="crudForm">
+      <div style="padding:18px 20px; max-height:60vh; overflow-y:auto;">
+
+        <!-- ── BASIC INFO ── -->
+        <div id="tab-basic">
+          <div class="fg">
+            <div class="fi">
+              <label>Firm Name <span class="req">*</span></label>
+              <input id="f_name" type="text" required placeholder="e.g. Acme Pvt Ltd" />
+            </div>
+            <div class="fi">
+              <label>Legal Name</label>
+              <input id="f_legal_name" type="text" placeholder="Full legal entity name" />
+            </div>
+
+            <!-- GST Number with Fetch — on Tab 1 for easy access.
+                 Fetch button sends FETCH_GST to parent (zero iframe API call).
+                 Parent calls /api/inventory/sales/lookup-gst and returns GST_DATA. -->
+            <div class="fi full">
+              <label>
+                GST Number
+                <span style="font-size:10px;font-weight:400;color:#6b7280;margin-left:6px;">
+                  — enter &amp; click Fetch to auto-fill fields
+                </span>
+              </label>
+              <div style="display:flex;gap:8px;align-items:stretch;">
+                <input id="f_gst_number" type="text" placeholder="22AAAAA0000A1Z5"
+                  style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;text-transform:uppercase;letter-spacing:0.5px;"
+                  oninput="this.value=this.value.toUpperCase()"
+                  onfocus="this.style.borderColor='#4f46e5';this.style.boxShadow='0 0 0 3px rgba(79,70,229,0.1)'"
+                  onblur="this.style.borderColor='#d1d5db';this.style.boxShadow=''" />
+                <button type="button" id="gstFetchBtn" onclick="triggerGstFetch()"
+                  style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity 0.15s;">
+                  <i id="gstFetchIcon" class="fas fa-search"></i>
+                  <span id="gstFetchLabel">Fetch Details</span>
+                </button>
+              </div>
+              <!-- Status feedback line -->
+              <div id="gstFetchStatus" style="display:none;margin-top:5px;font-size:11px;padding:6px 10px;border-radius:5px;"></div>
+            </div>
+
+            <div class="fi">
+              <label>Code</label>
+              <input id="f_code" type="text" placeholder="e.g. ACME" />
+            </div>
+            <div class="fi">
+              <label>Status</label>
+              <select id="f_status">
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="fi">
+              <label>Business Type</label>
+              <input id="f_business_type" type="text" placeholder="e.g. Retail, Manufacturing" />
+            </div>
+            <div class="fi">
+              <label>Industry Type</label>
+              <input id="f_industry_type" type="text" placeholder="e.g. Healthcare, IT" />
+            </div>
+            <div class="fi">
+              <label>Establishment Year</label>
+              <input id="f_establishment_year" type="number" placeholder="e.g. 2005" min="1800" max="2099" />
+            </div>
+            <div class="fi">
+              <label>Employee Count</label>
+              <input id="f_employee_count" type="number" placeholder="e.g. 50" min="0" />
+            </div>
+            <div class="fi full">
+              <label>Description</label>
+              <textarea id="f_description" placeholder="Brief description of the firm"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── LOCATION & CONTACT ── -->
+        <div id="tab-location" style="display:none;">
+          <div class="fg" style="margin-bottom:14px;">
+            <div class="fi full">
+              <label>Address</label>
+              <textarea id="f_address" placeholder="Street address, building number"></textarea>
+            </div>
+            <div class="fi">
+              <label>City</label>
+              <input id="f_city" type="text" placeholder="City" />
+            </div>
+            <div class="fi">
+              <label>State</label>
+              <input id="f_state" type="text" placeholder="State / Province" />
+            </div>
+            <div class="fi">
+              <label>Country</label>
+              <input id="f_country" type="text" placeholder="Country" />
+            </div>
+            <div class="fi">
+              <label>Pincode</label>
+              <input id="f_pincode" type="text" placeholder="PIN / ZIP code" />
+            </div>
+          </div>
+          <hr style="margin:12px 0;border-color:#f0f0f0;">
+          <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Contact</p>
+          <div class="fg">
+            <div class="fi">
+              <label>Primary Phone</label>
+              <input id="f_phone_number" type="text" placeholder="+91 XXXXX XXXXX" />
+            </div>
+            <div class="fi">
+              <label>Secondary Phone</label>
+              <input id="f_secondary_phone" type="text" placeholder="+91 XXXXX XXXXX" />
+            </div>
+            <div class="fi">
+              <label>Email</label>
+              <input id="f_email" type="email" placeholder="firm@example.com" />
+            </div>
+            <div class="fi">
+              <label>Website</label>
+              <input id="f_website" type="text" placeholder="https://example.com" />
+            </div>
+          </div>
+        </div>
+
+        <!-- ── COMPLIANCE ── -->
+        <div id="tab-compliance" style="display:none;">
+          <div class="fg">
+            <div class="fi">
+              <label>GST Number</label>
+              <input id="f_gst_number_ref" type="text" readonly
+                style="background:#f9fafb;color:#6b7280;cursor:not-allowed;"
+                placeholder="Set on Basic Info tab" />
+            </div>
+            <div class="fi">
+              <label>PAN Number
+                <span style="font-size:10px;font-weight:400;color:#6b7280;"> — auto-filled from GST</span>
+              </label>
+              <input id="f_pan_number" type="text" placeholder="ABCDE1234F" />
+            </div>
+            <div class="fi">
+              <label>CIN Number</label>
+              <input id="f_cin_number" type="text" placeholder="U12345MH2005PTC123456" />
+            </div>
+            <div class="fi">
+              <label>Registration Number</label>
+              <input id="f_registration_number" type="text" placeholder="Reg. number" />
+            </div>
+            <div class="fi">
+              <label>Registration Date</label>
+              <input id="f_registration_date" type="date" />
+            </div>
+            <div class="fi">
+              <label>Tax ID</label>
+              <input id="f_tax_id" type="text" placeholder="Tax identification" />
+            </div>
+            <div class="fi">
+              <label>VAT Number</label>
+              <input id="f_vat_number" type="text" placeholder="VAT registration" />
+            </div>
+            <div class="fi full">
+              <label>License Numbers</label>
+              <input id="f_license_numbers" type="text" placeholder="Trade / operating license numbers" />
+            </div>
+            <div class="fi full">
+              <label>Insurance Details</label>
+              <textarea id="f_insurance_details" placeholder="Insurance policy details"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── FINANCIAL & SETTINGS ── -->
+        <div id="tab-financial" style="display:none;">
+          <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Banking</p>
+          <div class="fg" style="margin-bottom:14px;">
+            <div class="fi">
+              <label>Bank Account Number</label>
+              <input id="f_bank_account_number" type="text" placeholder="Account number" />
+            </div>
+            <div class="fi">
+              <label>Bank Name</label>
+              <input id="f_bank_name" type="text" placeholder="Bank name" />
+            </div>
+            <div class="fi">
+              <label>Bank Branch</label>
+              <input id="f_bank_branch" type="text" placeholder="Branch name" />
+            </div>
+            <div class="fi">
+              <label>IFSC Code</label>
+              <input id="f_ifsc_code" type="text" placeholder="IFSC" />
+            </div>
+            <div class="fi full">
+              <label>Payment Terms</label>
+              <input id="f_payment_terms" type="text" placeholder="e.g. Net 30" />
+            </div>
+          </div>
+          <hr style="margin:12px 0;border-color:#f0f0f0;">
+          <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Settings</p>
+          <div class="fg">
+            <div class="fi">
+              <label>Currency</label>
+              <select id="f_currency">
+                <option value="INR">INR — Indian Rupee</option>
+                <option value="USD">USD — US Dollar</option>
+                <option value="EUR">EUR — Euro</option>
+                <option value="GBP">GBP — British Pound</option>
+              </select>
+            </div>
+            <div class="fi">
+              <label>Timezone</label>
+              <select id="f_timezone">
+                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                <option value="UTC">UTC</option>
+                <option value="America/New_York">America/New_York</option>
+                <option value="Europe/London">Europe/London</option>
+              </select>
+            </div>
+            <div class="fi">
+              <label>Fiscal Year Start</label>
+              <input id="f_fiscal_year_start" type="text" placeholder="e.g. 01-04" />
+            </div>
+            <div class="fi">
+              <label>Invoice Prefix</label>
+              <input id="f_invoice_prefix" type="text" placeholder="e.g. INV-" />
+            </div>
+            <div class="fi">
+              <label>Quote Prefix</label>
+              <input id="f_quote_prefix" type="text" placeholder="e.g. QT-" />
+            </div>
+            <div class="fi">
+              <label>PO Prefix</label>
+              <input id="f_po_prefix" type="text" placeholder="e.g. PO-" />
+            </div>
+            <div class="fi">
+              <label>Logo URL</label>
+              <input id="f_logo_url" type="text" placeholder="https://..." />
+            </div>
+            <div class="fi" style="align-self:flex-end;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input id="f_enable_e_invoice" type="checkbox" style="width:16px;height:16px;accent-color:#4f46e5;" />
+                Enable E-Invoice
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ADMIN ACCOUNT (create only) ── -->
+        <div id="tab-admin" style="display:none;">
+          <div style="padding:10px 14px;background:#fef9e7;border:1px solid #fde68a;border-radius:8px;margin-bottom:14px;font-size:12px;color:#92400e;">
+            <i class="fas fa-info-circle" style="margin-right:6px;"></i>
+            Optional — create an admin user account linked to this firm. All fields are required if this section is filled.
+          </div>
+          <div class="fg">
+            <div class="fi">
+              <label>Full Name</label>
+              <input id="a_fullname" type="text" placeholder="Admin full name" />
+            </div>
+            <div class="fi">
+              <label>Username</label>
+              <input id="a_username" type="text" placeholder="admin_username" autocomplete="off" />
+            </div>
+            <div class="fi">
+              <label>Email</label>
+              <input id="a_email" type="email" placeholder="admin@firm.com" autocomplete="off" />
+            </div>
+            <div class="fi">
+              <label>Password</label>
+              <input id="a_password" type="password" placeholder="Min 8 characters" autocomplete="new-password" />
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /scroll area -->
+
+      <div class="mfooter">
+        <button type="button" class="btn-cancel" onclick="closeModal('crudModal')">
+          <i class="fas fa-times" style="margin-right:4px;"></i>Cancel
+        </button>
+        <button type="submit" class="btn-primary" id="crudSubmitBtn">
+          <i class="fas fa-save" style="margin-right:4px;"></i>
+          <span id="crudSubmitLabel">Create Firm</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════ VIEW MODAL ══════════ -->
+<div id="viewModal" class="modal">
+  <div class="mc mc-xl">
+    <div class="mh mh-primary">
+      <h2><i class="fas fa-eye"></i> Firm Details</h2>
+      <button class="mclose" onclick="closeModal('viewModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:20px; max-height:70vh; overflow-y:auto;">
+      <div class="ig" id="viewContent"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn-cancel" onclick="closeModal('viewModal')"><i class="fas fa-times" style="margin-right:4px;"></i>Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ DELETE MODAL ══════════ -->
+<div id="deleteModal" class="modal">
+  <div class="mc mc-sm">
+    <div class="mh mh-danger">
+      <h2><i class="fas fa-trash"></i> Confirm Delete</h2>
+      <button class="mclose" onclick="closeModal('deleteModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:12px;">
+      <p id="deleteMsg" style="font-size:13px;color:#374151;"></p>
+      <div style="padding:10px 13px;background:#fef2f2;border-left:4px solid #f87171;border-radius:6px;font-size:12px;color:#991b1b;font-weight:600;">
+        <i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>
+        Cannot delete if firm has associated users, stocks, bills, or parties.
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn-cancel" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="btn-danger" id="deleteConfirmBtn" onclick="confirmDelete()">
+        <i class="fas fa-trash" style="margin-right:4px;"></i>Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ BULK DELETE MODAL ══════════ -->
+<div id="bulkDelModal" class="modal">
+  <div class="mc mc-sm">
+    <div class="mh mh-danger">
+      <h2><i class="fas fa-trash"></i> Bulk Delete</h2>
+      <button class="mclose" onclick="closeModal('bulkDelModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:12px;">
+      <p id="bulkDelMsg" style="font-size:13px;color:#374151;"></p>
+      <div style="padding:10px 13px;background:#fef2f2;border-left:4px solid #f87171;border-radius:6px;font-size:12px;color:#991b1b;font-weight:600;">
+        <i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>This cannot be undone.
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn-cancel" onclick="closeModal('bulkDelModal')">Cancel</button>
+      <button class="btn-danger" id="bulkDelConfirmBtn" onclick="confirmBulkDelete()">
+        <i class="fas fa-trash" style="margin-right:4px;"></i>Delete All Selected
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ════════════════════════════════════════
+   STATE
+════════════════════════════════════════ */
+var allFirms       = [];
+var table          = null;
+var curMode        = 'create';   // 'create' | 'edit'
+var curIdx         = -1;
+var selectedIdxs   = [];
+
+/* NEW: Excel Column Filter State */
+let currentFilterCol = -1;
+let filterPanel = null;
+
+/* ════════════════════════════════════════
+   TOASTR
+════════════════════════════════════════ */
+toastr.options = { closeButton:true, progressBar:true, positionClass:'toast-bottom-right', timeOut:2500, extendedTimeOut:800 };
+
+/* ════════════════════════════════════════
+   MODAL HELPERS
+════════════════════════════════════════ */
+window.openModal  = function(id){ document.getElementById(id).classList.add('show'); };
+window.closeModal = function(id){ document.getElementById(id).classList.remove('show'); };
+
+/* ════════════════════════════════════════
+   MODAL TAB SWITCHER
+════════════════════════════════════════ */
+function switchModalTab(name) {
+  ['basic','location','compliance','financial','admin'].forEach(function(t){
+    var el = document.getElementById('tab-'+t);
+    if (el) el.style.display = 'none';
+  });
+  document.querySelectorAll('.mtab-btn').forEach(function(b){
+    b.classList.remove('active');
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+name+"'")) b.classList.add('active');
+  });
+  var target = document.getElementById('tab-'+name);
+  if (target) target.style.display = '';
+}
+
+/* ════════════════════════════════════════
+   FORM HELPERS
+════════════════════════════════════════ */
+function setField(id, val) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (el.type === 'checkbox') el.checked = !!val;
+  else el.value = (val !== null && val !== undefined) ? val : '';
+}
+
+function getField(id) {
+  var el = document.getElementById(id);
+  if (!el) return '';
+  if (el.type === 'checkbox') return el.checked;
+  return el.value.trim();
+}
+
+function resetForm() {
+  ['f_name','f_legal_name','f_code','f_description','f_business_type','f_industry_type',
+   'f_establishment_year','f_employee_count','f_address','f_city','f_state','f_country','f_pincode',
+   'f_phone_number','f_secondary_phone','f_email','f_website',
+   'f_gst_number','f_pan_number','f_cin_number','f_registration_number','f_registration_date',
+   'f_tax_id','f_vat_number','f_license_numbers','f_insurance_details',
+   'f_bank_account_number','f_bank_name','f_bank_branch','f_ifsc_code','f_payment_terms',
+   'f_logo_url','a_fullname','a_username','a_email','a_password'].forEach(function(id){
+    setField(id,'');
+  });
+  setField('f_status','approved');
+  setField('f_currency','INR');
+  setField('f_timezone','Asia/Kolkata');
+  setField('f_fiscal_year_start','');
+  setField('f_invoice_prefix','');
+  setField('f_quote_prefix','');
+  setField('f_po_prefix','');
+  setField('f_enable_e_invoice',false);
+}
+
+function collectFirmData() {
+  var data = {
+    name:                getField('f_name'),
+    legal_name:          getField('f_legal_name') || undefined,
+    code:                getField('f_code') || undefined,
+    description:         getField('f_description') || undefined,
+    business_type:       getField('f_business_type') || undefined,
+    industry_type:       getField('f_industry_type') || undefined,
+    status:              getField('f_status'),
+    address:             getField('f_address') || undefined,
+    city:                getField('f_city') || undefined,
+    state:               getField('f_state') || undefined,
+    country:             getField('f_country') || undefined,
+    pincode:             getField('f_pincode') || undefined,
+    phone_number:        getField('f_phone_number') || undefined,
+    secondary_phone:     getField('f_secondary_phone') || undefined,
+    email:               getField('f_email') || undefined,
+    website:             getField('f_website') || undefined,
+    gst_number:          getField('f_gst_number') || undefined,
+    pan_number:          getField('f_pan_number') || undefined,
+    cin_number:          getField('f_cin_number') || undefined,
+    registration_number: getField('f_registration_number') || undefined,
+    registration_date:   getField('f_registration_date') || undefined,
+    tax_id:              getField('f_tax_id') || undefined,
+    vat_number:          getField('f_vat_number') || undefined,
+    license_numbers:     getField('f_license_numbers') || undefined,
+    insurance_details:   getField('f_insurance_details') || undefined,
+    bank_account_number: getField('f_bank_account_number') || undefined,
+    bank_name:           getField('f_bank_name') || undefined,
+    bank_branch:         getField('f_bank_branch') || undefined,
+    ifsc_code:           getField('f_ifsc_code') || undefined,
+    payment_terms:       getField('f_payment_terms') || undefined,
+    currency:            getField('f_currency') || 'INR',
+    timezone:            getField('f_timezone') || 'Asia/Kolkata',
+    fiscal_year_start:   getField('f_fiscal_year_start') || undefined,
+    invoice_prefix:      getField('f_invoice_prefix') || undefined,
+    quote_prefix:        getField('f_quote_prefix') || undefined,
+    po_prefix:           getField('f_po_prefix') || undefined,
+    logo_url:            getField('f_logo_url') || undefined,
+    enable_e_invoice:    getField('f_enable_e_invoice'),
+  };
+  var estYear = parseInt(document.getElementById('f_establishment_year').value);
+  if (!isNaN(estYear)) data.establishment_year = estYear;
+  var empCount = parseInt(document.getElementById('f_employee_count').value);
+  if (!isNaN(empCount)) data.employee_count = empCount;
+  return data;
+}
+
+/* ════════════════════════════════════════
+   CREATE MODAL
+════════════════════════════════════════ */
+window.openCreateModal = function() {
+  curMode = 'create'; curIdx = -1;
+  resetForm();
+  switchModalTab('basic');
+  document.getElementById('crudModalTitle').innerHTML = '<i class="fas fa-plus"></i> Create Firm';
+  document.getElementById('crudSubmitLabel').textContent = 'Create Firm';
+  document.getElementById('crudSubmitBtn').disabled = false;
+  document.getElementById('adminTabBtn').style.display = '';
+  openModal('crudModal');
+};
+
+/* ════════════════════════════════════════
+   EDIT MODAL
+════════════════════════════════════════ */
+window.showEditModal = function(idx) {
+  var f = allFirms[idx]; if (!f) return;
+  curMode = 'edit'; curIdx = idx;
+
+  var fields = {
+    f_name:f.name, f_legal_name:f.legal_name, f_code:f.code, f_description:f.description,
+    f_business_type:f.business_type, f_industry_type:f.industry_type,
+    f_establishment_year:f.establishment_year, f_employee_count:f.employee_count,
+    f_status:f.status||'approved',
+    f_address:f.address, f_city:f.city, f_state:f.state, f_country:f.country, f_pincode:f.pincode,
+    f_phone_number:f.phone_number, f_secondary_phone:f.secondary_phone,
+    f_email:f.email, f_website:f.website,
+    f_gst_number:f.gst_number, f_pan_number:f.pan_number, f_cin_number:f.cin_number,
+    f_registration_number:f.registration_number, f_registration_date:f.registration_date,
+    f_tax_id:f.tax_id, f_vat_number:f.vat_number,
+    f_license_numbers:f.license_numbers, f_insurance_details:f.insurance_details,
+    f_bank_account_number:f.bank_account_number, f_bank_name:f.bank_name,
+    f_bank_branch:f.bank_branch, f_ifsc_code:f.ifsc_code, f_payment_terms:f.payment_terms,
+    f_currency:f.currency||'INR', f_timezone:f.timezone||'Asia/Kolkata',
+    f_fiscal_year_start:f.fiscal_year_start, f_invoice_prefix:f.invoice_prefix,
+    f_quote_prefix:f.quote_prefix, f_po_prefix:f.po_prefix,
+    f_logo_url:f.logo_url, f_enable_e_invoice:f.enable_e_invoice||false
+  };
+  Object.entries(fields).forEach(function(e){ setField(e[0],e[1]); });
+
+  /* Sync readonly GST ref on compliance tab */
+  var refEl = document.getElementById('f_gst_number_ref');
+  if (refEl) refEl.value = f.gst_number || '';
+
+  switchModalTab('basic');
+  document.getElementById('crudModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit: ' + (f.name||'');
+  document.getElementById('crudSubmitLabel').textContent = 'Save Changes';
+  document.getElementById('crudSubmitBtn').disabled = false;
+  document.getElementById('adminTabBtn').style.display = 'none';
+  openModal('crudModal');
+  toastr.info('Editing: ' + f.name, 'Edit Mode');
+};
+
+/* ════════════════════════════════════════
+   VIEW MODAL
+════════════════════════════════════════ */
+window.showViewModal = function(idx) {
+  var f = allFirms[idx]; if (!f) return;
+
+  function ii(label, val, full) {
+    var cls = 'ii' + (full?' full':'');
+    var html = val ? '<div class="iv">'+val+'</div>' : '<div class="iv empty">Not provided</div>';
+    return '<div class="'+cls+'"><div class="il">'+label+'</div>'+html+'</div>';
+  }
+  function sec(t) { return '<div class="isec">'+t+'</div>'; }
+  function badge(s) {
+    var m={approved:'sbadge-approved',pending:'sbadge-pending',rejected:'sbadge-rejected'};
+    var c=m[(s||'').toLowerCase()]||'sbadge-unknown';
+    return '<span class="sbadge '+c+'">'+(s||'—')+'</span>';
+  }
+  var created = f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+  document.getElementById('viewContent').innerHTML =
+    sec('<i class="fas fa-building" style="margin-right:6px;"></i>Basic Information') +
+    ii('Firm Name',f.name) + ii('Legal Name',f.legal_name) + ii('Code',f.code) +
+    ii('Business Type',f.business_type) + ii('Industry Type',f.industry_type) +
+    ii('Status',badge(f.status)) + ii('Registered',created) +
+    ii('Est. Year',f.establishment_year) + ii('Employees',f.employee_count) +
+    ii('Description',f.description,true) +
+    sec('<i class="fas fa-map-marker-alt" style="margin-right:6px;"></i>Location') +
+    ii('Address',f.address,true) + ii('City',f.city) + ii('State',f.state) +
+    ii('Country',f.country) + ii('Pincode',f.pincode) +
+    sec('<i class="fas fa-phone" style="margin-right:6px;"></i>Contact') +
+    ii('Phone',f.phone_number) + ii('Secondary Phone',f.secondary_phone) +
+    ii('Email',f.email) + ii('Website',f.website) +
+    sec('<i class="fas fa-file-alt" style="margin-right:6px;"></i>Compliance') +
+    ii('GST No.',f.gst_number) + ii('PAN No.',f.pan_number) +
+    ii('CIN No.',f.cin_number) + ii('Reg. Number',f.registration_number) +
+    ii('Reg. Date',f.registration_date) + ii('Tax ID',f.tax_id) +
+    ii('VAT Number',f.vat_number) + ii('Licenses',f.license_numbers) +
+    ii('Insurance',f.insurance_details,true) +
+    sec('<i class="fas fa-university" style="margin-right:6px;"></i>Banking') +
+    ii('Account No.',f.bank_account_number) + ii('Bank Name',f.bank_name) +
+    ii('Branch',f.bank_branch) + ii('IFSC',f.ifsc_code) + ii('Payment Terms',f.payment_terms) +
+    sec('<i class="fas fa-cog" style="margin-right:6px;"></i>Settings') +
+    ii('Currency',f.currency) + ii('Timezone',f.timezone) +
+    ii('Fiscal Year Start',f.fiscal_year_start) +
+    ii('Invoice Prefix',f.invoice_prefix) + ii('Quote Prefix',f.quote_prefix) +
+    ii('PO Prefix',f.po_prefix) +
+    ii('E-Invoice',f.enable_e_invoice?'Enabled':'Disabled');
+
+  openModal('viewModal');
+};
+
+/* ════════════════════════════════════════
+   DELETE
+════════════════════════════════════════ */
+window.showDeleteModal = function(idx) {
+  var f = allFirms[idx]; if (!f) return;
+  curIdx = idx;
+  document.getElementById('deleteMsg').textContent =
+    'Delete "' + f.name + '"? All associated data must be removed first.';
+  document.getElementById('deleteConfirmBtn').disabled = false;
+  openModal('deleteModal');
+};
+
+window.confirmDelete = function() {
+  if (curIdx < 0) return;
+  var f = allFirms[curIdx];
+  document.getElementById('deleteConfirmBtn').disabled = true;
+  window.parent.postMessage({ type: 'DELETE_FIRM', firmId: f._id }, '*');
+};
+
+/* ════════════════════════════════════════
+   FORM SUBMIT
+════════════════════════════════════════ */
+document.getElementById('crudForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  var data = collectFirmData();
+  if (!data.name) { toastr.error('Firm name is required.', 'Validation'); return; }
+
+  var submitBtn = document.getElementById('crudSubmitBtn');
+  submitBtn.disabled = true;
+  document.getElementById('crudSubmitLabel').textContent = 'Saving...';
+
+  if (curMode === 'create') {
+    // Admin account (optional)
+    var af = document.getElementById('a_fullname').value.trim();
+    var au = document.getElementById('a_username').value.trim();
+    var ae = document.getElementById('a_email').value.trim();
+    var ap = document.getElementById('a_password').value;
+    if (af || au || ae || ap) {
+      data.admin_account = { fullname:af, username:au, email:ae, password:ap };
+    }
+    window.parent.postMessage({ type: 'CREATE_FIRM', data: data }, '*');
+  } else {
+    var f = allFirms[curIdx];
+    window.parent.postMessage({ type: 'UPDATE_FIRM', firmId: f._id, data: data }, '*');
+  }
+});
+
+/* ════════════════════════════════════════
+   BULK SELECTION
+════════════════════════════════════════ */
+function updateBulkBar() {
+  var bar = document.getElementById('bulkBar');
+  if (selectedIdxs.length > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = selectedIdxs.length;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+function clearSelection() {
+  selectedIdxs = [];
+  document.querySelectorAll('.rcb:checked').forEach(function(c){ c.checked=false; });
+  var sa = document.getElementById('selAll'); if(sa) sa.checked = false;
+  updateBulkBar();
+}
+function bulkDeleteSelected() {
+  if (!selectedIdxs.length) return;
+  document.getElementById('bulkDelMsg').textContent =
+    'Delete ' + selectedIdxs.length + ' selected firm(s)? This cannot be undone.';
+  document.getElementById('bulkDelConfirmBtn').disabled = false;
+  openModal('bulkDelModal');
+}
+window.confirmBulkDelete = function() {
+  var confirmBtn = document.getElementById('bulkDelConfirmBtn');
+  confirmBtn.disabled = true;
+  var ids = selectedIdxs.map(function(i){ return allFirms[i] && allFirms[i]._id; }).filter(Boolean);
+  window.parent.postMessage({ type: 'BULK_DELETE_FIRMS', firmIds: ids }, '*');
+};
+
+/* ════════════════════════════════════════
+   COLUMN VISIBILITY
+════════════════════════════════════════ */
+var CV = [
+  {idx:2,label:'Firm Name',def:true},{idx:3,label:'Code',def:false},
+  {idx:4,label:'City',def:true},{idx:5,label:'State',def:true},
+  {idx:6,label:'Phone',def:true},{idx:7,label:'Email',def:true},
+  {idx:8,label:'GST No.',def:false},{idx:9,label:'PAN No.',def:false},
+  {idx:10,label:'Business Type',def:false},{idx:11,label:'Status',def:true},{idx:12,label:'Registered',def:true}
+];
+function buildCVMenu() {
+  var menu = document.getElementById('cvMenu');
+  menu.innerHTML = CV.map(function(c){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background=\'#f0f4ff\'" onmouseout="this.style.background=\'\'">' +
+      '<input type="checkbox" class="cv-cb" data-col="'+c.idx+'" '+(c.def?'checked':'')+' style="accent-color:#4f46e5;width:14px;height:14px;"> '+c.label+'</label>';
+  }).join('');
+  menu.querySelectorAll('.cv-cb').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      if(table) table.column(parseInt(this.dataset.col)).visible(this.checked);
+    });
+  });
+}
+document.getElementById('cvBtn').addEventListener('click', function(e){
+  e.stopPropagation();
+  var m = document.getElementById('cvMenu');
+  m.style.display = m.style.display === 'none' ? '' : 'none';
+});
+document.addEventListener('click', function(){ document.getElementById('cvMenu').style.display='none'; });
+
+/* ════════════════════════════════════════
+   STATS
+════════════════════════════════════════ */
+function updateStats() {
+  var data = allFirms;
+  var filtered = table ? table.rows({search:'applied'}).count() : data.length;
+  document.getElementById('s-total').textContent    = data.length;
+  document.getElementById('s-approved').textContent = data.filter(function(f){return (f.status||'').toLowerCase()==='approved';}).length;
+  document.getElementById('s-pending').textContent  = data.filter(function(f){return (f.status||'').toLowerCase()==='pending';}).length;
+  document.getElementById('s-rejected').textContent = data.filter(function(f){return (f.status||'').toLowerCase()==='rejected';}).length;
+  var fw = document.getElementById('s-filter-wrap');
+  if(filtered < data.length){ fw.style.display=''; document.getElementById('s-filtered').textContent=filtered; }
+  else fw.style.display='none';
+}
+
+/* ════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════ */
+function dash(v){ return (v && String(v).trim()) ? String(v).trim() : '—'; }
+function fmtDate(v){ return v ? new Date(v).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'; }
+function badge(s){
+  var m={approved:'sbadge-approved',pending:'sbadge-pending',rejected:'sbadge-rejected'};
+  var c=m[(s||'').toLowerCase()]||'sbadge-unknown';
+  return '<span class="sbadge '+c+'">'+(s||'—')+'</span>';
+}
+
+/* ════════════════════════════════════════
+   EXCEL-STYLE COLUMN FILTER FUNCTIONS (NEW)
+════════════════════════════════════════ */
+function createFilterPanel() {
+  if (filterPanel) return filterPanel;
+  filterPanel = $(`
+    <div id="dtColumnFilterPanel">
+      <input type="text" id="filterSearch" placeholder="Search values..." />
+      <div id="filterList"></div>
+      <div class="panel-footer" style="margin-top:12px;display:flex;gap:6px;">
+        <button id="filterSelectAll">Select All</button>
+        <button id="filterClear">Clear</button>
+        <button id="filterApply" style="background:#4f46e5;color:white;">Apply</button>
+      </div>
+    </div>
+  `);
+  $('body').append(filterPanel);
+
+  $('#filterSearch').on('input', function(){
+    const term = this.value.toLowerCase();
+    $('#filterList label').each(function(){
+      $(this).toggle($(this).text().toLowerCase().includes(term));
+    });
+  });
+
+  $('#filterSelectAll').on('click', function(){
+    $('#filterList input.filter-cb').prop('checked', true);
+    applyColumnFilter();
+  });
+  $('#filterClear').on('click', function(){
+    $('#filterList input.filter-cb').prop('checked', false);
+    applyColumnFilter();
+  });
+  $('#filterApply').on('click', function(){
+    applyColumnFilter();
+    $('#dtColumnFilterPanel').hide();
+  });
+
+  return filterPanel;
+}
+
+function populateFilterList(colIdx) {
+  const listDiv = $('#filterList');
+  listDiv.empty();
+
+  const uniques = new Set();
+  table.rows({search: 'applied'}).data().each(function(row){
+    let val = String(row[colIdx] || '').replace(/<[^>]+>/g, '').trim();
+    if (val && val !== '—' && val !== '') uniques.add(val);
+  });
+
+  const sorted = Array.from(uniques).sort();
+
+  let currentSearch = table.column(colIdx).search();
+  let preSelected = [];
+  if (currentSearch) {
+    const match = currentSearch.match(/\^\((.+)\)\$/);
+    if (match) preSelected = match[1].split('|');
+  }
+
+  sorted.forEach(val => {
+    const checked = preSelected.includes(val) ? 'checked' : '';
+    const label = $(`
+      <label>
+        <input type="checkbox" class="filter-cb" value="${val}" ${checked}>
+        <span>${val}</span>
+      </label>
+    `);
+    listDiv.append(label);
+  });
+
+  $('#filterList input.filter-cb').on('change', applyColumnFilter);
+}
+
+function applyColumnFilter() {
+  const checked = [];
+  $('#filterList input.filter-cb:checked').each(function(){
+    checked.push($.escapeSelector($(this).val()));
+  });
+
+  const regex = checked.length ? '^(' + checked.join('|') + ')$' : '';
+  table.column(currentFilterCol).search(regex, true, false).draw();
+}
+
+function showColumnFilterPanel(colIdx, th) {
+  currentFilterCol = colIdx;
+  const panel = createFilterPanel();
+
+  const offset = th.offset();
+  panel.css({
+    top: offset.top + th.outerHeight() + 4,
+    left: offset.left,
+    display: 'block'
+  });
+
+  populateFilterList(colIdx);
+}
+
+function addExcelFilters() {
+  $('.dt-filter-icon').remove();
+  const totalCols = table.columns().count();
+
+  table.columns().every(function() {
+    const dtColIdx = this.index();
+
+    // Skip checkbox (0), serial # (1), and Actions (last column)
+    if (dtColIdx < 2 || dtColIdx === totalCols - 1) return;
+
+    // Skip hidden columns — their <th> is not in the visible DOM
+    if (!this.visible()) return;
+
+    const th = $(this.header());
+    const icon = $('<i class="fas fa-filter dt-filter-icon"></i>');
+    th.append(icon);
+
+    icon.on('click', function(e) {
+      e.stopImmediatePropagation();
+      showColumnFilterPanel(dtColIdx, th);
+    });
+  });
+}
+
+/* ════════════════════════════════════════
+   INIT DATATABLE
+════════════════════════════════════════ */
+function initTable(data) {
+  if ($.fn.DataTable.isDataTable('#firmsTable')) { table.destroy(); $('#firmsTable tbody').empty(); }
+
+  var rows = data.map(function(f, i){
+    return [
+      '<input type="checkbox" class="rcb" data-idx="'+i+'" style="width:15px;height:15px;accent-color:#4f46e5;cursor:pointer;">',
+      i+1,
+      dash(f.name), dash(f.code), dash(f.city), dash(f.state),
+      dash(f.phone_number), dash(f.email), dash(f.gst_number), dash(f.pan_number),
+      dash(f.business_type), badge(f.status), fmtDate(f.createdAt),
+      '<div style="display:flex;gap:2px;">' +
+        '<button class="abtn abtn-view" onclick="showViewModal('+i+')" title="View"><i class="fas fa-eye"></i></button>' +
+        '<button class="abtn abtn-edit" onclick="showEditModal('+i+')" title="Edit"><i class="fas fa-edit"></i></button>' +
+        '<button class="abtn abtn-del"  onclick="showDeleteModal('+i+')" title="Delete"><i class="fas fa-trash"></i></button>' +
+      '</div>'
+    ];
+  });
+
+  table = $('#firmsTable').DataTable({
+    data: rows,
+    columns:[
+      {title:'<input type="checkbox" id="selAll" style="width:15px;height:15px;accent-color:#4f46e5;cursor:pointer;">',
+       width:'36px',searchable:false,orderable:false},
+      {title:'#',width:'44px'},
+      {title:'Firm Name',minWidth:'150px'},
+      {title:'Code',width:'80px'},
+      {title:'City',width:'100px'},
+      {title:'State',width:'100px'},
+      {title:'Phone',width:'130px'},
+      {title:'Email',minWidth:'160px'},
+      {title:'GST No.',width:'150px'},
+      {title:'PAN No.',width:'110px'},
+      {title:'Business Type',width:'130px'},
+      {title:'Status',width:'100px',searchable:false,orderable:false},
+      {title:'Registered',width:'120px'},
+      {title:'Actions',width:'95px',searchable:false,orderable:false}
+    ],
+    pageLength:20,
+    lengthChange:true,
+    lengthMenu:[[15,20,25,50,100,-1],['15','20','25','50','100','All']],
+    dom:'rt',
+    order:[[2,'asc']],
+    language:{
+      info:'Showing _START_–_END_ of _TOTAL_',
+      infoEmpty:'No records',infoFiltered:'(filtered from _MAX_)',
+      lengthMenu:'Show _MENU_',paginate:{first:'«',previous:'‹',next:'›',last:'»'}
+    },
+    initComplete: function() {
+      table = $('#firmsTable').DataTable();
+
+      $('#ft-length').html($('.dataTables_length').detach());
+      $('#ft-info').html($('.dataTables_info').detach());
+      $('#ft-pages').html($('.dataTables_paginate').detach());
+
+      CV.forEach(function(c){ if(!c.def) table.column(c.idx).visible(false); });
+      updateStats();
+
+      // NEW: Add Excel-style filters
+      addExcelFilters();
+
+      // Select all
+      $(document).on('change','#selAll', function(){
+        var chk=this.checked; selectedIdxs=[];
+        document.querySelectorAll('.rcb').forEach(function(cb){
+          cb.checked=chk; if(chk) selectedIdxs.push(parseInt(cb.dataset.idx));
+        });
+        updateBulkBar();
+      });
+      // Row checkboxes
+      $(document).on('change','.rcb', function(){
+        var idx=parseInt(this.dataset.idx);
+        if(this.checked){ if(selectedIdxs.indexOf(idx)===-1) selectedIdxs.push(idx); }
+        else { selectedIdxs=selectedIdxs.filter(function(i){return i!==idx;}); var sa=document.getElementById('selAll'); if(sa) sa.checked=false; }
+        updateBulkBar();
+      });
+    },
+    drawCallback: function(){ updateStats(); }
+  });
+
+  // Global search
+  document.getElementById('gSearch').oninput = function(){ table.search(this.value).draw(); };
+
+  // Status filter
+  $.fn.dataTable.ext.search.length = 0;
+  $.fn.dataTable.ext.search.push(function(settings, rowData, dataIndex){
+    var fv = document.getElementById('statusFilter').value;
+    if(!fv) return true;
+    var rs = allFirms[dataIndex] ? (allFirms[dataIndex].status||'').toLowerCase() : '';
+    return rs === fv.toLowerCase();
+  });
+  document.getElementById('statusFilter').onchange = function(){ table.draw(); };
+}
+
+/* ════════════════════════════════════════
+   EXPORTS
+════════════════════════════════════════ */
+var HDRS=['#','Firm Name','City','State','Phone','Email','GST No.','PAN No.','Business Type','Status','Registered'];
+function getExportRows(){
+  if (!table) return [];
+  var out=[]; var idx=0;
+  table.rows({search:'applied'}).data().each(function(row){
+    var f=allFirms[idx]||{};
+    out.push([idx+1,dash(f.name),dash(f.city),dash(f.state),dash(f.phone_number),dash(f.email),
+      dash(f.gst_number),dash(f.pan_number),dash(f.business_type),
+      (f.status||'').charAt(0).toUpperCase()+(f.status||'').slice(1),
+      fmtDate(f.createdAt)]);
+    idx++;
+  });
+  return out;
+}
+function exportToCSV(){
+  var rows=[HDRS].concat(getExportRows());
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+(c+'').replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='firms_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+  toastr.success('CSV exported!','Export');
+}
+function exportToExcel(){
+  var wb=XLSX.utils.book_new(); var ws=XLSX.utils.aoa_to_sheet([HDRS].concat(getExportRows()));
+  ws['!cols']=HDRS.map(function(){return{wch:18};}); XLSX.utils.book_append_sheet(wb,ws,'Firms');
+  XLSX.writeFile(wb,'firms_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  toastr.success('Excel exported!','Export');
+}
+function exportToPDF(){
+  if(!window.jspdf||!window.jspdf.jsPDF){ toastr.error('jsPDF not ready.','Error'); return; }
+  var doc=new window.jspdf.jsPDF('l','mm','a4');
+  doc.setFontSize(14); doc.setTextColor(79,70,229); doc.text('Firms Directory',14,14);
+  doc.setFontSize(9); doc.setTextColor(140); doc.text('Generated: '+new Date().toLocaleString('en-IN'),14,20);
+  doc.autoTable({head:[HDRS],body:getExportRows(),startY:26,theme:'grid',
+    styles:{font:'helvetica',fontSize:8,cellPadding:3},
+    headStyles:{fillColor:[30,41,59],textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[249,250,251]},margin:{left:10,right:10}});
+  doc.save('firms_'+new Date().toISOString().slice(0,10)+'.pdf');
+  toastr.success('PDF exported!','Export');
+}
+function exportToPrint(){
+  var rows=getExportRows();
+  var tr=rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';}).join('');
+  var win=window.open('','','height=700,width=1100');
+  win.document.write('<html><head><title>Firms</title></head><body>');
+  win.document.write('<h2>Firms Directory</h2><p style="font-size:11px;color:#999;">Generated: '+new Date().toLocaleString('en-IN')+'</p>');
+  win.document.write('<table><tr>'+HDRS.map(function(h){return'<th>'+h+'</th>';}).join('')+'</tr>'+tr+'</table></body></html>');
+  win.document.close(); win.print();
+  toastr.success('Print dialog opened!','Export');
+}
+
+/* ════════════════════════════════════════
+   REFRESH BUTTON
+════════════════════════════════════════ */
+document.getElementById('refreshBtn').addEventListener('click', function(){
+  var icon=document.getElementById('refreshIcon');
+  icon.classList.add('spin'); setTimeout(function(){icon.classList.remove('spin');},700);
+  document.getElementById('gSearch').value='';
+  document.getElementById('statusFilter').value='';
+  if(table) {
+    table.search('').draw();
+    table.columns().search('').draw();   // clears all Excel column filters
+  }
+  window.parent.postMessage('IFRAME_READY','*');
+});
+
+/* ════════════════════════════════════════
+   GST FETCH
+════════════════════════════════════════ */
+window.triggerGstFetch = function() {
+  var gstin = (document.getElementById('f_gst_number').value || '').trim().toUpperCase();
+
+  if (!gstin) {
+    showGstStatus('Please enter a GST Number first.', 'error');
+    document.getElementById('f_gst_number').focus();
+    return;
+  }
+  if (gstin.length !== 15) {
+    showGstStatus('GST Number must be exactly 15 characters.', 'error');
+    return;
+  }
+
+  var btn   = document.getElementById('gstFetchBtn');
+  var icon  = document.getElementById('gstFetchIcon');
+  var label = document.getElementById('gstFetchLabel');
+  btn.disabled = true;
+  icon.className = 'fas fa-spinner fa-spin';
+  label.textContent = 'Fetching…';
+  showGstStatus('Looking up GST details…', 'info');
+
+  window.parent.postMessage({ type: 'FETCH_GST', gstin: gstin }, '*');
+};
+
+function showGstStatus(msg, type) {
+  var el = document.getElementById('gstFetchStatus');
+  if (!el) return;
+  var styles = {
+    info:    'background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;',
+    success: 'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;',
+    error:   'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;',
+  };
+  el.style.cssText = 'display:block;margin-top:5px;font-size:11px;padding:6px 10px;border-radius:5px;' + (styles[type] || styles.info);
+  el.innerHTML = '<i class="fas ' + (type==='error'?'fa-exclamation-circle':type==='success'?'fa-check-circle':'fa-info-circle') + '" style="margin-right:5px;"></i>' + msg;
+}
+
+function resetGstFetchBtn() {
+  var btn   = document.getElementById('gstFetchBtn');
+  var icon  = document.getElementById('gstFetchIcon');
+  var label = document.getElementById('gstFetchLabel');
+  if (btn)   btn.disabled   = false;
+  if (icon)  icon.className = 'fas fa-search';
+  if (label) label.textContent = 'Fetch Details';
+}
+
+function populateGstFields(gstData) {
+  function set(id, val) {
+    if (!val && val !== false) return;
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = Array.isArray(val) ? val.join(', ') : val;
+    el.style.transition = 'background 0.3s';
+    el.style.background = '#eef2ff';
+    setTimeout(function(){ el.style.background = ''; }, 1200);
+  }
+
+  set('f_gst_number',  gstData.gstin);
+  set('f_legal_name',  gstData.legal_name);
+  set('f_name',        gstData.trade_name);
+  set('f_business_type', gstData.business_constitution);
+  if (gstData.nature) set('f_industry_type', gstData.nature);
+
+  var addr = gstData.place_of_business_principal && gstData.place_of_business_principal.address;
+  if (addr) {
+    var addrParts = [addr.door_num, addr.street, addr.location, addr.building_name].filter(Boolean).join(', ');
+    if (addrParts) set('f_address', addrParts);
+
+    var city = addr.city;
+    if (!city && addr.location) {
+      var locParts = addr.location.split(' ');
+      city = locParts[locParts.length - 1];
+    }
+    if (!city && addr.district) city = addr.district;
+    if (city) set('f_city', city);
+
+    if (addr.state)    set('f_state',   addr.state);
+    if (addr.pin_code) set('f_pincode', addr.pin_code);
+  }
+
+  var pob = gstData.place_of_business_principal;
+  if (pob && pob.nature && Array.isArray(pob.nature) && pob.nature.length > 0) {
+    set('f_industry_type', pob.nature.join(', '));
+  }
+
+  if (gstData.registration_date) {
+    var regDate = new Date(gstData.registration_date);
+    if (!isNaN(regDate.getTime())) set('f_establishment_year', regDate.getFullYear());
+  }
+
+  if (gstData.status === 'Active') {
+    var statusEl = document.getElementById('f_status');
+    if (statusEl) { statusEl.value = 'approved'; }
+  }
+
+  if (gstData.gstin && typeof gstData.gstin === 'string' && gstData.gstin.length === 15) {
+    set('f_pan_number', gstData.gstin.substring(2, 12));
+  }
+
+  var refEl = document.getElementById('f_gst_number_ref');
+  if (refEl && gstData.gstin) refEl.value = gstData.gstin;
+}
+
+/* ════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+════════════════════════════════════════ */
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape') {
+    ['crudModal','viewModal','deleteModal','bulkDelModal'].forEach(closeModal);
+    $('#dtColumnFilterPanel').hide();   // close filter panel
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'){ e.preventDefault(); document.getElementById('gSearch').focus(); }
+  if((e.ctrlKey||e.metaKey)&&e.key==='n'){ e.preventDefault(); openCreateModal(); }
+});
+
+/* Close panel when clicking outside */
+$(document).on('click', function(e){
+  if (!$(e.target).closest('#dtColumnFilterPanel, .dt-filter-icon').length) {
+    $('#dtColumnFilterPanel').hide();
+  }
+});
+
+/* ════════════════════════════════════════
+   RECEIVE MESSAGES FROM PARENT
+════════════════════════════════════════ */
+window.addEventListener('message', function(event) {
+  var msg = event.data;
+
+  if (msg && msg.type === 'FIRMS_DATA') {
+    allFirms = msg.firms || [];
+    selectedIdxs = [];
+    initTable(allFirms);
+    buildCVMenu();
+    document.getElementById('gSearch').value = '';
+    document.getElementById('statusFilter').value = '';
+    toastr.success(allFirms.length + ' firms loaded', 'Ready', { timeOut: 1800 });
+    return;
+  }
+
+  if (msg && msg.type === 'GST_DATA') {
+    resetGstFetchBtn();
+    populateGstFields(msg.data);
+    showGstStatus(
+      'GST details fetched! Fields highlighted in blue were auto-filled. Review before saving.',
+      'success'
+    );
+    toastr.success('GST details fetched successfully!', 'GST Lookup');
+    return;
+  }
+
+  if (msg && msg.type === 'GST_ERROR') {
+    resetGstFetchBtn();
+    showGstStatus(msg.error || 'GST lookup failed. Check the number and try again.', 'error');
+    toastr.error(msg.error || 'GST lookup failed', 'GST Lookup');
+    return;
+  }
+
+  if (msg && msg.type === 'CRUD_SUCCESS') {
+    var labels = {
+      create: 'Firm created successfully!',
+      update: 'Firm updated successfully!',
+      delete: 'Firm deleted successfully!',
+    };
+    toastr.success(msg.message || labels[msg.op] || 'Operation successful!', 'Success');
+    closeModal('crudModal');
+    closeModal('deleteModal');
+    closeModal('bulkDelModal');
+    document.getElementById('crudSubmitBtn').disabled = false;
+    document.getElementById('crudSubmitLabel').textContent = curMode === 'create' ? 'Create Firm' : 'Save Changes';
+    document.getElementById('deleteConfirmBtn').disabled = false;
+    document.getElementById('bulkDelConfirmBtn').disabled = false;
+    selectedIdxs = [];
+    return;
+  }
+
+  if (msg && msg.type === 'CRUD_ERROR') {
+    toastr.error(msg.error || 'Operation failed', 'Error');
+    document.getElementById('crudSubmitBtn').disabled = false;
+    document.getElementById('crudSubmitLabel').textContent = curMode === 'create' ? 'Create Firm' : 'Save Changes';
+    document.getElementById('deleteConfirmBtn').disabled = false;
+    document.getElementById('bulkDelConfirmBtn').disabled = false;
+    return;
+  }
+});
+
+/* ════════════════════════════════════════
+   INIT
+════════════════════════════════════════ */
+buildCVMenu();
+window.parent.postMessage('IFRAME_READY', '*');
+toastr.info('Ctrl+N → new firm &nbsp;|&nbsp; Ctrl+F → search &nbsp;|&nbsp; ESC → close modal &nbsp;|&nbsp; Click <i class="fas fa-filter"></i> in column headers for Excel filters', 'Firms Grid', { timeOut: 3000 });
+</script>
+</body>
+</html>

@@ -1,0 +1,1160 @@
+@import "tailwindcss";
+
+/*
+  Sidebar positioning uses #sidebar-menu (ID selector), NOT a Tailwind class.
+  Reason: Tailwind v4 does not reliably scan JS template literals, so any
+  class added in sidebar.js may never appear in output.css after build.
+  An ID-based rule in input.css is always compiled — no scanning involved.
+
+  Navbar  = h-12 = 3rem (48px)
+  Footer  = h-8  = 2rem (32px)
+  Sidebar = 100vh - 3rem - 2rem
+*/
+#sidebar-menu {
+  position: fixed;
+  top: 3rem;
+  left: 0;
+  height: calc(100vh - 3rem - 2rem);
+}
+
+/* Page Loading Spinner */
+#page-loading {
+  display: none;
+}
+
+#page-loading .loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+#page-loading .loading-container {
+  text-align: center;
+}
+
+#page-loading .loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px;
+}
+
+#page-loading .loading-text {
+  color: #666;
+  font-family: Arial, sans-serif;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error Page Styles */
+.error-container {
+  max-width: 480px;
+  margin: 4rem auto;
+  padding: 2rem;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+
+.error-heading {
+  color: #dc2626;
+  margin-bottom: 0.5rem;
+}
+
+.error-message {
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+}
+
+.error-link {
+  display: inline-block;
+  padding: 0.6rem 1.4rem;
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.error-link:hover {
+  background: #2563eb;
+}
+
+/* Wages Components - Tabs */
+.tabs {
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  padding: 12px 24px;
+  background: transparent;
+  color: #6b7280;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.tab-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-bottom-color: #3b82f6;
+}
+
+.tab-btn:hover {
+  background: #e0e7ff;
+}
+
+.tab-btn.active:hover {
+  background: #2563eb;
+}
+
+/* Wages Components - Manage Mode */
+.manage-mode {
+  width: 100%;
+}
+
+.manage-controls {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.manage-controls-row {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.manage-month-field {
+  display: block;
+}
+
+.manage-month-label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.manage-month-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.manage-margin-auto {
+  margin-top: auto;
+}
+
+.manage-button {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.manage-button:hover {
+  background: #2563eb;
+}
+
+.manage-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.bulk-edit-button {
+  padding: 8px 16px;
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.bulk-edit-button.active {
+  background: #dc2626;
+}
+
+.bulk-edit-button:hover {
+  background: #7c3aed;
+}
+
+.bulk-edit-button.active:hover {
+  background: #b91c1c;
+}
+
+.delete-button {
+  padding: 8px 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.delete-button:hover {
+  background: #dc2626;
+}
+
+.delete-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.save-button {
+  padding: 8px 16px;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.save-button:hover {
+  background: #047857;
+}
+
+.save-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.export-button {
+  padding: 8px 16px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.export-button:hover {
+  background: #4f46e5;
+}
+
+#manage-selection-actions {
+  gap: 10px;
+  align-items: center;
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+#manage-selection-actions.hidden {
+  display: none !important;
+}
+
+#manage-selection-actions.visible {
+  display: flex !important;
+}
+
+#save-edited-btn-container {
+  margin-top: auto;
+}
+
+#save-edited-btn-container.hidden {
+  display: none !important;
+}
+
+#save-edited-btn-container.visible {
+  display: block !important;
+}
+
+.manage-summary-panel {
+  margin-top: 15px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f0fdf4, #fef2f2);
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 15px;
+}
+
+.manage-summary-panel.hidden {
+  display: none !important;
+}
+
+.manage-summary-panel.visible {
+  display: block !important;
+}
+
+.manage-summary-header {
+  margin-bottom: 10px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.manage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.manage-summary-card {
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  border-left: 3px solid;
+}
+
+.manage-summary-card-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 3px;
+}
+
+.manage-summary-card-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.manage-summary-gross {
+  border-left-color: #ef4444;
+}
+
+.manage-summary-gross .manage-summary-card-value {
+  color: #059669;
+}
+
+.manage-summary-epf {
+  border-left-color: #f59e0b;
+}
+
+.manage-summary-epf .manage-summary-card-value {
+  color: #f59e0b;
+}
+
+.manage-summary-esic {
+  border-left-color: #3b82f6;
+}
+
+.manage-summary-esic .manage-summary-card-value {
+  color: #3b82f6;
+}
+
+.manage-summary-net {
+  border-left-color: #8b5cf6;
+}
+
+.manage-summary-net .manage-summary-card-value {
+  color: #059669;
+}
+
+/* Admin Users Grid */
+.admin-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.refresh-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #4f46e5;
+  background: #eef2ff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-button:hover {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.status-approved {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.status-pending {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.status-rejected {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.role-badge {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.role-super_admin {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.role-admin {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.role-user {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* iframes - dynamic height */
+.admin-iframe {
+  width: 100%;
+  border: 0;
+  height: calc(100vh - 160px);
+  min-height: 500px;
+}
+
+/* Bulk Edit Form Styles */
+.bulk-edit-form {
+  margin-top: 15px;
+  padding: 15px;
+  background: #fef3c7;
+  border-radius: 8px;
+  border-left: 4px solid #f59e0b;
+}
+
+.bulk-edit-header {
+  margin-bottom: 10px;
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bulk-edit-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.bulk-edit-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: #78350f;
+}
+
+.bulk-edit-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #d97706;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.bulk-edit-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.bulk-apply-button {
+  padding: 6px 12px;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.bulk-apply-button:hover {
+  background: #047857;
+}
+
+.bulk-clear-button {
+  padding: 6px 12px;
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.bulk-clear-button:hover {
+  background: #4b5563;
+}
+
+/* Filters Section Styles */
+.filters-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.filters-header {
+  margin-bottom: 10px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.filter-input,
+.filter-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Wages Table Container */
+.wages-table-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.wages-table-title {
+  margin-bottom: 15px;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wages-table-count {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+#unsaved-changes-badge {
+  display: none;
+  color: #f59e0b;
+  font-size: 14px;
+  margin-left: 10px;
+}
+
+#unsaved-changes-badge.visible {
+  display: inline;
+}
+
+.wages-table-wrapper {
+  overflow-x: auto;
+}
+
+.wages-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wages-table-header {
+  background: linear-gradient(to right, #ef4444, #10b981);
+  border-bottom: 2px solid #e5e7eb;
+  color: white;
+}
+
+.wages-table-th {
+  padding: 10px;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+}
+
+.wages-table-th:nth-child(1) {
+  text-align: center;
+  width: 40px;
+}
+
+.wages-table-th.wages-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.wages-table-th.wages-sortable:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.wages-table-row {
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.wages-table-row.selected {
+  background: #eff6ff;
+}
+
+.wages-table-td {
+  padding: 10px;
+  text-align: left;
+}
+
+.wages-table-td:nth-child(1) {
+  text-align: center;
+}
+
+.wages-table-td.wages-right {
+  text-align: right;
+}
+
+.wage-employee-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.wage-employee-details {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.wage-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.wage-input {
+  padding: 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  text-align: center;
+  font-family: inherit;
+}
+
+.wage-days-input {
+  width: 50px;
+}
+
+.wage-numeric-input {
+  width: 70px;
+  text-align: right;
+}
+
+.wage-currency {
+  font-weight: 500;
+}
+
+.wage-net-salary {
+  font-weight: 600;
+  color: #059669;
+}
+
+.wage-payment-info {
+  font-size: 11px;
+}
+
+.wage-payment-date {
+  color: #6b7280;
+}
+
+.wage-payment-cheque {
+  color: #6b7280;
+}
+
+/* No Wages Container */
+.no-wages-container {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.no-wages-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.no-wages-title {
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.no-wages-message {
+  color: #9ca3af;
+}
+
+/* Wages Dashboard */
+#wages-dashboard {
+  padding: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.wages-dashboard-header {
+  margin-bottom: 20px;
+}
+
+.wages-dashboard-title {
+  color: #1f2937;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.wages-dashboard-subtitle {
+  color: #6b7280;
+  margin-top: 5px;
+}
+
+/* Create Mode Styles */
+.create-mode {
+  width: 100%;
+}
+
+.create-controls {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.create-controls-row {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.create-month-field {
+  display: block;
+}
+
+.create-month-label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.create-month-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.create-margin-auto {
+  margin-top: auto;
+}
+
+.create-button {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.create-button:hover {
+  background: #2563eb;
+}
+
+.create-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.create-button-secondary {
+  background: #10b981;
+}
+
+.create-button-secondary:hover {
+  background: #059669;
+}
+
+.create-save-button {
+  background: #059669;
+}
+
+.create-save-button:hover:not(:disabled) {
+  background: #047857;
+}
+
+.create-save-button.disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.create-button-export {
+  background: #6366f1;
+}
+
+.create-button-export:hover {
+  background: #4f46e5;
+}
+
+.create-filters-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.create-filters-header {
+  margin-bottom: 10px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.create-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.create-filter-input,
+.create-filter-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.create-filter-input:focus,
+.create-filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.create-payment-data {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  border-left: 4px solid #3b82f6;
+}
+
+.create-payment-header {
+  margin-bottom: 10px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.create-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.create-payment-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.create-payment-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.create-summary {
+  margin-top: 15px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f0fdf4, #fef2f2);
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.create-summary-header {
+  margin-bottom: 10px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.create-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.create-summary-card {
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+  border-left: 3px solid;
+}
+
+.create-summary-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 3px;
+}
+
+.create-summary-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.create-table-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.create-table-title {
+  margin-bottom: 15px;
+  color: #1f2937;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.create-table-count {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.create-table-wrapper {
+  overflow-x: auto;
+}
+
+.create-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.create-table-header {
+  background: linear-gradient(to right, #ef4444, #10b981);
+  border-bottom: 2px solid #e5e7eb;
+  color: white;
+}
+
+.create-table-th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+}
+
+.create-table-th:nth-child(1) {
+  text-align: center;
+  width: 40px;
+}
+
+.create-table-th:nth-child(4),
+.create-table-th:nth-child(5),
+.create-table-th:nth-child(6),
+.create-table-th:nth-child(7),
+.create-table-th:nth-child(8),
+.create-table-th:nth-child(9),
+.create-table-th:nth-child(10),
+.create-table-th:nth-child(11) {
+  text-align: center;
+}
+
+.create-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.create-sortable:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.create-table-row {
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.create-table-row.selected {
+  background: #eff6ff;
+}
+
+.create-table-td {
+  padding: 12px;
+  text-align: left;
+}
+
+.create-table-td:nth-child(1) {
+  text-align: center;
+}
+
+.create-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.create-emp-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.create-emp-details {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.create-bank-name {
+  font-size: 13px;
+  color: #374151;
+}
+
+.create-account-no {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.create-input {
+  padding: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.create-numeric-input {
+  width: 80px;
+  text-align: right;
+}
+
+.create-center-input {
+  width: 60px;
+  text-align: center;
+}
+
+.create-readonly {
+  width: 100px;
+  text-align: right;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.create-net-salary {
+  width: 110px;
+  text-align: right;
+  border: 2px solid #10b981;
+  background: #ecfdf5;
+  font-weight: 600;
+  color: #059669;
+}
+
+.create-no-employees {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.create-no-employees-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.create-no-employees-title {
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.create-no-employees-message {
+  color: #9ca3af;
+}
+/* Create Mode Summary Card Colors */
+.create-summary-card.create-summary-gross .create-summary-value {
+  color: #ef4444;
+}
+
+.create-summary-card.create-summary-epf .create-summary-value {
+  color: #f59e0b;
+}
+
+.create-summary-card.create-summary-esic .create-summary-value {
+  color: #3b82f6;
+}
+
+.create-summary-card.create-summary-net .create-summary-value {
+  color: #059669;
+}
+
+.create-summary-card.create-summary-gross {
+  border-left-color: #ef4444;
+}
+
+.create-summary-card.create-summary-epf{
+  border-left-color: #f59e0b;
+}
+
+.create-summary-card.create-summary-esic {
+  border-left-color: #3b82f6;
+}
+
+.create-summary-card.create-summary-net {
+  border-left-color: #10b981;
+}

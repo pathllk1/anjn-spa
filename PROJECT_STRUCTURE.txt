@@ -1,0 +1,322 @@
+PROJECT STRUCTURE - Business Management Application
+==================
+
+Application Overview:
+This is a comprehensive Node.js Single Page Application for business management, supporting multi-firm operations with modules for user management, employee records, wages, inventory, and accounting. Database: MongoDB with Mongoose ODM.
+
+nodejs-spa-auth/
+│
+├── 📄 package.json              # Node.js dependencies and scripts
+├── 📄 package-lock.json         # npm dependencies lock file
+├── 📄 .env                      # Environment variables (actual)
+├── 📄 .env.example              # Environment variables template
+├── 📄 vercel.json               # Vercel deployment configuration
+├── 📄 PROJECT_STRUCTURE.txt     # This file - project documentation
+├── 📄 .gitignore                # Git ignore file
+├── 🔨 setup.sh                  # Linux/Mac setup script
+├── 🔨 setup.bat                 # Windows setup script
+│
+├── 📁 .git/                     # Git repository
+├── 📁 .qoder/                   # Qoder configuration
+├── 📁 .vercel/                  # Vercel configuration
+├── 📁 .vscode/                  # VS Code settings
+├── 📁 node_modules/             # npm dependencies
+│
+├── 📁 docs/                     # Comprehensive documentation (35 files)
+│
+├── 📁 prisma/                   # Prisma ORM configuration
+│   └── 📄 schema.prisma         # Database schema definition (MongoDB)
+│
+├── 📁 server/                   # Backend (Express.js + MongoDB + Mongoose ODM)
+│   ├── 📄 server.js            # Main server entry point
+│   │
+│   ├── 📁 controllers/         # Business logic controllers (17 items)
+│   │   ├── 📄 pageController.js # Page controller
+│   │   ├── 📁 mongo/           # MongoDB controllers (16 items)
+│   │   │   ├── 📄 authController.js # Authentication
+│   │   │   ├── � firmManagementController.js # Firm management
+│   │   │   ├── � masterRoll.controller.js # Master roll
+│   │   │   ├── 📄 pageController.js # Page controller
+│   │   │   ├── � sessionController.js # Session controller
+│   │   │   ├── 📄 settingsController.js # Settings
+│   │   │   ├── 📄 superAdminController.js # Super admin
+│   │   │   ├── 📄 systemConfigController.js # System config
+│   │   │   ├── 📄 wages.controller.js # Wages
+│   │   │   ├── 📁 inventory/   # Inventory controllers (3 items)
+│   │   │   │   └── 📄 inventory.js # Inventory management
+│   │   │   └── 📁 ledger/      # Ledger controllers (4 items)
+│   │   │       ├── 📄 journalEntryController.js # Journal entries
+│   │   │       ├── 📄 ledgerController.js # Ledger
+│   │   │       ├── 📄 pdfMakeController.js # PDF for ledger
+│   │   │       └── 📄 voucherController.js # Vouchers
+│   │
+│   ├── 📁 models/              # Mongoose models (22 files)
+│   │   ├── 📄 AdminAuditLog.model.js # Admin audit log
+│   │   ├── 📄 Bill.model.js       # Bill/invoice model
+│   │   ├── 📄 BillSequence.model.js # Bill sequence
+│   │   ├── 📄 Firm.model.js       # Firm model
+│   │   ├── 📄 FirmSettings.model.js # Firm settings
+│   │   ├── 📄 Ledger.model.js     # Ledger entries
+│   │   ├── 📄 LoginAudit.model.js # Login audit
+│   │   ├── 📄 MasterRoll.model.js # Master roll
+│   │   ├── 📄 Party.model.js      # Party model
+│   │   ├── 📄 RateLimit.model.js  # Rate limit
+│   │   ├── 📄 RefreshToken.model.js # Refresh token
+│   │   ├── 📄 Settings.model.js   # Global settings
+│   │   ├── 📄 Stock.model.js      # Stock model
+│   │   ├── 📄 StockReg.model.js   # Stock movement
+│   │   ├── 📄 TokenBlacklist.model.js # Token blacklist
+│   │   ├── 📄 TokenSessionDevice.model.js # Token session device
+│   │   ├── 📄 User.model.js       # User accounts
+│   │   ├── 📄 UserMasterRoll.model.js # User-master roll
+│   │   ├── 📄 UserWage.model.js   # User-wage
+│   │   ├── 📄 VoucherSequence.model.js # Voucher sequence
+│   │   ├── 📄 Wage.model.js       # Wage records
+│   │   └── 📄 index.js            # Models index
+│   │
+│   ├── 📁 routes/              # API route definitions (11 items)
+│   │   ├── 📄 admin.js            # Admin routes
+│   │   ├── 📄 api.js              # General API routes
+│   │   ├── 📄 auth.js             # Authentication routes
+│   │   ├── 📄 authRoutes.js       # Auth routes (legacy)
+│   │   ├── 📄 ledger.routes.js    # Ledger routes
+│   │   ├── 📄 masterRoll.routes.js # Master roll routes
+│   │   ├── 📄 pageRoutes.js       # Page routes
+│   │   ├── 📄 settings.routes.js  # Settings routes
+│   │   ├── 📄 wages.routes.js     # Wages routes
+│   │   └── 📁 inventory/       # Inventory routes (1 item)
+│   │       └── 📄 sls.js          # Sales routes
+│   │
+│   ├── 📁 middleware/          # Express middleware (6 items)
+│   │   ├── 📄 auth.js             # Auth middleware
+│   │   ├── 📄 authMiddleware.js   # JWT validation & auto-refresh
+│   │   ├── 📄 sanitizer.js        # Sanitizer middleware
+│   │   ├── 📄 securityMiddleware.js # CSP/XSS headers
+│   │   ├── 📄 csrfMiddleware.js   # CSRF middleware
+│   │   └── 📁 mongo/           # MongoDB middleware (2 items)
+│   │       ├── 📄 authMiddleware.js # MongoDB-compatible auth
+│   │       └── 📄 securityMiddleware.js # MongoDB-compatible security
+│   │
+│   └── 📁 utils/               # Server utilities (25 items)
+│       ├── 📄 billNumberGenerator.js # Bill number generation
+│       ├── 📄 dateFormatter.js    # Date formatting
+│       ├── 📄 db.js               # Database connection
+│       ├── 📄 gstCalculator.js    # GST calculations
+│       ├── 📄 ledgerHelper.js     # Ledger operations helper
+│       ├── 📄 pdfGenerator.js     # PDF generation
+│       ├── 📄 prisma.js           # Prisma client
+│       ├── 📄 seed-prisma.js      # Prisma seeding
+│       ├── 📄 seed-super-admin.js # Super admin seeding
+│       ├── 📄 seed.js             # Database seeding
+│       ├── 📄 tokenUtils.js       # JWT generation & verification
+│       ├── 📄 users.json          # Demo users data
+│       └── 📁 mongo/           # MongoDB utilities (8 items)
+│           ├── 📄 mongoose.config.js # MongoDB connection
+│           ├── 📄 dateFormatter.js  # MongoDB date formatting
+│           ├── 📄 gstCalculator.js  # MongoDB GST
+│           ├── 📄 ledgerHelper.js   # MongoDB ledger helper
+│           ├── 📄 pdfGenerator.js   # MongoDB PDF
+│           ├── 📄 seed-super-admin.js # MongoDB super admin
+│           ├── 📄 seed.js           # MongoDB seeding
+│           └── 📄 tokenUtils.js     # MongoDB token utils
+│
+├── 📁 client/                  # Frontend (Vanilla JS SPA with Navigo.js)
+│   ├── 📄 index.html           # Main HTML entry point
+│   ├── 📄 app.js               # Router configuration (lazy loading)
+│   │
+│   ├── 📁 public/              # Static assets (3 subdirectories)
+│   │   ├── 📁 cdns/            # CDN libraries
+│   │   ├── 📁 css/             # Stylesheets
+│   │   └── 📁 fonts/           # Font files (44 items)
+│   │
+│   ├── 📁 pages/               # Page components (17 items)
+│   │   ├── 📄 home.js             # Public home page
+│   │   ├── 📄 about.js            # Public about page
+│   │   ├── 📄 login.js            # Login page
+│   │   ├── 📄 dashboard.js        # Main dashboard
+│   │   ├── 📄 profile.js          # User profile
+│   │   ├── 📄 authPage.js         # Authentication page
+│   │   ├── 📄 superAdmin.js       # Super admin page
+│   │   ├── 📄 master-roll.js      # Employee records page
+│   │   ├── 📄 WagesDashboard.js   # Wages management dashboard
+│   │   ├── 📄 sales.js            # Sales page
+│   │   ├── 📄 stocks.js           # Stocks page
+│   │   ├── 📄 inventory-dashboard.js # Inventory dashboard
+│   │   ├── 📄 inventory-categories.js # Inventory categories
+│   │   ├── 📄 inventory-suppliers.js # Suppliers management
+│   │   ├── 📄 inventory-reports.js # Inventory reports
+│   │   ├── 📄 stock-movement.js    # Stock movement tracking
+│   │   ├── 📄 accounts-dashboard.js # Accounts dashboard
+│   │   └── 📁 ledger/          # Ledger pages (7 items)
+│   │       ├── 📄 journal-entries.js
+│   │       ├── 📄 vouchers.js
+│   │       ├── 📄 trial-balance.js
+│   │       ├── 📄 general-ledger.js
+│   │       ├── 📄 account-details.js
+│   │       ├── 📄 new-journal-entry.js
+│   │       └── 📄 new-voucher.js
+│   │
+│   ├── 📁 components/          # Reusable UI components (5 items)
+│   │   ├── 📄 layout.js           # Page layout
+│   │   ├── 📄 navbar.js           # Navigation bar
+│   │   ├── 📄 sidebar.js          # Sidebar navigation
+│   │   ├── 📄 voucher-modal.js    # Voucher modal
+│   │   ├── 📁 inventory/       # Inventory components (19 items)
+│   │   │   ├── 📁 sls/         # Sales components (16 files)
+│   │   │   │   ├── 📄 batchModal.js
+│   │   │   │   ├── 📄 cartManager.js
+│   │   │   │   ├── 📄 chargesModal.js
+│   │   │   │   ├── 📄 historyModal.js
+│   │   │   │   ├── 📄 index.js
+│   │   │   │   ├── 📄 invoiceExport.js
+│   │   │   │   ├── 📄 layoutRenderer.js
+│   │   │   │   ├── 📄 otherChargesManager.js
+│   │   │   │   ├── 📄 partyCreate.js
+│   │   │   │   ├── 📄 partyManager.js
+│   │   │   │   ├── 📄 partyModal.js
+│   │   │   │   ├── 📄 stateManager.js
+│   │   │   │   ├── 📄 stockCrud.js
+│   │   │   │   ├── 📄 stockModal.js
+│   │   │   │   ├── 📄 toast.js
+│   │   │   │   └── 📄 utils.js
+│   │   │   └── 📁 stocks/      # Stock components (3 files)
+│   │   │       ├── 📄 index.js
+│   │   │       ├── 📄 stockApi.js
+│   │   │       └── 📄 stockRenderer.js
+│   │   └── 📁 wages/           # Wages components (3 files)
+│   │       ├── 📄 renderCreateMode.js
+│   │       ├── 📄 renderManageMode.js
+│   │       └── 📄 renderTabs.js
+│   │
+│   ├── 📁 utils/               # Client utilities (2 files)
+│   │   ├── 📄 api.js              # HTTP client wrapper
+│   │   └── 📄 auth.js             # Authentication manager
+│   │
+│   └── 📁 middleware/          # Client-side middleware (1 file)
+│       └── 📄 authMiddleware.js   # Route guards
+│
+├── 📁 api/                     # Serverless API for Vercel (1 file)
+│   └── 📄 index.js                # Vercel serverless entry point
+│
+├── 📁 src/                     # Source files (1 item)
+│   └── 📄 input.css               # Tailwind CSS input
+│
+├── 📁 public/                  # Public static files (empty)
+│
+└── 📁 TST/                      # Test directory (empty)
+
+
+DATABASE SCHEMA OVERVIEW
+========================
+
+Tables:
+- firms: Multi-firm support with business details
+- users: User accounts with roles (user, manager, admin, super_admin)
+- refresh_tokens: JWT refresh token storage
+- master_rolls: Employee records with personal and work details
+- wages: Salary and wage processing records
+- user_master_rolls: User-employee assignment (many-to-many)
+- user_wages: User-wage assignment (many-to-many)
+- stocks: Inventory items with batch support (enhanced with uom/grate fields)
+- parties: Customers and suppliers
+- bills: Sales/purchase invoices
+- stock_reg: Stock movement transactions
+- ledger: General ledger entries
+- bill_sequences: Bill number generation sequences
+- voucher_sequences: Voucher number generation sequences
+- settings: Global application settings
+- firm_settings: Firm-specific settings
+
+
+KEY FEATURES
+============
+
+✅ Multi-Firm Business Management System
+✅ Dual Token JWT Authentication (Access: 15min, Refresh: 30 days)
+✅ Automatic Token Refresh (every 10 minutes)
+✅ HTTP-only Cookies with SameSite protection
+✅ Content Security Policy (CSP) headers
+✅ XSS Protection
+✅ MongoDB with Mongoose ODM
+✅ Enhanced Batch Management with UOM and GST Rate Support
+✅ PDF Report Generation
+✅ Excel Export Functionality (Stock Movements)
+✅ GST Calculations
+✅ Employee Master Rolls & Wage Management
+✅ Inventory Management (Stocks, Parties, Bills, Movements)
+✅ Accounting Ledger (Journal Entries, Vouchers, Trial Balance)
+✅ Responsive Vanilla JS SPA with Navigo.js routing
+✅ Lazy-loaded pages for performance
+✅ Protected and public routes
+✅ Clean ES6 module architecture
+✅ Vercel Serverless Deployment Ready
+
+
+QUICK START
+===========
+
+1. Run setup:
+   Linux/Mac: ./setup.sh
+   Windows:   setup.bat
+
+2. Start server:
+   npm start
+
+3. Open browser:
+   http://localhost:3000
+
+4. Login with demo credentials:
+   admin/admin123, user/user123, or demo/demo123
+
+
+RECENT ENHANCEMENTS
+==================
+
+🔧 Stock Management Enhancements:
+- Fixed UOM and GST rate field persistence in batch management
+- Added comprehensive migration logic for existing batch data
+- Enhanced database schema with proper batch field support
+- Improved client-side field validation and updates
+- Added Excel export functionality for stock movements
+
+🔧 Database Schema Updates:
+- Added VoucherSequence model for auto-increment voucher IDs
+- Enhanced Stock model with proper batch schema (uom, grate fields)
+- Improved data consistency between batch and root-level fields
+
+🔧 API Enhancements:
+- MongoDB-specific controllers for better performance
+- Enhanced error handling and validation
+- Improved data migration and backward compatibility
+
+
+HEAVY FILES
+===========
+
+Large files (>100KB) identified in the project:
+- node_modules/@prisma/engines/schema-engine-debian-openssl-3.0.x (19M)
+- node_modules/prisma/engines/libquery_engine-debian-openssl-3.0.x.so.node (17M)
+- node_modules/lightningcss-linux-x64-musl/lightningcss.linux-x64-musl.node (9.6M)
+- node_modules/@libsql/linux-x64-musl/index.node (9.5M)
+- .git/objects/pack/pack-1732ccccd4e4aeed7f4b8f9b9154d6f05879184b.pack (6.7M)
+- node_modules/pdfmake/build/pdfmake.js.map (4.0M)
+- node_modules/exceljs/dist/exceljs.js.map (3.8M)
+- node_modules/pdfmake/build/pdfmake.min.js.map (3.7M)
+- node_modules/exceljs/dist/exceljs.bare.js.map (3.5M)
+- node_modules/exceljs/dist/exceljs.min.js.map (3.5M)
+- node_modules/@prisma/client/runtime/query_engine_bg.postgresql.wasm-base64.mjs (3.1M)
+- node_modules/@prisma/client/runtime/query_engine_bg.postgresql.wasm-base64.js (3.0M)
+- node_modules/@prisma/client/runtime/query_engine_bg.cockroachdb.wasm-base64.mjs (3.0M)
+- node_modules/@prisma/client/runtime/query_engine_bg.cockroachdb.wasm-base64.js (3.0M)
+- node_modules/prisma/build/schema_engine_bg.wasm (3.0M)
+- package-lock.json (167KB)
+- PROJECT_STRUCTURE.txt (16KB)
+
+
+RECENT CHANGES
+==============
+
+- Removed duplicate "client - Copy" directory (large copy of client/ containing fonts, css, js files)
+- Modified client/components/layout.js
+- Modified client/components/navbar.js
+- Enhanced application with lazy loading pages, security middleware, and multi-firm support
