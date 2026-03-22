@@ -1,16 +1,4 @@
-/**
- * sls/inventory.js — sales bill controller (perpetual inventory)
- *
- * Exports every name that sls_route.js imports from inventoryController.
- * Shared handlers (stocks, parties, stock movements, utilities) are
- * re-exported from sharedStockHandlers.js — no routes change needed.
- *
- * Key accounting changes vs old sls.js:
- *   • Sales posting now includes COGS DR / Inventory CR per goods line at WAC
- *   • StockReg SALE entries carry cost_rate = WAC at moment of sale
- *   • Cancel deletes SALES ledger entries (COGS included, same voucher_id)
- *   • Service items (stock_id: null) have no inventory or COGS entry
- */
+
 
 import mongoose from 'mongoose';
 import {

@@ -1,15 +1,4 @@
-/**
- * prs/inventory.js — purchase bill controller (perpetual inventory)
- *
- * Exports every name that prs.js route imports from inventoryController.
- * Shared handlers (stocks, parties, stock movements, utilities) are
- * re-exported from sharedStockHandlers.js — no routes change needed.
- *
- * Key accounting changes vs old inventory.js:
- *   • Purchase A/c DR (EXPENSE) → Inventory A/c DR (ASSET) per item line
- *   • Stock.rate / Stock.total updated via WAC blend on every purchase
- *   • Stock reversal on cancel / updateBill uses StockReg.total for WAC accuracy
- */
+
 
 import mongoose from 'mongoose';
 import {

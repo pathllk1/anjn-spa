@@ -14,6 +14,7 @@ import {
   BillSequence, VoucherSequence, Settings, FirmSettings, Bill,
 } from '../../../models/index.js';
 
+
 /* ── Actor ────────────────────────────────────────────────────────────────── */
 
 export const getActorUsername = (req) => req?.user?.username ?? null;

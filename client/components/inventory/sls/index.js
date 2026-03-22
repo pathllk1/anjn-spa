@@ -252,7 +252,6 @@ export function initSalesSystem(router) {
                         <div class="p-2 w-10 text-center"></div>
                     </div>
                     
-
                     <div class="flex-1 overflow-y-auto custom-scrollbar relative" id="items-container">
                         ${renderItemsList(state)}
                     </div>

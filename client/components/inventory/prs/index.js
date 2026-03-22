@@ -19,6 +19,7 @@ import { showToast } from './toast.js';
 import { exportInvoiceToPDF } from './invoiceExport.js';
 import { fetchWithCSRF } from '../../../utils/api.js';
 
+
 export function initPurchaseSystem(router) {
     const container = document.getElementById('purchase-system');
     if (!container) return;

@@ -1,16 +1,3 @@
-/**
- * sharedStockHandlers.js — route handlers shared verbatim between
- * the purchase (prs/inventory.js) and sales (sls/inventory.js) controllers.
- *
- * Both controllers re-export everything from here, so prs.js and sls_route.js
- * can continue importing the same named exports without any route changes.
- *
- * NOT exported from here (differ between purchase and sales):
- *   createBill, updateBill, cancelBill
- *   getPartyItemHistory    (type: 'PURCHASE' vs 'SALE')
- *   getPartyBalance        (balance sign: credit-debit vs debit-credit)
- *   getNextBillNumberPreviewEndpoint  (bill type: PURCHASE vs SALES)
- */
 
 import mongoose from 'mongoose';
 import ExcelJS   from 'exceljs';
