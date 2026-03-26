@@ -304,10 +304,18 @@ export const generateInvoicePDF = async (req, res) => {
         let firmGstin = '';
 
         try {
-            firm = await Firm.findById(firmId).select('name address gst_number bank_account_number bank_name bank_branch ifsc_code').lean();
+            firm = await Firm.findById(firmId).select('name address gst_number bank_account_number bank_name bank_branch ifsc_code locations').lean();
             if (!firm) return res.status(404).json({ error: 'Firm not found' });
             firmAddress = firm.address || '';
-            firmGstin = firm.gst_number || '';
+            
+            // FIX: Use the GST number that was used at the time of billing (bill.firm_gstin)
+            // If not available (legacy bills), fall back to the default GST from firm
+            if (bill.firm_gstin) {
+                firmGstin = bill.firm_gstin;
+            } else {
+                // Legacy fallback: use default GST from firm
+                firmGstin = firm.gst_number || '';
+            }
         } catch (err) {
             console.error('Error fetching firm:', err.message);
             return res.status(500).json({ error: 'Internal server error' });

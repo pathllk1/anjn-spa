@@ -215,13 +215,21 @@ export const generateInvoiceExcel = async (req, res) => {
         let firmGstin   = '';
         let firmRecord  = null;
         try {
-            firmRecord = await Firm.findById(firmId).select('name address gst_number bank_account_number bank_name bank_branch ifsc_code').lean();
+            firmRecord = await Firm.findById(firmId).select('name address gst_number bank_account_number bank_name bank_branch ifsc_code locations').lean();
             if (!firmRecord) return res.status(404).json({ error: 'Firm not found' });
             firmAddress = firmRecord.address || '';
-            firmGstin   = firmRecord.gst_number || '';
+            
+            // FIX: Use the GST number that was used at the time of billing (bill.firm_gstin)
+            // If not available (legacy bills), fall back to the default GST from firm
+            if (bill.firm_gstin) {
+                firmGstin = bill.firm_gstin;
+            } else {
+                // Legacy fallback: use default GST from firm
+                firmGstin = firmRecord.gst_number || '';
+            }
         } catch (err) {
             console.error('Error fetching firm:', err.message);
-            return res.status(500).json({ error: 'Internal server error' });
+            return res.status(404).json({ error: 'Firm not found' });
         }
 
         const seller     = { name: bill.firm || 'Company Name', address: firmAddress, gstin: firmGstin };

@@ -802,6 +802,9 @@ function resetForm() {
    COLLECT FIRM DATA
    Sends locations[] (unified) — never gst_numbers/addresses.
    Backend controller already expects req.body.locations.
+   
+   CRITICAL: Filter out completely empty locations (no GSTIN and no address).
+   This prevents blank placeholder cards from being saved.
 ══════════════════════════════════════════════════════════ */
 function collectFirmData() {
   var data = {
@@ -840,23 +843,34 @@ function collectFirmData() {
 
     /*
      * KEY FIX: send locations[] — the single unified array.
-     * Strip _fetched (UI-only). Skip entries with neither GSTIN nor address.
+     * Strip _fetched (UI-only). 
+     * CRITICAL: Only include locations that have at least a GSTIN or address.
+     * This filters out completely empty placeholder cards.
      */
     locations: locationList
-      .filter(function(l){ return l.gst_number || l.address; })
+      .filter(function(l){ 
+        var hasGstin = (l.gst_number || '').trim().length > 0;
+        var hasAddr = (l.address || '').trim().length > 0;
+        return hasGstin || hasAddr;
+      })
       .map(function(l){
         return {
-          gst_number:        l.gst_number        || '',
-          state_code:        l.state_code        || '',
-          state:             l.state             || '',
+          gst_number:        (l.gst_number || '').trim(),
+          state_code:        (l.state_code || '').trim(),
+          state:             (l.state || '').trim(),
           registration_type: l.registration_type || 'PPOB',
-          address:           l.address           || '',
-          city:              l.city              || '',
-          pincode:           l.pincode           || '',
+          address:           (l.address || '').trim(),
+          city:              (l.city || '').trim(),
+          pincode:           (l.pincode || '').trim(),
           is_default:        !!l.is_default,
         };
       }),
   };
+
+  /* Ensure at least one location is marked as default */
+  if (data.locations.length > 0 && !data.locations.some(function(l){ return l.is_default; })) {
+    data.locations[0].is_default = true;
+  }
 
   var estYear = parseInt(document.getElementById('f_establishment_year').value);
   if (!isNaN(estYear)) data.establishment_year = estYear;
@@ -879,7 +893,27 @@ window.openCreateModal = function() {
 
 window.showEditModal = function(idx) {
   var f = allFirms[idx]; if (!f) return;
-  curMode = 'edit'; curIdx = idx; resetForm();
+  curMode = 'edit'; curIdx = idx;
+
+  /* Clear form fields but DON'T call resetForm() yet — we'll load locations manually */
+  [
+    'f_name','f_legal_name','f_code','f_description','f_business_type','f_industry_type',
+    'f_establishment_year','f_employee_count','f_phone_number','f_secondary_phone',
+    'f_email','f_website','f_gst_number',
+    'f_pan_number','f_cin_number','f_registration_number','f_registration_date',
+    'f_tax_id','f_vat_number','f_license_numbers','f_insurance_details',
+    'f_bank_account_number','f_bank_name','f_bank_branch','f_ifsc_code','f_payment_terms',
+    'f_logo_url','a_fullname','a_username','a_email','a_password',
+  ].forEach(function(id){ setField(id,''); });
+
+  setField('f_status','approved');
+  setField('f_currency','INR');
+  setField('f_timezone','Asia/Kolkata');
+  setField('f_fiscal_year_start','');
+  setField('f_invoice_prefix','');
+  setField('f_quote_prefix','');
+  setField('f_po_prefix','');
+  setField('f_enable_e_invoice', false);
 
   /* Populate all simple fields */
   var fields = {
@@ -904,7 +938,7 @@ window.showEditModal = function(idx) {
 
   /* KEY FIX: load from f.locations[] — the single unified array */
   locationList = [];
-  var locs = (f.locations && f.locations.length) ? f.locations : null;
+  var locs = (f.locations && Array.isArray(f.locations) && f.locations.length > 0) ? f.locations : null;
 
   if (locs) {
     locs.forEach(function(l) {

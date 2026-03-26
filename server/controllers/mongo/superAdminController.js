@@ -84,7 +84,7 @@ export async function getAllFirmsForAdmin(req, res) {
 
   try {
     const firms = await Firm.find()
-      .select('name code legal_name address city state country pincode phone_number secondary_phone email website business_type industry_type gst_number pan_number cin_number registration_number status createdAt')
+      .select('name code legal_name address city state country pincode phone_number secondary_phone email website business_type industry_type gst_number pan_number cin_number registration_number status locations createdAt')
       .sort({ createdAt: -1 });
 
     res.json({ firms });
