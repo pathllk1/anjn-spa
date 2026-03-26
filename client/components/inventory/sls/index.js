@@ -3,7 +3,7 @@
  * Coordinates all components and manages the application lifecycle
  */
 
-import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBillData } from './stateManager.js';
+import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBillData, determineGstBillType } from './stateManager.js';
 import { formatCurrency, populateConsigneeFromBillTo, getPartyId, escHtml } from './utils.js';
 import { addOtherCharge, removeOtherCharge, updateOtherCharge } from './otherChargesManager.js';
 import { addItemToCart, addServiceToCart, removeItemFromCart, updateCartItem, updateCartItemNarration, clearCart } from './cartManager.js';
@@ -23,9 +23,7 @@ export function initSalesSystem(router) {
     const container = document.getElementById('sales-system');
     if (!container) return;
 
-    // FIX: Removed all [LOAD_BILL_DATA] and URL/param debug console.log calls
-
-    const urlParams      = new URLSearchParams(window.location.search);
+    const urlParams       = new URLSearchParams(window.location.search);
     const editBillIdParam = urlParams.get('edit');
     const sessionEditId   = sessionStorage.getItem('editBillId');
     const finalEditParam  = editBillIdParam || sessionEditId;
@@ -36,8 +34,8 @@ export function initSalesSystem(router) {
     if (finalEditParam) {
         const isValidObjectId = /^[a-f\d]{24}$/i.test(finalEditParam);
         if (isValidObjectId) {
-            editBillId  = finalEditParam;
-            isEditMode  = true;
+            editBillId = finalEditParam;
+            isEditMode = true;
         } else {
             console.warn('Invalid edit bill ID:', finalEditParam);
             sessionStorage.removeItem('editBillId');
@@ -48,6 +46,7 @@ export function initSalesSystem(router) {
 
     const state = createInitialState();
 
+    // fetchCurrentUserFirmName now also populates state.firmLocations
     fetchCurrentUserFirmName(state);
 
     if (isEditMode) {
@@ -69,7 +68,6 @@ export function initSalesSystem(router) {
             renderMainLayout(isEditMode);
         }).catch(err => {
             console.error('Failed to load data:', err);
-            // FIX: escHtml on err.message before innerHTML interpolation
             container.innerHTML = `
                 <div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
                     <h3 class="font-bold text-lg">System Error</h3>
@@ -82,7 +80,6 @@ export function initSalesSystem(router) {
     }
 
     function showEditError(container, errorMessage, billId) {
-        // FIX: escHtml on both errorMessage (JS Error.message, not DB-sanitized) and billId
         container.innerHTML = `
             <div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
                 <h3 class="font-bold text-lg">Edit Bill Error</h3>
@@ -98,6 +95,53 @@ export function initSalesSystem(router) {
                         Create New Bill
                     </button>
                 </div>
+            </div>`;
+    }
+
+    /* ── Auto-determine GST bill type from firm location vs party state ────
+     *
+     * FIX: Previously the user had to manually pick intra/inter-state from a
+     * dropdown with no validation. Now whenever a party is selected or the
+     * active firm GSTIN changes we automatically derive the correct type and
+     * update the dropdown. The backend also validates before saving.
+     */
+    function autoSetBillType() {
+        const detectedType = determineGstBillType(state.activeFirmLocation, state.selectedParty);
+        if (!detectedType) return; // can't determine — leave as-is
+
+        state.meta.billType = detectedType;
+
+        const sel = document.getElementById('billTypeSelector');
+        if (sel) sel.value = detectedType;
+
+        const totals = document.getElementById('totals-section');
+        if (totals) totals.innerHTML = renderTotals(state);
+    }
+
+    /* ── Render firm GSTIN selector (only shown when firm has >1 location) ──
+     *
+     * FIX: With multiple GST registrations, the user must be able to pick
+     * which GSTIN is billing. This selector sets state.activeFirmLocation and
+     * immediately re-derives the bill type.
+     */
+    function renderFirmGstinSelector() {
+        const locs = state.firmLocations;
+        if (!locs || locs.length <= 1) return ''; // single GSTIN — no selector needed
+
+        const options = locs.map(l => {
+            const label = `${l.gst_number || 'No GSTIN'} — ${l.state || l.state_code || ''}${l.is_default ? ' (Default)' : ''}`;
+            const selected = state.activeFirmLocation?.gst_number === l.gst_number ? 'selected' : '';
+            return `<option value="${escHtml(l.gst_number || '')}" ${selected}>${escHtml(label)}</option>`;
+        }).join('');
+
+        return `
+            <div class="flex flex-col">
+                <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Billing from GSTIN</label>
+                <select id="firmGstinSelector"
+                        class="border border-orange-300 bg-orange-50 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-orange-400 outline-none text-slate-700 font-medium"
+                        title="Select which firm GSTIN to bill from">
+                    ${options}
+                </select>
             </div>`;
     }
 
@@ -123,6 +167,10 @@ export function initSalesSystem(router) {
                         <input type="date" value="${escHtml(state.meta.billDate)}"
                                class="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none text-slate-700">
                     </div>
+
+                    <!-- FIX: Firm GSTIN selector — only shown when firm has multiple GST registrations -->
+                    ${renderFirmGstinSelector()}
+
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Transaction Type</label>
                         <select id="billTypeSelector" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 font-medium">
@@ -143,9 +191,10 @@ export function initSalesSystem(router) {
 
                 <div class="flex flex-wrap gap-2">
                     <button id="btn-other-charges" class="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap">Other Charges</button>
-                    <button id="btn-add-service"   class="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors whitespace-nowrap">Add Service</button>
-                    <button id="btn-reset"         class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
-                    <button id="btn-save"          class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
+                    <button id="btn-add-item"    class="px-3 py-1.5 text-xs text-indigo-600 border border-indigo-200 bg-indigo-50 rounded hover:bg-indigo-100 transition-colors whitespace-nowrap">Add Items (F2)</button>
+                    <button id="btn-add-service" class="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors whitespace-nowrap">Add Service</button>
+                    <button id="btn-reset"       class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
+                    <button id="btn-save"        class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
                         <span id="save-icon">💾</span>
                         <span id="save-text">${isEditMode ? 'Update Bill' : 'Save Invoice'}</span>
                         <div id="save-spinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
@@ -251,7 +300,7 @@ export function initSalesSystem(router) {
                         <div class="p-2 w-28 text-right">Total</div>
                         <div class="p-2 w-10 text-center"></div>
                     </div>
-                    
+
                     <div class="flex-1 overflow-y-auto custom-scrollbar relative" id="items-container">
                         ${renderItemsList(state)}
                     </div>
@@ -293,16 +342,10 @@ export function initSalesSystem(router) {
                 <div class="p-5 flex flex-col gap-2">
                     <button id="download-pdf-btn"
                             class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
                         Download PDF
                     </button>
                     <button id="download-excel-btn"
                             class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
                         Download Excel
                     </button>
                     <button id="close-modal-btn"
@@ -325,6 +368,8 @@ export function initSalesSystem(router) {
                         onSelectParty: async (party) => {
                             state.selectedParty = party;
                             state.historyCache  = {};
+                            // FIX: Auto-detect bill type after party is selected
+                            autoSetBillType();
                             renderMainLayout(isEditMode);
                         },
                         onCreateParty: () => {
@@ -332,6 +377,8 @@ export function initSalesSystem(router) {
                                 state.parties.push(newParty);
                                 state.selectedParty = newParty;
                                 state.historyCache  = {};
+                                // FIX: Auto-detect bill type after new party is created and selected
+                                autoSetBillType();
                                 renderMainLayout(isEditMode);
                             });
                         },
@@ -349,7 +396,6 @@ export function initSalesSystem(router) {
         attachEventListeners(isEditMode, editBillId || null);
     }
 
-    // ── Helper: refresh stocks list ────────────────────────────────────────
     async function refreshStocks() {
         try {
             const response = await fetch('/api/inventory/sales/stocks', {
@@ -365,9 +411,8 @@ export function initSalesSystem(router) {
         }
     }
 
-    // ── Stock modal callbacks ─────────────────────────────────────────────
     function buildStockModalCallbacks(isEditMode) {
-        const callbacks = {
+        return {
             onSelectStock: async (stock, showBatchModal) => {
                 if (showBatchModal) {
                     await showBatchSelectionModal(stock, (stockWithBatch) => {
@@ -395,12 +440,10 @@ export function initSalesSystem(router) {
                 openPartyItemHistoryModal(stock, state);
             },
         };
-        return callbacks;
     }
 
     function attachEventListeners(isEditMode = false, editBillId = null) {
 
-        // Save button spinner helpers
         const showSaveSpinner = () => {
             document.getElementById('btn-save')?.setAttribute('disabled', 'true');
             document.getElementById('save-icon')?.classList.add('hidden');
@@ -416,9 +459,8 @@ export function initSalesSystem(router) {
 
         // Add item
         const addBtn = document.getElementById('btn-add-item');
-        if (addBtn) {
-            addBtn.onclick = () => openStockModal(state, buildStockModalCallbacks(isEditMode));
-        }
+        if (addBtn) addBtn.onclick = () => openStockModal(state, buildStockModalCallbacks(isEditMode));
+
         const addServiceBtn = document.getElementById('btn-add-service');
         if (addServiceBtn) {
             addServiceBtn.onclick = () => {
@@ -432,9 +474,9 @@ export function initSalesSystem(router) {
         if (chargesBtn) {
             chargesBtn.onclick = () => {
                 openOtherChargesModal(state, {
-                    onAddCharge:    (charge)      => addOtherCharge(state, charge),
-                    onRemoveCharge: (idx)          => removeOtherCharge(state, idx),
-                    onUpdateCharge: (idx, charge)  => updateOtherCharge(state, idx, charge),
+                    onAddCharge:    (charge)     => addOtherCharge(state, charge),
+                    onRemoveCharge: (idx)         => removeOtherCharge(state, idx),
+                    onUpdateCharge: (idx, charge) => updateOtherCharge(state, idx, charge),
                     formatCurrency,
                     onSave: () => {
                         const totals = document.getElementById('totals-section');
@@ -452,6 +494,17 @@ export function initSalesSystem(router) {
                     clearCart(state);
                     renderMainLayout(isEditMode);
                 }
+            };
+        }
+
+        // FIX: Firm GSTIN selector — update activeFirmLocation and re-derive bill type
+        const firmGstinSelector = document.getElementById('firmGstinSelector');
+        if (firmGstinSelector) {
+            firmGstinSelector.onchange = (e) => {
+                const selectedGstin = e.target.value;
+                state.activeFirmLocation = state.firmLocations.find(l => l.gst_number === selectedGstin) || null;
+                // Re-detect bill type for the newly selected firm location
+                autoSetBillType();
             };
         }
 
@@ -485,15 +538,20 @@ export function initSalesSystem(router) {
                 try {
                     const partyId  = getPartyId(state.selectedParty);
                     const billData = {
-                        meta:         state.meta,
+                        meta: {
+                            ...state.meta,
+                            // FIX: send the active firm GSTIN so the backend can
+                            // validate the bill type and store it on the bill record
+                            firmGstin: state.activeFirmLocation?.gst_number || null,
+                        },
                         party:        partyId,
                         cart:         state.cart,
                         otherCharges: state.otherCharges,
                         consignee:    state.selectedConsignee,
                     };
 
-                    const method   = isEditMode ? 'PUT' : 'POST';
-                    const url      = isEditMode
+                    const method = isEditMode ? 'PUT' : 'POST';
+                    const url    = isEditMode
                         ? `/api/inventory/sales/bills/${editBillId}`
                         : '/api/inventory/sales/bills';
 
@@ -581,8 +639,6 @@ export function initSalesSystem(router) {
             };
         }
 
-        // FIX: Removed stray `state.meta.vehicle_no = ''` that was silently clearing vehicle number on every render
-
         // Reverse charge
         const rcToggle = document.getElementById('reverse-charge-toggle');
         if (rcToggle) {
@@ -608,17 +664,17 @@ export function initSalesSystem(router) {
             const el = document.getElementById(id);
             if (el) el.oninput = (e) => setter(e.target.value);
         };
-        bindInput('reference-no',                  v => { state.meta.referenceNo     = v; });
-        bindInput('vehicle-no',                    v => { state.meta.vehicleNo        = v; });
-        bindInput('narration',                     v => { state.meta.narration        = v; });
-        bindInput('dispatch-through',              v => { state.meta.dispatchThrough  = v; });
-        bindInput('consignee-name',                v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.name = v; });
-        bindInput('consignee-gstin',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.gstin = v; });
-        bindInput('consignee-state',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.state = v; });
-        bindInput('consignee-pin',                 v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.pin = v; });
-        bindInput('consignee-contact',             v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.contact = v; });
+        bindInput('reference-no',                    v => { state.meta.referenceNo     = v; });
+        bindInput('vehicle-no',                      v => { state.meta.vehicleNo        = v; });
+        bindInput('narration',                       v => { state.meta.narration        = v; });
+        bindInput('dispatch-through',                v => { state.meta.dispatchThrough  = v; });
+        bindInput('consignee-name',                  v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.name = v; });
+        bindInput('consignee-gstin',                 v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.gstin = v; });
+        bindInput('consignee-state',                 v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.state = v; });
+        bindInput('consignee-pin',                   v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.pin = v; });
+        bindInput('consignee-contact',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.contact = v; });
         bindInput('consignee-delivery-instructions', v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.deliveryInstructions = v; });
-        bindInput('consignee-address',             v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.address = v; });
+        bindInput('consignee-address',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.address = v; });
 
         // Bill date
         const billDateInput = document.querySelector('input[type="date"]');
@@ -639,10 +695,9 @@ export function initSalesSystem(router) {
         else if (e.key === 'F9') { e.preventDefault(); document.getElementById('btn-reset')?.click(); }
     });
 
-    // ── Save confirmation modal ───────────────────────────────────────────
     function showSaveConfirmationModal(billId, billNo, isEditMode) {
-        const modal     = document.getElementById('save-confirmation-modal');
-        const billNoEl  = document.getElementById('modal-bill-no');
+        const modal    = document.getElementById('save-confirmation-modal');
+        const billNoEl = document.getElementById('modal-bill-no');
         if (billNoEl) billNoEl.textContent = billNo;
         modal.classList.remove('hidden');
 
@@ -671,10 +726,6 @@ export function initSalesSystem(router) {
         document.getElementById('save-confirmation-modal')?.classList.add('hidden');
     }
 
-    // FIX: Uses credentials:'same-origin' (cookie auth).
-    // Original code sent localStorage.getItem('token') in an Authorization header —
-    // mixing auth strategies and defeating the HttpOnly cookie security model.
-    // FIX: alert() → showToast
     function downloadFile(url, filename, _mimeType, billId, handleAfterModal) {
         fetch(url, { method: 'GET', credentials: 'same-origin' })
             .then(response => {

@@ -47,12 +47,12 @@ Authenticate user and receive JWT tokens.
   "success": true,
   "message": "Login successful",
   "user": {
-    "id": 1,
+    "id": "65f1a2b3c4d5e6f7a8b9c0d1",
     "username": "string",
     "fullname": "string",
     "email": "string",
     "role": "admin|manager|user",
-    "firm_id": 1
+    "firm_id": "65f1a2b3c4d5e6f7a8b9c0d2"
   }
 }
 ```
@@ -142,10 +142,10 @@ Create new employee record.
 ```json
 {
   "success": true,
-  "id": 123,
+  "id": "65f1a2b3c4d5e6f7a8b9c0d3",
   "message": "Employee added to master roll",
   "created_by": {
-    "id": 1,
+    "id": "65f1a2b3c4d5e6f7a8b9c0d1",
     "name": "Admin User",
     "username": "admin"
   }

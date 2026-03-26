@@ -27,12 +27,10 @@ vercel --prod
 In Vercel Dashboard → Project Settings → Environment Variables, add:
 
 ```
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 ACCESS_TOKEN_SECRET=your-strong-secret-key
 REFRESH_TOKEN_SECRET=your-strong-secret-key
-JWT_SECRET=your-strong-secret-key
-JWT_REFRESH_SECRET=your-strong-secret-key
 RAPIDAPI_KEY=your-api-key
 NODE_ENV=production
 ```
@@ -71,8 +69,9 @@ vercel --prod
 ```
 
 ### Database connection fails
-- Verify `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in Vercel dashboard
-- Check Turso dashboard for database status
+- Verify `MONGODB_URI` and `DATABASE_URL` in Vercel dashboard
+- Check MongoDB Atlas dashboard for database status
+- Ensure IP whitelist includes Vercel (or use `0.0.0.0/0` with caution)
 
 ### Static files return 404
 - Verify files exist in `/client/public`

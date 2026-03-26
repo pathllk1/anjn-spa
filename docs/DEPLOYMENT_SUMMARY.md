@@ -100,7 +100,8 @@ Your Node.js SPA Business Management Application has been analyzed and prepared 
 
 ### Backend Stack
 - **Framework**: Express.js (Node.js)
-- **Database**: Turso (SQLite Cloud)
+- **Database**: MongoDB (Atlas)
+- **ORM/ODM**: Mongoose & Prisma
 - **Authentication**: JWT dual-token system
 - **Security**: CSP headers, XSS protection, secure cookies
 
@@ -141,13 +142,13 @@ Your Node.js SPA Business Management Application has been analyzed and prepared 
 - Modular, well-organized codebase
 - Comprehensive security measures
 - Proper error handling
-- Database integration with Turso
+- Database integration with MongoDB Atlas
 - Static file serving configured
 - Environment variable management
 
 ### ⚠️ Important Considerations
 - Ensure strong, unique JWT secrets
-- Verify Turso database credentials
+- Verify MongoDB Atlas database credentials
 - Test all API endpoints before deployment
 - Monitor application after deployment
 - Set up error tracking and logging
@@ -158,8 +159,8 @@ Your Node.js SPA Business Management Application has been analyzed and prepared 
 
 ```env
 # Database
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 
 # JWT Secrets (MUST be strong and unique)
 ACCESS_TOKEN_SECRET=your-strong-secret-key
@@ -264,7 +265,7 @@ curl https://your-app.vercel.app/api/health
 ### Recommended Tools
 1. **Error Tracking**: Sentry
 2. **Performance Monitoring**: Vercel Analytics
-3. **Database Monitoring**: Turso Dashboard
+3. **Database Monitoring**: MongoDB Atlas Dashboard
 4. **Log Aggregation**: Vercel Logs
 
 ### Maintenance Schedule
@@ -281,7 +282,7 @@ curl https://your-app.vercel.app/api/health
 **Solution**: Run `npm install` and verify all dependencies are in package.json
 
 ### Issue: Database connection fails
-**Solution**: Verify TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in Vercel dashboard
+**Solution**: Verify MONGODB_URI and DATABASE_URL in Vercel dashboard
 
 ### Issue: Static files return 404
 **Solution**: Verify files exist in `/client/public` and check vercel.json routes
@@ -338,9 +339,10 @@ vercel rollback --prod
 
 - **Vercel Documentation**: https://vercel.com/docs
 - **Express.js Guide**: https://expressjs.com
-- **Turso Documentation**: https://docs.turso.tech
+- **MongoDB Documentation**: https://www.mongodb.com/docs
+- **Prisma Documentation**: https://www.prisma.io/docs
 - **Vercel Support**: https://vercel.com/support
-- **Turso Support**: https://turso.tech/support
+- **MongoDB Support**: https://www.mongodb.com/support
 
 ---
 
@@ -350,7 +352,7 @@ vercel rollback --prod
 - Solid architecture with proper separation of concerns
 - Comprehensive security measures
 - Proper error handling and logging
-- Database integration with Turso
+- Database integration with MongoDB Atlas
 - Static file serving configured
 - Environment variable management
 

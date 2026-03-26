@@ -395,7 +395,7 @@ POST   /api/inventory/sales/gst-lookup                # GST validation
 ### Caching Strategy
 - Firm settings caching
 - Frequently accessed data optimization
-- Connection pooling with Turso
+- Connection pooling with MongoDB Atlas
 
 ## Integration Points
 

@@ -251,8 +251,8 @@ Set up monitoring:
 Add these to Vercel Dashboard → Environment Variables:
 
 ```
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 ACCESS_TOKEN_SECRET=your-strong-secret-key
 REFRESH_TOKEN_SECRET=your-strong-secret-key
 JWT_SECRET=your-strong-secret-key

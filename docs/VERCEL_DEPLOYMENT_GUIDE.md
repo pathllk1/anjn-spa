@@ -8,7 +8,7 @@ This guide provides step-by-step instructions to deploy your Node.js SPA Busines
 
 1. **Vercel Account**: Create a free account at [vercel.com](https://vercel.com)
 2. **Git Repository**: Your code must be in a Git repository (GitHub, GitLab, or Bitbucket)
-3. **Environment Variables**: Turso database credentials and JWT secrets
+3. **Environment Variables**: MongoDB Atlas credentials and JWT secrets
 4. **Node.js**: v18+ (Vercel uses Node.js 20.x by default)
 
 ## Step 1: Prepare Your Repository
@@ -34,9 +34,9 @@ git push -u origin main
 NODE_ENV=production
 PORT=3000
 
-# Database (Turso)
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+# Database (MongoDB Atlas)
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 
 # JWT Secrets (use strong, unique values in production)
 ACCESS_TOKEN_SECRET=your-strong-access-token-secret-key-here
@@ -78,8 +78,8 @@ vercel --prod
 During deployment, Vercel will prompt you to add environment variables. Alternatively, add them after deployment:
 
 ```bash
-vercel env add TURSO_DATABASE_URL
-vercel env add TURSO_AUTH_TOKEN
+vercel env add MONGODB_URI
+vercel env add DATABASE_URL
 vercel env add ACCESS_TOKEN_SECRET
 vercel env add REFRESH_TOKEN_SECRET
 vercel env add JWT_SECRET
@@ -105,8 +105,8 @@ vercel env add RAPIDAPI_KEY
 #### 3B.3 Add Environment Variables
 1. Click "Environment Variables"
 2. Add each variable:
-   - `TURSO_DATABASE_URL`
-   - `TURSO_AUTH_TOKEN`
+   - `MONGODB_URI`
+   - `DATABASE_URL`
    - `ACCESS_TOKEN_SECRET`
    - `REFRESH_TOKEN_SECRET`
    - `JWT_SECRET`
@@ -176,7 +176,7 @@ git push
 vercel env list
 ```
 
-Ensure `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set correctly.
+Ensure `MONGODB_URI` and `DATABASE_URL` are set correctly.
 
 ### Issue: Static files not loading
 
@@ -259,7 +259,7 @@ Already configured in `server/middleware/securityMiddleware.js`:
 ## Scaling Considerations
 
 ### 1. Database Scaling
-- Turso automatically scales
+- MongoDB Atlas automatically scales
 - Monitor query performance
 - Add indexes as needed
 
@@ -294,12 +294,12 @@ npm install @sentry/node
 ```
 
 ### 2. Monitor Database Performance
-- Check Turso dashboard for query performance
-- Monitor connection pool usage
+- Check MongoDB Atlas dashboard for query performance
+- Monitor connection usage
 - Review slow query logs
 
 ### 3. Regular Backups
-- Turso provides automatic backups
+- MongoDB Atlas provides automatic backups
 - Export data regularly for safety
 - Test restore procedures
 
@@ -307,13 +307,13 @@ npm install @sentry/node
 
 - [Vercel Documentation](https://vercel.com/docs)
 - [Vercel Node.js Runtime](https://vercel.com/docs/functions/runtimes/node-js)
-- [Turso Documentation](https://docs.turso.tech)
+- [MongoDB Atlas Documentation](https://www.mongodb.com/docs/atlas/)
 - [Express.js Best Practices](https://expressjs.com/en/advanced/best-practice-performance.html)
 
 ## Support
 
 For issues or questions:
 1. Check Vercel logs: `vercel logs --prod`
-2. Review Turso dashboard for database issues
+2. Review MongoDB Atlas dashboard for database issues
 3. Check GitHub issues in your repository
 4. Contact Vercel support: [vercel.com/support](https://vercel.com/support)

@@ -17,19 +17,40 @@ const billSchema = new Schema(
     voucher_id:   { type: String },
     bno:          { type: String, required: true },
     bdate:        { type: String, required: true },
-    supply:       { type: String },
-    addr:         { type: String },
-    gstin:        { type: String },
-    state:        { type: String },
+
+    // ── Party (Bill-To) fields ─────────────────────────────────────────────
+    supply:       { type: String },   // party firm name
+    addr:         { type: String },   // party address
+    gstin:        { type: String },   // party GSTIN
+    state:        { type: String },   // party state name
     pin:          { type: String },
-    state_code:   { type: String },
+    state_code:   { type: String },   // party state code (GSTIN[0:2])
+
+    // ── Firm (Supplier) fields ─────────────────────────────────────────────
+    // FIX: Added firm_gstin, firm_state, firm_state_code to record WHICH firm
+    // GSTIN / location was used when raising this bill.
+    //
+    // With multiple GST registrations across states, a firm may bill from
+    // Maharashtra (27) for one customer and Karnataka (29) for another.
+    // Storing these here is essential for:
+    //   • GST type validation (intra vs inter-state correctness)
+    //   • GSTR-1 filing — each GSTIN files its own outward supply return
+    //   • Credit note / debit note reversal — must match the original GSTIN
+    //   • Audit trail — which registration was the supplier at time of sale
+    //
+    // NULL on legacy bills created before this field was introduced —
+    // fall back to firm.locations[is_default] when generating those reports.
+    firm_gstin:      { type: String, default: null },
+    firm_state:      { type: String, default: null },
+    firm_state_code: { type: String, default: null },
+
     gtot:         { type: Number, required: true, default: 0 },
     ntot:         { type: Number, required: true, default: 0 },
     rof:          { type: Number, default: 0 },
     btype:        { type: String, default: 'SALES' },
     bill_subtype: { type: String },
     usern:        { type: String },
-    firm:         { type: String },
+    firm:         { type: String },   // firm name (display)
     party_id: {
       type: Schema.Types.ObjectId,
       ref: 'Party',
@@ -73,6 +94,8 @@ billSchema.index({ firm_id: 1, party_id: 1 });
 billSchema.index({ firm_id: 1, status: 1 });
 // ensureUniqueSupplierBillNo runs on every purchase create/update
 billSchema.index({ firm_id: 1, party_id: 1, supplier_bill_no: 1, status: 1 });
+// GSTR-1 filing queries: all bills for a given firm GSTIN in a date range
+billSchema.index({ firm_id: 1, firm_gstin: 1, bdate: 1 });
 
 const Bill = mongoose.model('Bill', billSchema);
 

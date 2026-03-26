@@ -21,53 +21,10 @@
 
 ## 🔴 CRITICAL BUGS
 
-### Bug #1: SQL Injection Vulnerability
+### Bug #1: SQL Injection Vulnerability (RESOLVED)
 **Severity:** Critical 🔴
-**Location:** `server/controllers/masterRoll.controller.js:405`
-**Impact:** Remote code execution, complete database compromise
-
-**Description:**
-Raw string interpolation in UPDATE statement allows SQL injection:
-```javascript
-const updateStmt = db.prepare(`
-  UPDATE master_rolls
-  SET employee_name = ?, father_husband_name = ?, date_of_birth = ?,
-      aadhar = ?, pan = ?, phone_no = ?, address = ?, bank = ?,
-      account_no = ?, ifsc = ?, branch = ?, uan = ?, esic_no = ?,
-      s_kalyan_no = ?, category = ?, p_day_wage = ?, project = ?,
-      site = ?, date_of_joining = ?, date_of_exit = ?, doe_rem = ?,
-      status = ?, updated_by = ?, updated_at = ?
-  WHERE id = ? AND firm_id = ?
-`);
-```
-
-**Root Cause:** Using `updateStmt.run(...params)` with user-controlled data.
-
-**Fix:**
-```javascript
-// Use fully parameterized queries
-const updateStmt = db.prepare(`
-  UPDATE master_rolls
-  SET employee_name = $employee_name, father_husband_name = $father_husband_name,
-      date_of_birth = $date_of_birth, aadhar = $aadhar, pan = $pan,
-      phone_no = $phone_no, address = $address, bank = $bank,
-      account_no = $account_no, ifsc = $ifsc, branch = $branch,
-      uan = $uan, esic_no = $esic_no, s_kalyan_no = $s_kalyan_no,
-      category = $category, p_day_wage = $p_day_wage, project = $project,
-      site = $site, date_of_joining = $date_of_joining,
-      date_of_exit = $date_of_exit, doe_rem = $doe_rem,
-      status = $status, updated_by = $updated_by, updated_at = $updated_at
-  WHERE id = $id AND firm_id = $firm_id
-`);
-
-updateStmt.run({
-  $employee_name: updateData.employee_name,
-  $father_husband_name: updateData.father_husband_name,
-  // ... all other parameters
-  $id: masterId,
-  $firm_id: firmId
-});
-```
+**Status:** Resolved ✅
+**Fix:** Migrated to Mongoose ODM which uses parameterized queries by default.
 
 ---
 
@@ -211,52 +168,10 @@ this.elements.form.addEventListener('reset', () => {
 
 ---
 
-### Bug #5: BigInt Serialization Bug
+### Bug #5: BigInt Serialization Bug (RESOLVED)
 **Severity:** Critical 🔴
-**Location:** `server/controllers/masterRoll.controller.js:51-61`
-**Impact:** Data corruption, incorrect financial calculations, display errors
-
-**Description:**
-Inconsistent handling of BigInt values from SQLite, causing serialization failures and data corruption.
-
-**Code Issue:**
-```javascript
-// Inconsistent BigInt handling
-const records = rows.map(record => {
-  const processedRecord = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (typeof value === 'bigint') {
-      processedRecord[key] = Number(value); // May lose precision or fail
-    } else {
-      processedRecord[key] = value;
-    }
-  }
-  return processedRecord;
-});
-```
-
-**Root Cause:** SQLite returns BigInt for large integers, but JavaScript Number has precision limits.
-
-**Fix:**
-```javascript
-// Safe BigInt to string conversion
-function safeBigIntToString(value) {
-  if (typeof value === 'bigint') {
-    // Convert to string to preserve full precision
-    return value.toString();
-  }
-  return value;
-}
-
-// Or use a serialization library
-const records = rows.map(record => {
-  const processedRecord = {};
-  for (const [key, value] of Object.entries(record)) {
-    processedRecord[key] = safeBigIntToString(value);
-  }
-  return processedRecord;
-});
-```
+**Status:** Resolved ✅
+**Fix:** Migrated to MongoDB/Mongoose which handles large numbers and ObjectIDs correctly without BigInt precision issues.
 
 ---
 

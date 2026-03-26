@@ -24,14 +24,15 @@ This guide provides comprehensive instructions for deploying and setting up the 
 #### Required Software
 - **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher (comes with Node.js)
-- **SQLite**: Turso cloud database (no local installation needed)
+- **MongoDB**: Atlas (Cloud) or Community Server (Local)
+- **Prisma CLI**: For database schema management
 
 #### Optional but Recommended
+- **MongoDB Compass**: For GUI database management
 - **Git**: For version control
 - **Docker**: For containerized deployment
 - **Nginx**: For production web server
 - **PM2**: For process management
-- **Redis**: For session caching (future enhancement)
 
 ## Development Setup
 
@@ -57,9 +58,9 @@ Create `.env` file in the root directory:
 NODE_ENV=development
 PORT=3000
 
-# Database Configuration (Turso)
-TURSO_DATABASE_URL=your-turso-database-url
-TURSO_AUTH_TOKEN=your-turso-auth-token
+# Database Configuration (MongoDB)
+MONGODB_URI=mongodb+srv://your-user:your-pass@cluster0.mongodb.net/business_db
+DATABASE_URL=mongodb+srv://your-user:your-pass@cluster0.mongodb.net/business_db
 
 # JWT Configuration
 ACCESS_TOKEN_SECRET=your-256-bit-access-token-secret-key-here-change-in-production
@@ -93,46 +94,33 @@ ENABLE_CORS=true
 
 ### 4. Database Setup
 
-#### Turso Database Setup
+#### MongoDB Setup (Cloud Atlas)
 
-1. **Install Turso CLI**:
-```bash
-curl -sSfL https://get.tur.so/install.sh | bash
-```
+1. **Create Account**: Sign up at [mongodb.com/atlas](https://www.mongodb.com/atlas).
+2. **Create Cluster**: Deploy a free M0 cluster.
+3. **Database Access**: Create a database user with read/write permissions.
+4. **Network Access**: Add your IP address to the whitelist.
+5. **Connection String**: Copy the connection string and update `MONGODB_URI` and `DATABASE_URL` in your `.env` file.
 
-2. **Login to Turso**:
-```bash
-turso auth login
-```
+#### Local MongoDB Setup
 
-3. **Create Database**:
-```bash
-turso db create business-app-db
-```
+1. **Install MongoDB Community Server**: Follow instructions for your OS.
+2. **Start MongoDB**: Ensure the service is running.
+3. **Update Env**: Use `mongodb://localhost:27017/business_db`.
 
-4. **Get Database URL**:
-```bash
-turso db show business-app-db
-```
+### 5. Database Initialization (Prisma)
 
-5. **Create Authentication Token**:
-```bash
-turso db tokens create business-app-db
-```
-
-### 5. Database Migration
-
-The application uses automatic schema creation. On first run, tables will be created automatically.
-
-For manual database setup:
+The application uses Prisma for schema management. Initialize the database:
 
 ```bash
-# Run database migrations (if available)
-npm run migrate
+# Push schema to database
+npx prisma db push
 
-# Or initialize database
-npm run db:init
+# (Optional) Generate Prisma Client
+npx prisma generate
 ```
+
+The application will automatically use Mongoose for most runtime operations once the database is connected.
 
 ### 6. Start Development Server
 
@@ -205,8 +193,8 @@ NODE_ENV=production
 PORT=3000
 
 # Production database
-TURSO_DATABASE_URL=your-production-turso-url
-TURSO_AUTH_TOKEN=your-production-turso-token
+MONGODB_URI=your-production-mongodb-url
+DATABASE_URL=your-production-mongodb-url
 
 # Strong JWT secrets (generate using openssl rand -base64 32)
 ACCESS_TOKEN_SECRET=your-256-bit-access-token-secret-key-here
@@ -421,8 +409,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - TURSO_DATABASE_URL=${TURSO_DATABASE_URL}
-      - TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN}
+      - MONGODB_URI=${MONGODB_URI}
+      - DATABASE_URL=${DATABASE_URL}
       - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
       - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
     volumes:
@@ -510,8 +498,8 @@ http {
 ```bash
 # Create environment file
 cat > .env << EOF
-TURSO_DATABASE_URL=your-production-turso-url
-TURSO_AUTH_TOKEN=your-production-turso-token
+MONGODB_URI=your-production-mongodb-url
+DATABASE_URL=your-production-mongodb-url
 ACCESS_TOKEN_SECRET=your-256-bit-access-secret
 REFRESH_TOKEN_SECRET=your-256-bit-refresh-secret
 EOF
@@ -580,11 +568,7 @@ curl http://your-domain.com/api/health
 #### Database Health Check
 
 ```bash
-# Test database connection
-curl http://your-domain.com/api/admin/health/db
-
-# Check Turso status
-turso db show your-database-name
+# Test database connection on MongoDB Atlas dashboard
 ```
 
 ### Backup Strategy
@@ -592,11 +576,11 @@ turso db show your-database-name
 #### Database Backup
 
 ```bash
-# Turso database backup (automatic via Turso)
-# Turso provides automatic backups and point-in-time recovery
+# MongoDB database backup (automatic via Atlas)
+# Atlas provides automatic backups and point-in-time recovery
 
 # Manual backup (if needed)
-turso db shell your-database-name ".backup /path/to/backup.db"
+mongodump --uri="your-mongodb-uri" --out=/path/to/backup
 ```
 
 #### File Backup
@@ -742,14 +726,10 @@ pm2 logs business-app --lines 100
 #### Database Connection Issues
 
 ```bash
-# Test Turso connection
-turso db ping your-database-name
+# Test MongoDB connection on Atlas dashboard
 
-# Check database URL
-echo $TURSO_DATABASE_URL
-
-# Verify authentication token
-turso db tokens list
+# Check database URI
+echo $MONGODB_URI
 ```
 
 #### High Memory Usage
@@ -827,7 +807,7 @@ if (cluster.isMaster) {
 
 ### Database Scaling
 
-- **Turso**: Automatically handles scaling
+- **MongoDB Atlas**: Automatically handles scaling
 - **Connection Pooling**: Implement for high traffic
 - **Read Replicas**: Consider for read-heavy workloads
 - **Caching Layer**: Redis for frequently accessed data
@@ -861,7 +841,7 @@ BACKUP_DIR="/var/backups/business-app"
 mkdir -p $BACKUP_DIR
 
 # Database backup
-turso db shell business-app-db ".backup $BACKUP_DIR/db_$DATE.db"
+mongodump --uri=$MONGODB_URI --out=$BACKUP_DIR/db_$DATE
 
 # File backup
 tar -czf $BACKUP_DIR/files_$DATE.tar.gz /var/www/business-app/uploads
@@ -892,8 +872,8 @@ crontab -e
 
 2. **Database Recovery**:
    ```bash
-   # Restore from Turso backup
-   turso db restore business-app-db --from backup.db
+   # Restore from MongoDB Atlas backup
+   # Use MongoDB Atlas restore interface or mongorestore for manual backups
    ```
 
 3. **Data Recovery**:

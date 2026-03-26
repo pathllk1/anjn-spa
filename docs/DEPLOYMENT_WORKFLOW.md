@@ -30,19 +30,19 @@ npm start
 cp .env.example .env.production
 
 # Update with production values:
-# - TURSO_DATABASE_URL
-# - TURSO_AUTH_TOKEN
+# - MONGODB_URI
+# - DATABASE_URL
 # - Strong JWT secrets
 # - RAPIDAPI_KEY
 ```
 
 ### 1.4 Database Verification
 ```bash
-# Verify Turso database is accessible
-# - Check Turso dashboard
-# - Verify database URL is correct
-# - Verify auth token is valid
-# - Check database size and performance
+# Verify MongoDB Atlas database is accessible
+# - Check MongoDB Atlas dashboard
+# - Verify connection strings are correct
+# - Verify database user permissions
+# - Check cluster health and performance
 ```
 
 ---
@@ -116,15 +116,15 @@ Your deployment URL: https://your-app.vercel.app
 ### 4.1 Add Variables via CLI
 ```bash
 # Add each environment variable
-vercel env add TURSO_DATABASE_URL
-# Paste: libsql://your-database.turso.io
+vercel env add MONGODB_URI
+# Paste: mongodb+srv://your-database.mongodb.net/dbname
 
-vercel env add TURSO_AUTH_TOKEN
-# Paste: your-auth-token
+vercel env add DATABASE_URL
+# Paste: mongodb+srv://your-database.mongodb.net/dbname
 
 vercel env add ACCESS_TOKEN_SECRET
 # Paste: your-strong-secret-key
-
+```
 vercel env add REFRESH_TOKEN_SECRET
 # Paste: your-strong-secret-key
 
@@ -329,15 +329,15 @@ vercel logs --prod
 # Verify environment variables
 vercel env list
 
-# Check Turso dashboard
-# - Verify database is running
+# Check MongoDB Atlas dashboard
+# - Verify cluster is running
 # - Check connection limits
 # - Review query performance
 
 # Solution:
 # 1. Verify credentials
 # 2. Check database status
-# 3. Restart database if needed
+# 3. Restart cluster if needed
 # 4. Redeploy: vercel --prod
 ```
 
@@ -496,7 +496,7 @@ We apologize for any inconvenience.
 ## Contact & Support
 
 - **Vercel Support**: https://vercel.com/support
-- **Turso Support**: https://turso.tech/support
+- **MongoDB Support**: https://www.mongodb.com/support/
 - **GitHub Issues**: [Your Repository]
 - **Internal Contact**: [Your Team Lead]
 

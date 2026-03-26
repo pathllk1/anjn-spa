@@ -11,8 +11,8 @@ export async function renderProfile(router) {
 
   try {
     const [profileRes, settingsRes] = await Promise.all([
-      fetch('/api/pages/profile',                          { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }),
-      fetch('/api/settings/system-config/gst-status',     { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }),
+      fetch('/api/pages/profile',                      { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }),
+      fetch('/api/settings/system-config/gst-status',  { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } }),
     ]);
 
     if (!profileRes.ok) throw new Error(`HTTP ${profileRes.status}`);
@@ -59,8 +59,8 @@ export async function renderProfile(router) {
         <section class="space-y-4">
           <h2 class="text-lg font-semibold text-gray-800">Account Information</h2>
           <div class="bg-gray-50 border border-gray-200 rounded-2xl p-6 space-y-2 text-sm text-gray-700">
-            <p><span class="font-medium text-gray-600">Member Since:</span> ${profileData.data?.accountInfo?.memberSince || 'N/A'}</p>
-            <p><span class="font-medium text-gray-600">Last Password Change:</span> ${profileData.data?.accountInfo?.lastPasswordChange || 'N/A'}</p>
+            <p><span class="font-medium text-gray-600">Member Since:</span> ${escapeHtml(profileData.data?.accountInfo?.memberSince || 'N/A')}</p>
+            <p><span class="font-medium text-gray-600">Last Password Change:</span> ${escapeHtml(profileData.data?.accountInfo?.lastPasswordChange || 'N/A')}</p>
             <p><span class="font-medium text-gray-600">Two-Factor Authentication:</span>
               ${profileData.data?.accountInfo?.twoFactorEnabled ? 'Enabled' : 'Disabled'}
             </p>
@@ -103,7 +103,6 @@ export async function renderProfile(router) {
           </div>
         </section>
 
-
       </div>
     `;
 
@@ -127,7 +126,8 @@ export async function renderProfile(router) {
         setTimeout(() => { gstMessage.innerHTML = ''; }, 3000);
       } catch (err) {
         gstToggle.checked = !gstToggle.checked;
-        gstMessage.innerHTML = statusMsg('red', 'Error: ' + err.message);
+        // FIX: err.message escaped before insertion into innerHTML
+        gstMessage.innerHTML = statusMsg('red', 'Error: ' + escapeHtml(err.message));
       }
     });
 
@@ -147,11 +147,13 @@ export async function renderProfile(router) {
     });
 
   } catch (error) {
+    // FIX: error.message escaped — JS Error.message is not sanitised and could
+    // contain text derived from server responses or URL params.
     const content = `
       <div class="max-w-4xl mx-auto px-4 py-16 space-y-6">
         <h1 class="text-3xl font-bold text-gray-900">Profile</h1>
         <div class="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl text-sm">
-          Failed to load profile data: ${error.message}
+          Failed to load profile data: ${escapeHtml(error.message)}
         </div>
       </div>
     `;
@@ -161,17 +163,38 @@ export async function renderProfile(router) {
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
+/**
+ * FIX: value is now HTML-escaped before being placed into the value="" attribute.
+ * Without this, a username like  "><script>alert(1)</script>  breaks out of the
+ * attribute and executes.  All user / API data that flows through createInput
+ * must be treated as untrusted.
+ */
 function createInput(label, value) {
   return `
     <div class="space-y-1.5">
-      <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide">${label}</label>
-      <input type="text" value="${value}" disabled
+      <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide">${escapeHtml(label)}</label>
+      <input type="text" value="${escapeHtml(String(value ?? ''))}" disabled
              class="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg
                     bg-gray-50 text-gray-600 cursor-not-allowed"/>
     </div>
   `;
 }
 
+/**
+ * FIX: text is now HTML-escaped.
+ * statusMsg is called with error messages that may contain server-returned
+ * strings or user-supplied data (e.g. the error from a failed API call).
+ * Without escaping, those strings can inject HTML into the status banner.
+ */
 function statusMsg(color, text) {
-  return `<div class="status-msg status-msg--${color}">${text}</div>`;
+  return `<div class="status-msg status-msg--${escapeHtml(color)}">${escapeHtml(text)}</div>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

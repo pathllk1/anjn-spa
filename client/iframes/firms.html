@@ -22,10 +22,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 
-  <!-- Common Styles -->
   <link rel="stylesheet" href="admin-common.css" />
 
-  <!-- Page-specific overrides: firms.html (indigo-purple theme) -->
   <style>
     :root {
       --grad-from:       #4f46e5;
@@ -36,98 +34,109 @@
     }
     html, body { background: #f8fafc; }
 
-    /* Excel-style Column Filter Panel */
-    .dt-filter-icon {
-      cursor: pointer;
-      margin-left: 8px;
-      color: #64748b;
-      font-size: 12px;
-      opacity: 0.75;
-      transition: all 0.15s;
+    /* ── Unified Location Card ── */
+    .loc-card {
+      background: #fff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .dt-filter-icon:hover {
-      color: #4f46e5;
-      opacity: 1;
-      transform: scale(1.1);
+    .loc-card.is-default {
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.08);
     }
-    #dtColumnFilterPanel {
-      position: absolute;
-      background: white;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-      z-index: 9999;
-      width: 260px;
-      padding: 14px;
-      display: none;
-      font-size: 12px;
-    }
-    #dtColumnFilterPanel input[type="text"] {
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      font-size: 12px;
-      margin-bottom: 10px;
-    }
-    #filterList {
-      max-height: 260px;
-      overflow-y: auto;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 6px;
-      background: #f8fafc;
-    }
-    #filterList label {
+    .loc-card-header {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 8px;
-      margin: 2px 0;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.1s;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid #f0f0f0;
+      min-height: 36px;
     }
-    #filterList label:hover {
-      background: #f1f5f9;
+    .loc-card.is-default .loc-card-header {
+      background: linear-gradient(90deg, #eef2ff, #f5f3ff);
+      border-bottom-color: #e0e7ff;
     }
-    #filterList input[type="checkbox"] {
-      accent-color: #4f46e5;
-      width: 16px;
-      height: 16px;
+    .loc-card-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+    .loc-gstin-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: flex-end; }
+    .loc-addr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .loc-addr-full { grid-column: 1 / -1; }
+    .loc-state-row { display: grid; grid-template-columns: 1fr 80px 90px; gap: 8px; }
+
+    .loc-fetch-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 7px 12px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: white; border: none; border-radius: 6px;
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      white-space: nowrap; height: 34px; transition: opacity 0.15s;
     }
-    #dtColumnFilterPanel .panel-footer button {
-      flex: 1;
-      padding: 7px 10px;
-      font-size: 12px;
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
+    .loc-fetch-btn:disabled { opacity: 0.6; cursor: default; }
+    .loc-fetch-btn:not(:disabled):hover { opacity: 0.9; }
+
+    .loc-remove-btn {
+      margin-left: auto; width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1.5px solid #fca5a5; border-radius: 6px;
+      background: #fef2f2; color: #ef4444;
+      cursor: pointer; font-size: 11px; transition: all 0.15s; flex-shrink: 0;
     }
+    .loc-remove-btn:hover { background: #fee2e2; border-color: #ef4444; }
+
+    .loc-default-radio {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600; color: #64748b;
+      cursor: pointer; user-select: none;
+    }
+    .loc-default-radio input[type="radio"] { accent-color: #4f46e5; width: 14px; height: 14px; cursor: pointer; }
+
+    .default-badge {
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      background: #4f46e5; color: white;
+      padding: 2px 7px; border-radius: 4px; letter-spacing: 0.4px;
+    }
+    .gstin-valid   { border-color: #10b981 !important; }
+    .gstin-invalid { border-color: #f59e0b !important; }
+
+    .loc-fetched-strip {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 600; color: #059669;
+      background: #ecfdf5; border: 1px solid #a7f3d0;
+      border-radius: 5px; padding: 4px 8px;
+    }
+
+    /* DataTable column filter panel */
+    #dtColumnFilterPanel {
+      position: absolute; background: white; border: 1px solid #cbd5e1;
+      border-radius: 8px; box-shadow: 0 10px 15px -3px rgb(0 0 0/0.1);
+      z-index: 9999; width: 260px; padding: 14px; display: none; font-size: 12px;
+    }
+    #filterList { max-height: 260px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background: #f8fafc; }
+    #filterList label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 2px 0; border-radius: 4px; cursor: pointer; }
+    #filterList label:hover { background: #f1f5f9; }
+    #filterList input[type="checkbox"] { accent-color: #4f46e5; width: 16px; height: 16px; }
   </style>
 </head>
 <body>
 
 <div style="padding:12px;">
 <div style="width:100%;">
-
-  <!-- Card -->
   <div style="background:white; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.08); overflow:hidden;">
 
     <!-- Header -->
     <div style="padding:14px 20px; background:linear-gradient(135deg,#4f46e5,#7c3aed); color:white; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
       <div>
-        <h2 style="margin:0; font-size:18px; font-weight:700; display:flex; gap:8px; align-items:center;">
-          <i class="fas fa-building"></i> Firms Directory
-        </h2>
+        <h2 style="margin:0; font-size:18px; font-weight:700; display:flex; gap:8px; align-items:center;"><i class="fas fa-building"></i> Firms Directory</h2>
         <p style="margin:3px 0 0; font-size:11px; opacity:0.9;">Full CRUD &middot; DataTables &middot; Exports &middot; Column toggle &middot; Bulk delete</p>
       </div>
       <div style="display:flex; gap:8px;">
         <button id="refreshBtn" style="display:flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(255,255,255,0.18);border:none;color:white;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
           <i id="refreshIcon" class="fas fa-sync-alt"></i> Refresh
         </button>
-        <button onclick="openCreateModal()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(255,255,255,0.9);border:none;color:#4f46e5;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;">
+        <button onclick="openCreateModal()" style="display:flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(255,255,255,0.9);border:none;color:#4f46e5;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
           <i class="fas fa-plus"></i> New Firm
         </button>
       </div>
@@ -139,13 +148,11 @@
       <span><i class="fas fa-check-circle" style="color:#10b981;margin-right:5px;"></i>Approved: <strong id="s-approved" style="color:#10b981;">0</strong></span>
       <span><i class="fas fa-clock" style="color:#f59e0b;margin-right:5px;"></i>Pending: <strong id="s-pending" style="color:#f59e0b;">0</strong></span>
       <span><i class="fas fa-ban" style="color:#ef4444;margin-right:5px;"></i>Rejected: <strong id="s-rejected" style="color:#ef4444;">0</strong></span>
-      <span id="s-filter-wrap" style="display:none;"><i class="fas fa-filter" style="color:#6366f1;margin-right:5px;"></i>Filtered: <strong id="s-filtered" style="color:#6366f1;">0</strong></span>
     </div>
 
     <!-- Toolbar -->
     <div style="padding:10px 14px; background:#f9fafb; border-bottom:1px solid #e5e7eb; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <input type="text" id="gSearch" placeholder="🔍  Search any field..."
-        style="flex:1;min-width:200px;padding:6px 11px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;outline:none;" />
+      <input type="text" id="gSearch" placeholder="🔍  Search any field..." style="flex:1;min-width:200px;padding:6px 11px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;outline:none;" />
       <select id="statusFilter" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;background:white;color:#374151;outline:none;">
         <option value="">All Status</option>
         <option value="approved">Approved</option>
@@ -162,22 +169,17 @@
 
     <!-- Bulk bar -->
     <div id="bulkBar" style="display:none;padding:9px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;font-size:12px;font-weight:600;align-items:center;gap:10px;">
-      <i class="fas fa-check-square"></i>
-      <span id="bulkCount">0</span> selected
-      <button onclick="bulkDeleteSelected()" style="padding:4px 11px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;background:rgba(239,68,68,0.25);color:white;border:1px solid rgba(239,68,68,0.5);">
-        <i class="fas fa-trash" style="margin-right:4px;"></i>Delete Selected
-      </button>
-      <button onclick="clearSelection()" style="margin-left:auto;padding:4px 11px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3);">
-        <i class="fas fa-times" style="margin-right:4px;"></i>Clear
-      </button>
+      <i class="fas fa-check-square"></i> <span id="bulkCount">0</span> selected
+      <button onclick="bulkDeleteSelected()" style="padding:4px 11px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;background:rgba(239,68,68,0.25);color:white;border:1px solid rgba(239,68,68,0.5);"><i class="fas fa-trash" style="margin-right:4px;"></i>Delete Selected</button>
+      <button onclick="clearSelection()" style="margin-left:auto;padding:4px 11px;border:none;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3);"><i class="fas fa-times" style="margin-right:4px;"></i>Clear</button>
     </div>
 
     <!-- Export row -->
     <div style="padding:7px 14px; border-bottom:1px solid #f0f0f0; display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
       <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-right:2px;">Export:</span>
-      <button onclick="exportToCSV()"   class="abtn abtn-view"><i class="fas fa-file-csv" style="margin-right:3px;"></i>CSV</button>
+      <button onclick="exportToCSV()"   class="abtn abtn-view"><i class="fas fa-file-csv"   style="margin-right:3px;"></i>CSV</button>
       <button onclick="exportToExcel()" class="abtn abtn-edit"><i class="fas fa-file-excel" style="margin-right:3px;"></i>Excel</button>
-      <button onclick="exportToPDF()"   class="abtn abtn-del"><i class="fas fa-file-pdf" style="margin-right:3px;"></i>PDF</button>
+      <button onclick="exportToPDF()"   class="abtn abtn-del" ><i class="fas fa-file-pdf"   style="margin-right:3px;"></i>PDF</button>
       <button onclick="exportToPrint()" class="abtn" style="background:#e0f2fe;color:#0369a1;"><i class="fas fa-print" style="margin-right:3px;"></i>Print</button>
     </div>
 
@@ -201,228 +203,115 @@
       <div id="ft-info" style="font-size:12px;color:#9ca3af;"></div>
       <div id="ft-pages"></div>
     </div>
-
   </div>
 </div>
 </div>
 
-<!-- ══════════════════════════════════════════════
-     CREATE / EDIT MODAL (shared form, tabbed)
-══════════════════════════════════════════════ -->
+<!-- ══ CREATE / EDIT MODAL ══ -->
 <div id="crudModal" class="modal">
   <div class="mc mc-xl">
-    <div class="mh mh-primary" id="crudModalHeader">
+    <div class="mh mh-primary">
       <h2 id="crudModalTitle"><i class="fas fa-building"></i> Create Firm</h2>
       <button class="mclose" onclick="closeModal('crudModal')"><i class="fas fa-times"></i></button>
     </div>
-
-    <!-- Modal tabs -->
-    <div class="mtab-nav" id="modalTabNav">
-      <button class="mtab-btn active" onclick="switchModalTab('basic')">Basic Info</button>
-      <button class="mtab-btn" onclick="switchModalTab('location')">Location &amp; Contact</button>
-      <button class="mtab-btn" onclick="switchModalTab('compliance')">Compliance</button>
-      <button class="mtab-btn" onclick="switchModalTab('financial')">Financial &amp; Settings</button>
+    <div class="mtab-nav">
+      <button class="mtab-btn active"  onclick="switchModalTab('basic')">Basic Info</button>
+      <button class="mtab-btn"         onclick="switchModalTab('location')">Location &amp; Contact</button>
+      <button class="mtab-btn"         onclick="switchModalTab('compliance')">Compliance</button>
+      <button class="mtab-btn"         onclick="switchModalTab('financial')">Financial &amp; Settings</button>
       <button class="mtab-btn" id="adminTabBtn" onclick="switchModalTab('admin')" style="display:none;">Admin Account</button>
     </div>
-
     <form id="crudForm">
       <div style="padding:18px 20px; max-height:60vh; overflow-y:auto;">
 
-        <!-- ── BASIC INFO ── -->
+        <!-- BASIC INFO -->
         <div id="tab-basic">
           <div class="fg">
-            <div class="fi">
-              <label>Firm Name <span class="req">*</span></label>
-              <input id="f_name" type="text" required placeholder="e.g. Acme Pvt Ltd" />
-            </div>
-            <div class="fi">
-              <label>Legal Name</label>
-              <input id="f_legal_name" type="text" placeholder="Full legal entity name" />
-            </div>
-
-            <!-- GST Number with Fetch — on Tab 1 for easy access.
-                 Fetch button sends FETCH_GST to parent (zero iframe API call).
-                 Parent calls /api/inventory/sales/lookup-gst and returns GST_DATA. -->
+            <div class="fi"><label>Firm Name <span class="req">*</span></label><input id="f_name" type="text" required placeholder="e.g. Acme Pvt Ltd" /></div>
+            <div class="fi"><label>Legal Name</label><input id="f_legal_name" type="text" placeholder="Full legal entity name" /></div>
             <div class="fi full">
-              <label>
-                GST Number
-                <span style="font-size:10px;font-weight:400;color:#6b7280;margin-left:6px;">
-                  — enter &amp; click Fetch to auto-fill fields
-                </span>
-              </label>
+              <label>Quick GST Fetch <span style="font-size:10px;font-weight:400;color:#6b7280;margin-left:6px;">— enter primary GSTIN &amp; Fetch to auto-fill name, PAN &amp; first location address</span></label>
               <div style="display:flex;gap:8px;align-items:stretch;">
-                <input id="f_gst_number" type="text" placeholder="22AAAAA0000A1Z5"
-                  style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;transition:border-color 0.15s,box-shadow 0.15s;text-transform:uppercase;letter-spacing:0.5px;"
-                  oninput="this.value=this.value.toUpperCase()"
-                  onfocus="this.style.borderColor='#4f46e5';this.style.boxShadow='0 0 0 3px rgba(79,70,229,0.1)'"
-                  onblur="this.style.borderColor='#d1d5db';this.style.boxShadow=''" />
+                <input id="f_gst_number" type="text" placeholder="22AAAAA0000A1Z5" maxlength="15"
+                  style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;"
+                  oninput="this.value=this.value.toUpperCase()" />
                 <button type="button" id="gstFetchBtn" onclick="triggerGstFetch()"
-                  style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity 0.15s;">
-                  <i id="gstFetchIcon" class="fas fa-search"></i>
-                  <span id="gstFetchLabel">Fetch Details</span>
+                  style="display:flex;align-items:center;gap:5px;padding:7px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                  <i id="gstFetchIcon" class="fas fa-search"></i> Fetch Details
                 </button>
               </div>
-              <!-- Status feedback line -->
-              <div id="gstFetchStatus" style="display:none;margin-top:5px;font-size:11px;padding:6px 10px;border-radius:5px;"></div>
             </div>
-
-            <div class="fi">
-              <label>Code</label>
-              <input id="f_code" type="text" placeholder="e.g. ACME" />
+            <div class="fi"><label>Code</label><input id="f_code" type="text" placeholder="e.g. ACME" /></div>
+            <div class="fi"><label>Status</label>
+              <select id="f_status"><option value="approved">Approved</option><option value="pending">Pending</option><option value="rejected">Rejected</option></select>
             </div>
-            <div class="fi">
-              <label>Status</label>
-              <select id="f_status">
-                <option value="approved">Approved</option>
-                <option value="pending">Pending</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </div>
-            <div class="fi">
-              <label>Business Type</label>
-              <input id="f_business_type" type="text" placeholder="e.g. Retail, Manufacturing" />
-            </div>
-            <div class="fi">
-              <label>Industry Type</label>
-              <input id="f_industry_type" type="text" placeholder="e.g. Healthcare, IT" />
-            </div>
-            <div class="fi">
-              <label>Establishment Year</label>
-              <input id="f_establishment_year" type="number" placeholder="e.g. 2005" min="1800" max="2099" />
-            </div>
-            <div class="fi">
-              <label>Employee Count</label>
-              <input id="f_employee_count" type="number" placeholder="e.g. 50" min="0" />
-            </div>
-            <div class="fi full">
-              <label>Description</label>
-              <textarea id="f_description" placeholder="Brief description of the firm"></textarea>
-            </div>
+            <div class="fi"><label>Business Type</label><input id="f_business_type" type="text" placeholder="e.g. Retail" /></div>
+            <div class="fi"><label>Industry Type</label><input id="f_industry_type" type="text" placeholder="e.g. Healthcare" /></div>
+            <div class="fi"><label>Establishment Year</label><input id="f_establishment_year" type="number" placeholder="e.g. 2005" min="1800" max="2099" /></div>
+            <div class="fi"><label>Employee Count</label><input id="f_employee_count" type="number" placeholder="e.g. 50" min="0" /></div>
+            <div class="fi full"><label>Description</label><textarea id="f_description" placeholder="Brief description"></textarea></div>
           </div>
         </div>
 
-        <!-- ── LOCATION & CONTACT ── -->
+        <!-- LOCATION & CONTACT -->
         <div id="tab-location" style="display:none;">
-          <div class="fg" style="margin-bottom:14px;">
-            <div class="fi full">
-              <label>Address</label>
-              <textarea id="f_address" placeholder="Street address, building number"></textarea>
+          <div style="margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div>
+                <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin:0;">
+                  <i class="fas fa-map-marker-alt" style="color:#4f46e5;margin-right:5px;"></i>GST Registrations &amp; Business Locations
+                </p>
+                <p style="font-size:10px;color:#b0b8c9;margin:2px 0 0;">
+                  In GST law, each GSTIN is bound to exactly one address (PPOB/APOB).
+                  Click <i class="fas fa-search" style="font-size:9px;"></i> on any row to auto-fill its address from the GST registry.
+                </p>
+              </div>
+              <button type="button" onclick="addLocationItem()"
+                style="display:flex;align-items:center;gap:5px;padding:5px 11px;font-size:11px;color:#4f46e5;font-weight:700;cursor:pointer;background:#eef2ff;border:1.5px solid #c7d2fe;border-radius:7px;">
+                <i class="fas fa-plus"></i> Add Location
+              </button>
             </div>
-            <div class="fi">
-              <label>City</label>
-              <input id="f_city" type="text" placeholder="City" />
-            </div>
-            <div class="fi">
-              <label>State</label>
-              <input id="f_state" type="text" placeholder="State / Province" />
-            </div>
-            <div class="fi">
-              <label>Country</label>
-              <input id="f_country" type="text" placeholder="Country" />
-            </div>
-            <div class="fi">
-              <label>Pincode</label>
-              <input id="f_pincode" type="text" placeholder="PIN / ZIP code" />
-            </div>
+            <div id="location-list-container" style="display:flex;flex-direction:column;gap:12px;"></div>
           </div>
-          <hr style="margin:12px 0;border-color:#f0f0f0;">
-          <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Contact</p>
+
+          <hr style="margin:15px 0;border-color:#f0f0f0;">
+          <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Contact Information</p>
           <div class="fg">
-            <div class="fi">
-              <label>Primary Phone</label>
-              <input id="f_phone_number" type="text" placeholder="+91 XXXXX XXXXX" />
-            </div>
-            <div class="fi">
-              <label>Secondary Phone</label>
-              <input id="f_secondary_phone" type="text" placeholder="+91 XXXXX XXXXX" />
-            </div>
-            <div class="fi">
-              <label>Email</label>
-              <input id="f_email" type="email" placeholder="firm@example.com" />
-            </div>
-            <div class="fi">
-              <label>Website</label>
-              <input id="f_website" type="text" placeholder="https://example.com" />
-            </div>
+            <div class="fi"><label>Primary Phone</label><input id="f_phone_number" type="text" placeholder="+91 XXXXX XXXXX" /></div>
+            <div class="fi"><label>Secondary Phone</label><input id="f_secondary_phone" type="text" placeholder="+91 XXXXX XXXXX" /></div>
+            <div class="fi"><label>Email</label><input id="f_email" type="email" placeholder="firm@example.com" /></div>
+            <div class="fi"><label>Website</label><input id="f_website" type="text" placeholder="https://example.com" /></div>
           </div>
         </div>
 
-        <!-- ── COMPLIANCE ── -->
+        <!-- COMPLIANCE -->
         <div id="tab-compliance" style="display:none;">
           <div class="fg">
-            <div class="fi">
-              <label>GST Number</label>
-              <input id="f_gst_number_ref" type="text" readonly
-                style="background:#f9fafb;color:#6b7280;cursor:not-allowed;"
-                placeholder="Set on Basic Info tab" />
-            </div>
-            <div class="fi">
-              <label>PAN Number
-                <span style="font-size:10px;font-weight:400;color:#6b7280;"> — auto-filled from GST</span>
-              </label>
-              <input id="f_pan_number" type="text" placeholder="ABCDE1234F" />
-            </div>
-            <div class="fi">
-              <label>CIN Number</label>
-              <input id="f_cin_number" type="text" placeholder="U12345MH2005PTC123456" />
-            </div>
-            <div class="fi">
-              <label>Registration Number</label>
-              <input id="f_registration_number" type="text" placeholder="Reg. number" />
-            </div>
-            <div class="fi">
-              <label>Registration Date</label>
-              <input id="f_registration_date" type="date" />
-            </div>
-            <div class="fi">
-              <label>Tax ID</label>
-              <input id="f_tax_id" type="text" placeholder="Tax identification" />
-            </div>
-            <div class="fi">
-              <label>VAT Number</label>
-              <input id="f_vat_number" type="text" placeholder="VAT registration" />
-            </div>
-            <div class="fi full">
-              <label>License Numbers</label>
-              <input id="f_license_numbers" type="text" placeholder="Trade / operating license numbers" />
-            </div>
-            <div class="fi full">
-              <label>Insurance Details</label>
-              <textarea id="f_insurance_details" placeholder="Insurance policy details"></textarea>
-            </div>
+            <div class="fi"><label>PAN Number</label><input id="f_pan_number" type="text" placeholder="ABCDE1234F" /></div>
+            <div class="fi"><label>CIN Number</label><input id="f_cin_number" type="text" placeholder="U12345MH2005PTC123456" /></div>
+            <div class="fi"><label>Registration Number</label><input id="f_registration_number" type="text" placeholder="Reg. number" /></div>
+            <div class="fi"><label>Registration Date</label><input id="f_registration_date" type="date" /></div>
+            <div class="fi"><label>Tax ID</label><input id="f_tax_id" type="text" placeholder="Tax identification" /></div>
+            <div class="fi"><label>VAT Number</label><input id="f_vat_number" type="text" placeholder="VAT registration" /></div>
+            <div class="fi full"><label>License Numbers</label><input id="f_license_numbers" type="text" placeholder="Trade / operating license numbers" /></div>
+            <div class="fi full"><label>Insurance Details</label><textarea id="f_insurance_details" placeholder="Insurance policy details"></textarea></div>
           </div>
         </div>
 
-        <!-- ── FINANCIAL & SETTINGS ── -->
+        <!-- FINANCIAL & SETTINGS -->
         <div id="tab-financial" style="display:none;">
           <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Banking</p>
           <div class="fg" style="margin-bottom:14px;">
-            <div class="fi">
-              <label>Bank Account Number</label>
-              <input id="f_bank_account_number" type="text" placeholder="Account number" />
-            </div>
-            <div class="fi">
-              <label>Bank Name</label>
-              <input id="f_bank_name" type="text" placeholder="Bank name" />
-            </div>
-            <div class="fi">
-              <label>Bank Branch</label>
-              <input id="f_bank_branch" type="text" placeholder="Branch name" />
-            </div>
-            <div class="fi">
-              <label>IFSC Code</label>
-              <input id="f_ifsc_code" type="text" placeholder="IFSC" />
-            </div>
-            <div class="fi full">
-              <label>Payment Terms</label>
-              <input id="f_payment_terms" type="text" placeholder="e.g. Net 30" />
-            </div>
+            <div class="fi"><label>Bank Account Number</label><input id="f_bank_account_number" type="text" placeholder="Account number" /></div>
+            <div class="fi"><label>Bank Name</label><input id="f_bank_name" type="text" placeholder="Bank name" /></div>
+            <div class="fi"><label>Bank Branch</label><input id="f_bank_branch" type="text" placeholder="Branch name" /></div>
+            <div class="fi"><label>IFSC Code</label><input id="f_ifsc_code" type="text" placeholder="IFSC" /></div>
+            <div class="fi full"><label>Payment Terms</label><input id="f_payment_terms" type="text" placeholder="e.g. Net 30" /></div>
           </div>
           <hr style="margin:12px 0;border-color:#f0f0f0;">
           <p style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">Settings</p>
           <div class="fg">
-            <div class="fi">
-              <label>Currency</label>
+            <div class="fi"><label>Currency</label>
               <select id="f_currency">
                 <option value="INR">INR — Indian Rupee</option>
                 <option value="USD">USD — US Dollar</option>
@@ -430,8 +319,7 @@
                 <option value="GBP">GBP — British Pound</option>
               </select>
             </div>
-            <div class="fi">
-              <label>Timezone</label>
+            <div class="fi"><label>Timezone</label>
               <select id="f_timezone">
                 <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
                 <option value="UTC">UTC</option>
@@ -439,26 +327,11 @@
                 <option value="Europe/London">Europe/London</option>
               </select>
             </div>
-            <div class="fi">
-              <label>Fiscal Year Start</label>
-              <input id="f_fiscal_year_start" type="text" placeholder="e.g. 01-04" />
-            </div>
-            <div class="fi">
-              <label>Invoice Prefix</label>
-              <input id="f_invoice_prefix" type="text" placeholder="e.g. INV-" />
-            </div>
-            <div class="fi">
-              <label>Quote Prefix</label>
-              <input id="f_quote_prefix" type="text" placeholder="e.g. QT-" />
-            </div>
-            <div class="fi">
-              <label>PO Prefix</label>
-              <input id="f_po_prefix" type="text" placeholder="e.g. PO-" />
-            </div>
-            <div class="fi">
-              <label>Logo URL</label>
-              <input id="f_logo_url" type="text" placeholder="https://..." />
-            </div>
+            <div class="fi"><label>Fiscal Year Start</label><input id="f_fiscal_year_start" type="text" placeholder="e.g. 01-04" /></div>
+            <div class="fi"><label>Invoice Prefix</label><input id="f_invoice_prefix" type="text" placeholder="e.g. INV-" /></div>
+            <div class="fi"><label>Quote Prefix</label><input id="f_quote_prefix" type="text" placeholder="e.g. QT-" /></div>
+            <div class="fi"><label>PO Prefix</label><input id="f_po_prefix" type="text" placeholder="e.g. PO-" /></div>
+            <div class="fi"><label>Logo URL</label><input id="f_logo_url" type="text" placeholder="https://..." /></div>
             <div class="fi" style="align-self:flex-end;">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                 <input id="f_enable_e_invoice" type="checkbox" style="width:16px;height:16px;accent-color:#4f46e5;" />
@@ -468,144 +341,152 @@
           </div>
         </div>
 
-        <!-- ── ADMIN ACCOUNT (create only) ── -->
+        <!-- ADMIN ACCOUNT -->
         <div id="tab-admin" style="display:none;">
           <div style="padding:10px 14px;background:#fef9e7;border:1px solid #fde68a;border-radius:8px;margin-bottom:14px;font-size:12px;color:#92400e;">
-            <i class="fas fa-info-circle" style="margin-right:6px;"></i>
-            Optional — create an admin user account linked to this firm. All fields are required if this section is filled.
+            <i class="fas fa-info-circle" style="margin-right:6px;"></i>Optional — create an admin user account linked to this firm.
           </div>
           <div class="fg">
-            <div class="fi">
-              <label>Full Name</label>
-              <input id="a_fullname" type="text" placeholder="Admin full name" />
-            </div>
-            <div class="fi">
-              <label>Username</label>
-              <input id="a_username" type="text" placeholder="admin_username" autocomplete="off" />
-            </div>
-            <div class="fi">
-              <label>Email</label>
-              <input id="a_email" type="email" placeholder="admin@firm.com" autocomplete="off" />
-            </div>
-            <div class="fi">
-              <label>Password</label>
-              <input id="a_password" type="password" placeholder="Min 8 characters" autocomplete="new-password" />
-            </div>
+            <div class="fi"><label>Full Name</label><input id="a_fullname" type="text" placeholder="Admin full name" /></div>
+            <div class="fi"><label>Username</label><input id="a_username" type="text" placeholder="admin_username" autocomplete="off" /></div>
+            <div class="fi"><label>Email</label><input id="a_email" type="email" placeholder="admin@firm.com" autocomplete="off" /></div>
+            <div class="fi"><label>Password</label><input id="a_password" type="password" placeholder="Min 8 characters" autocomplete="new-password" /></div>
           </div>
         </div>
 
-      </div><!-- /scroll area -->
-
+      </div>
       <div class="mfooter">
-        <button type="button" class="btn-cancel" onclick="closeModal('crudModal')">
-          <i class="fas fa-times" style="margin-right:4px;"></i>Cancel
-        </button>
-        <button type="submit" class="btn-primary" id="crudSubmitBtn">
-          <i class="fas fa-save" style="margin-right:4px;"></i>
-          <span id="crudSubmitLabel">Create Firm</span>
-        </button>
+        <button type="button" class="btn-cancel" onclick="closeModal('crudModal')"><i class="fas fa-times" style="margin-right:4px;"></i>Cancel</button>
+        <button type="submit" class="btn-primary" id="crudSubmitBtn"><i class="fas fa-save" style="margin-right:4px;"></i><span id="crudSubmitLabel">Create Firm</span></button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- ══════════ VIEW MODAL ══════════ -->
+<!-- VIEW MODAL -->
 <div id="viewModal" class="modal">
   <div class="mc mc-xl">
     <div class="mh mh-primary">
       <h2><i class="fas fa-eye"></i> Firm Details</h2>
       <button class="mclose" onclick="closeModal('viewModal')"><i class="fas fa-times"></i></button>
     </div>
-    <div style="padding:20px; max-height:70vh; overflow-y:auto;">
-      <div class="ig" id="viewContent"></div>
-    </div>
-    <div class="mfooter">
-      <button class="btn-cancel" onclick="closeModal('viewModal')"><i class="fas fa-times" style="margin-right:4px;"></i>Close</button>
-    </div>
+    <div style="padding:20px; max-height:70vh; overflow-y:auto;"><div class="ig" id="viewContent"></div></div>
+    <div class="mfooter"><button class="btn-cancel" onclick="closeModal('viewModal')"><i class="fas fa-times" style="margin-right:4px;"></i>Close</button></div>
   </div>
 </div>
 
-<!-- ══════════ DELETE MODAL ══════════ -->
+<!-- DELETE MODAL -->
 <div id="deleteModal" class="modal">
   <div class="mc mc-sm">
-    <div class="mh mh-danger">
-      <h2><i class="fas fa-trash"></i> Confirm Delete</h2>
-      <button class="mclose" onclick="closeModal('deleteModal')"><i class="fas fa-times"></i></button>
-    </div>
+    <div class="mh mh-danger"><h2><i class="fas fa-trash"></i> Confirm Delete</h2><button class="mclose" onclick="closeModal('deleteModal')"><i class="fas fa-times"></i></button></div>
     <div style="padding:20px;display:flex;flex-direction:column;gap:12px;">
       <p id="deleteMsg" style="font-size:13px;color:#374151;"></p>
       <div style="padding:10px 13px;background:#fef2f2;border-left:4px solid #f87171;border-radius:6px;font-size:12px;color:#991b1b;font-weight:600;">
-        <i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>
-        Cannot delete if firm has associated users, stocks, bills, or parties.
+        <i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>Cannot delete if firm has associated data.
       </div>
     </div>
     <div class="mfooter">
       <button class="btn-cancel" onclick="closeModal('deleteModal')">Cancel</button>
-      <button class="btn-danger" id="deleteConfirmBtn" onclick="confirmDelete()">
-        <i class="fas fa-trash" style="margin-right:4px;"></i>Delete
-      </button>
+      <button class="btn-danger" onclick="confirmDelete()"><i class="fas fa-trash" style="margin-right:4px;"></i>Delete</button>
     </div>
   </div>
 </div>
 
-<!-- ══════════ BULK DELETE MODAL ══════════ -->
+<!-- BULK DELETE MODAL -->
 <div id="bulkDelModal" class="modal">
   <div class="mc mc-sm">
-    <div class="mh mh-danger">
-      <h2><i class="fas fa-trash"></i> Bulk Delete</h2>
-      <button class="mclose" onclick="closeModal('bulkDelModal')"><i class="fas fa-times"></i></button>
-    </div>
-    <div style="padding:20px;display:flex;flex-direction:column;gap:12px;">
-      <p id="bulkDelMsg" style="font-size:13px;color:#374151;"></p>
-      <div style="padding:10px 13px;background:#fef2f2;border-left:4px solid #f87171;border-radius:6px;font-size:12px;color:#991b1b;font-weight:600;">
-        <i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>This cannot be undone.
-      </div>
-    </div>
+    <div class="mh mh-danger"><h2><i class="fas fa-trash"></i> Bulk Delete</h2><button class="mclose" onclick="closeModal('bulkDelModal')"><i class="fas fa-times"></i></button></div>
+    <div style="padding:20px;"><p id="bulkDelMsg" style="font-size:13px;color:#374151;"></p></div>
     <div class="mfooter">
       <button class="btn-cancel" onclick="closeModal('bulkDelModal')">Cancel</button>
-      <button class="btn-danger" id="bulkDelConfirmBtn" onclick="confirmBulkDelete()">
-        <i class="fas fa-trash" style="margin-right:4px;"></i>Delete All Selected
-      </button>
+      <button class="btn-danger" onclick="confirmBulkDelete()"><i class="fas fa-trash" style="margin-right:4px;"></i>Delete All</button>
     </div>
+  </div>
+</div>
+
+<div id="dtColumnFilterPanel">
+  <input type="text" id="filterSearch" placeholder="Search values..." style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;margin-bottom:10px;" />
+  <div id="filterList"></div>
+  <div style="display:flex;gap:6px;margin-top:10px;">
+    <button id="filterApplyBtn" style="flex:1;padding:7px 10px;font-size:12px;border-radius:6px;font-weight:600;cursor:pointer;background:#4f46e5;color:white;border:none;">Apply</button>
+    <button id="filterClearBtn" style="flex:1;padding:7px 10px;font-size:12px;border-radius:6px;font-weight:600;cursor:pointer;background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;">Clear</button>
   </div>
 </div>
 
 <script>
 'use strict';
 
-/* ════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════
    STATE
-════════════════════════════════════════ */
-var allFirms       = [];
-var table          = null;
-var curMode        = 'create';   // 'create' | 'edit'
-var curIdx         = -1;
-var selectedIdxs   = [];
+══════════════════════════════════════════════════════════ */
+var allFirms        = [];
+var table           = null;
+var curMode         = 'create';
+var curIdx          = -1;
+var selectedIdxs    = [];
+var pendingFetchIdx = -1;  /* -1 = basic-tab quick fetch, >=0 = per-card fetch */
 
-/* NEW: Excel Column Filter State */
-let currentFilterCol = -1;
-let filterPanel = null;
+/*
+ * locationList — single source of truth for all GST + address data.
+ *
+ * Each entry represents ONE GSTIN registration tied to ONE address.
+ * This matches Indian GST law: PPOB / APOB = one physical address per registration.
+ *
+ * Shape per entry:
+ * {
+ *   gst_number        : string,   // 15-char GSTIN
+ *   state_code        : string,   // 2-digit — always derived from gst_number[0:2]
+ *   state             : string,   // human state name
+ *   registration_type : string,   // 'PPOB' | 'APOB'
+ *   address           : string,   // street / locality
+ *   city              : string,
+ *   pincode           : string,
+ *   is_default        : boolean,
+ *   _fetched          : boolean   // UI-only; stripped before sending to backend
+ * }
+ */
+var locationList = [];
 
-/* ════════════════════════════════════════
-   TOASTR
-════════════════════════════════════════ */
-toastr.options = { closeButton:true, progressBar:true, positionClass:'toast-bottom-right', timeOut:2500, extendedTimeOut:800 };
+toastr.options = { closeButton: true, progressBar: true, positionClass: 'toast-bottom-right', timeOut: 2500 };
 
-/* ════════════════════════════════════════
-   MODAL HELPERS
-════════════════════════════════════════ */
-window.openModal  = function(id){ document.getElementById(id).classList.add('show'); };
-window.closeModal = function(id){ document.getElementById(id).classList.remove('show'); };
+/* ══════════════════════════════════════════════════════════
+   GST STATE-CODE → STATE NAME  (all 38 Indian state codes)
+══════════════════════════════════════════════════════════ */
+var GST_STATE_MAP = {
+  '01':'Jammu & Kashmir',       '02':'Himachal Pradesh',       '03':'Punjab',
+  '04':'Chandigarh',             '05':'Uttarakhand',             '06':'Haryana',
+  '07':'Delhi',                  '08':'Rajasthan',               '09':'Uttar Pradesh',
+  '10':'Bihar',                  '11':'Sikkim',                  '12':'Arunachal Pradesh',
+  '13':'Nagaland',               '14':'Manipur',                 '15':'Mizoram',
+  '16':'Tripura',                '17':'Meghalaya',               '18':'Assam',
+  '19':'West Bengal',            '20':'Jharkhand',               '21':'Odisha',
+  '22':'Chhattisgarh',           '23':'Madhya Pradesh',          '24':'Gujarat',
+  '25':'Daman & Diu',            '26':'Dadra & Nagar Haveli',    '27':'Maharashtra',
+  '28':'Andhra Pradesh (Old)',   '29':'Karnataka',               '30':'Goa',
+  '31':'Lakshadweep',            '32':'Kerala',                  '33':'Tamil Nadu',
+  '34':'Puducherry',             '35':'Andaman & Nicobar',       '36':'Telangana',
+  '37':'Andhra Pradesh',         '38':'Ladakh',
+  '97':'Other Territory',        '99':'Centre Jurisdiction',
+};
 
-/* ════════════════════════════════════════
-   MODAL TAB SWITCHER
-════════════════════════════════════════ */
+function deriveStateFromGstin(gstin) {
+  if (!gstin || gstin.length < 2) return { state_code: '', state: '' };
+  var code = gstin.substring(0, 2);
+  return { state_code: code, state: GST_STATE_MAP[code] || '' };
+}
+
+/* ══════════════════════════════════════════════════════════
+   MODAL / TAB HELPERS
+══════════════════════════════════════════════════════════ */
+window.openModal  = function(id) { document.getElementById(id).classList.add('show'); };
+window.closeModal = function(id) { document.getElementById(id).classList.remove('show'); };
+
 function switchModalTab(name) {
-  ['basic','location','compliance','financial','admin'].forEach(function(t){
+  ['basic','location','compliance','financial','admin'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.style.display = 'none';
   });
-  document.querySelectorAll('.mtab-btn').forEach(function(b){
+  document.querySelectorAll('.mtab-btn').forEach(function(b) {
     b.classList.remove('active');
     if (b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+name+"'")) b.classList.add('active');
   });
@@ -613,16 +494,12 @@ function switchModalTab(name) {
   if (target) target.style.display = '';
 }
 
-/* ════════════════════════════════════════
-   FORM HELPERS
-════════════════════════════════════════ */
 function setField(id, val) {
   var el = document.getElementById(id);
   if (!el) return;
   if (el.type === 'checkbox') el.checked = !!val;
   else el.value = (val !== null && val !== undefined) ? val : '';
 }
-
 function getField(id) {
   var el = document.getElementById(id);
   if (!el) return '';
@@ -630,16 +507,284 @@ function getField(id) {
   return el.value.trim();
 }
 
-function resetForm() {
-  ['f_name','f_legal_name','f_code','f_description','f_business_type','f_industry_type',
-   'f_establishment_year','f_employee_count','f_address','f_city','f_state','f_country','f_pincode',
-   'f_phone_number','f_secondary_phone','f_email','f_website',
-   'f_gst_number','f_pan_number','f_cin_number','f_registration_number','f_registration_date',
-   'f_tax_id','f_vat_number','f_license_numbers','f_insurance_details',
-   'f_bank_account_number','f_bank_name','f_bank_branch','f_ifsc_code','f_payment_terms',
-   'f_logo_url','a_fullname','a_username','a_email','a_password'].forEach(function(id){
-    setField(id,'');
+/* ══════════════════════════════════════════════════════════
+   LOCATION LIST — RENDER
+   One card per GSTIN. Each card contains the GSTIN input,
+   a Fetch button, and ALL address fields (address, city,
+   pincode, state, state_code, registration_type).
+   Address fields are auto-populated when Fetch is clicked.
+══════════════════════════════════════════════════════════ */
+function renderLocationList() {
+  var container = document.getElementById('location-list-container');
+  container.innerHTML = '';
+
+  locationList.forEach(function(item, i) {
+    var gstin    = item.gst_number || '';
+    var isValid  = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin);
+    var validCls = gstin.length === 15 ? (isValid ? 'gstin-valid' : 'gstin-invalid') : '';
+    var validInd = gstin.length === 15
+      ? '<span style="font-size:10px;font-weight:600;color:'+(isValid?'#10b981':'#f59e0b')+';">'
+          +'<i class="fas fa-'+(isValid?'check-circle':'exclamation-circle')+'" style="margin-right:2px;"></i>'
+          +(isValid?'Valid':'Check format')+'</span>'
+      : '';
+
+    var defaultLabel = item.is_default
+      ? '<span class="default-badge"><i class="fas fa-star" style="font-size:8px;margin-right:2px;"></i>Default</span>'
+      : '<span style="font-size:11px;color:#94a3b8;">Set as Default</span>';
+
+    var removeBtn = locationList.length > 1
+      ? '<div class="loc-remove-btn" onclick="removeLocationItem('+i+')" title="Remove"><i class="fas fa-times"></i></div>'
+      : '<div class="loc-remove-btn" style="opacity:0.3;cursor:default;" title="At least one location required"><i class="fas fa-times"></i></div>';
+
+    var fetchedBadge = item._fetched
+      ? '<div class="loc-fetched-strip"><i class="fas fa-check-circle"></i> Address auto-filled from GST registry</div>'
+      : '';
+
+    var el = document.createElement('div');
+    el.className = 'loc-card' + (item.is_default ? ' is-default' : '');
+    el.id = 'loc-card-' + i;
+
+    el.innerHTML =
+      /* Header */
+      '<div class="loc-card-header">'
+        +'<label class="loc-default-radio">'
+          +'<input type="radio" name="loc_default" '+(item.is_default?'checked':'')+' onchange="setDefaultLocation('+i+')">'
+          +defaultLabel
+        +'</label>'
+        +'<div style="margin-left:auto;display:flex;align-items:center;gap:6px;">'+validInd+removeBtn+'</div>'
+      +'</div>'
+
+      /* Body */
+      +'<div class="loc-card-body">'
+
+        /* GSTIN + Fetch */
+        +'<div class="loc-gstin-row">'
+          +'<div class="fi" style="margin:0;">'
+            +'<label>GSTIN <span class="req">*</span></label>'
+            +'<input type="text" id="loc-gstin-'+i+'" value="'+esc(gstin)+'" placeholder="27AABCD1234A1Z5" maxlength="15" '
+              +'style="text-transform:uppercase;letter-spacing:0.5px;font-family:monospace;font-size:12px;" '
+              +'class="'+validCls+'" oninput="onLocGstinInput('+i+', this)">'
+          +'</div>'
+          +'<div style="align-self:flex-end;">'
+            +'<button type="button" class="loc-fetch-btn" id="loc-fetch-btn-'+i+'" onclick="triggerLocFetch('+i+')" title="Fetch address from GST registry">'
+              +'<i id="loc-fetch-icon-'+i+'" class="fas fa-search"></i> Fetch'
+            +'</button>'
+          +'</div>'
+        +'</div>'
+
+        /* Fetched confirmation */
+        +fetchedBadge
+
+        /* Address fields — always visible, auto-populated on fetch */
+        +'<div class="loc-addr-grid">'
+          +'<div class="fi loc-addr-full" style="margin:0;">'
+            +'<label>Address <span style="font-size:10px;font-weight:400;color:#9ca3af;">(PPOB / APOB as per GST certificate)</span></label>'
+            +'<input type="text" id="loc-addr-'+i+'" value="'+esc(item.address)+'" placeholder="Street, locality, building name" '
+              +'oninput="updateLocField('+i+',\'address\',this.value)">'
+          +'</div>'
+          +'<div class="fi" style="margin:0;">'
+            +'<label>City / District</label>'
+            +'<input type="text" id="loc-city-'+i+'" value="'+esc(item.city)+'" placeholder="e.g. Mumbai" '
+              +'oninput="updateLocField('+i+',\'city\',this.value)">'
+          +'</div>'
+          +'<div class="fi" style="margin:0;">'
+            +'<label>Pincode</label>'
+            +'<input type="text" id="loc-pin-'+i+'" value="'+esc(item.pincode)+'" placeholder="e.g. 400069" maxlength="6" '
+              +'oninput="updateLocField('+i+',\'pincode\',this.value)">'
+          +'</div>'
+        +'</div>'
+
+        /* State + State Code + Type — one row */
+        +'<div class="loc-state-row">'
+          +'<div class="fi" style="margin:0;">'
+            +'<label>State <span style="font-size:10px;font-weight:400;color:#9ca3af;">(auto from GSTIN)</span></label>'
+            +'<input type="text" id="loc-state-'+i+'" value="'+esc(item.state)+'" placeholder="e.g. Maharashtra" '
+              +'oninput="updateLocField('+i+',\'state\',this.value)">'
+          +'</div>'
+          +'<div class="fi" style="margin:0;">'
+            +'<label>State Code</label>'
+            +'<input type="text" id="loc-sc-'+i+'" value="'+esc(item.state_code)+'" placeholder="27" maxlength="2" '
+              +'style="font-family:monospace;" oninput="updateLocField('+i+',\'state_code\',this.value)">'
+          +'</div>'
+          +'<div class="fi" style="margin:0;">'
+            +'<label>Type</label>'
+            +'<select id="loc-regtype-'+i+'" onchange="updateLocField('+i+',\'registration_type\',this.value)">'
+              +'<option value="PPOB"'+(item.registration_type==='PPOB'?' selected':'')+'>PPOB</option>'
+              +'<option value="APOB"'+(item.registration_type==='APOB'?' selected':'')+'>APOB</option>'
+            +'</select>'
+          +'</div>'
+        +'</div>'
+
+      +'</div>'; /* end .loc-card-body */
+
+    container.appendChild(el);
   });
+}
+
+/* Minimal HTML attribute escaper */
+function esc(v) {
+  return (v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Live GSTIN input: uppercase + validate + auto-derive state ── */
+window.onLocGstinInput = function(i, el) {
+  el.value = el.value.toUpperCase();
+  var val = el.value;
+  locationList[i].gst_number = val;
+  locationList[i]._fetched   = false;
+
+  el.classList.remove('gstin-valid','gstin-invalid');
+  if (val.length === 15) {
+    var ok = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(val);
+    el.classList.add(ok ? 'gstin-valid' : 'gstin-invalid');
+
+    if (ok) {
+      var d = deriveStateFromGstin(val);
+      locationList[i].state_code = d.state_code;
+      locationList[i].state      = d.state;
+
+      /* Populate state fields in this card immediately without full re-render */
+      var scEl  = document.getElementById('loc-sc-'+i);
+      var stEl  = document.getElementById('loc-state-'+i);
+      if (scEl)  scEl.value  = d.state_code;
+      if (stEl)  stEl.value  = d.state;
+
+      /* Auto-fill PAN (chars 2–11) if compliance tab is still empty */
+      var pan = val.substring(2, 12);
+      if (!getField('f_pan_number')) setField('f_pan_number', pan);
+    }
+  }
+};
+
+window.updateLocField     = function(i, key, val) { locationList[i][key] = val; };
+window.setDefaultLocation = function(idx) {
+  locationList.forEach(function(l, i){ l.is_default = (i === idx); });
+  renderLocationList();
+};
+window.removeLocationItem = function(idx) {
+  if (locationList.length <= 1) return;
+  locationList.splice(idx, 1);
+  if (!locationList.some(function(l){ return l.is_default; })) locationList[0].is_default = true;
+  renderLocationList();
+};
+window.addLocationItem = function(data) {
+  data = data || {};
+  locationList.push({
+    gst_number:        data.gst_number        || '',
+    state_code:        data.state_code        || '',
+    state:             data.state             || '',
+    registration_type: data.registration_type || 'PPOB',
+    address:           data.address           || '',
+    city:              data.city              || '',
+    pincode:           data.pincode           || '',
+    is_default:        data.is_default !== undefined ? data.is_default : locationList.length === 0,
+    _fetched:          data._fetched          || false,
+  });
+  renderLocationList();
+};
+
+/* ── Per-card fetch: triggered by the Fetch button inside each location card ── */
+window.triggerLocFetch = function(idx) {
+  var gstin = (locationList[idx] && locationList[idx].gst_number || '').toUpperCase();
+  if (gstin.length !== 15) { toastr.error('Enter a 15-character GSTIN first'); return; }
+  pendingFetchIdx = idx;
+  var btn  = document.getElementById('loc-fetch-btn-'+idx);  if (btn)  btn.disabled = true;
+  var icon = document.getElementById('loc-fetch-icon-'+idx); if (icon) icon.className = 'fas fa-spinner fa-spin';
+  window.parent.postMessage({ type: 'FETCH_GST', gstin: gstin }, '*');
+};
+
+/* ── Basic-tab quick fetch (top of form) ── */
+window.triggerGstFetch = function() {
+  var gstin = getField('f_gst_number').toUpperCase();
+  if (gstin.length !== 15) { toastr.error('Invalid GSTIN — must be 15 characters'); return; }
+  pendingFetchIdx = -1;
+  var btn = document.getElementById('gstFetchBtn'); btn.disabled = true;
+  document.getElementById('gstFetchIcon').className = 'fas fa-spinner fa-spin';
+  window.parent.postMessage({ type: 'FETCH_GST', gstin: gstin }, '*');
+};
+
+/* ── Core handler: populate ALL fields after GST API responds ── */
+function populateGstFields(gstData) {
+  var ppob    = gstData.place_of_business_principal && gstData.place_of_business_principal.address;
+  var derived = deriveStateFromGstin(gstData.gstin || '');
+
+  /* Build full address string from all available PPOB components */
+  var fullAddr = ppob
+    ? [ppob.door_num, ppob.building_name, ppob.street, ppob.location].filter(Boolean).join(', ')
+    : '';
+  var city    = (ppob && (ppob.city || ppob.district)) || '';
+  var pincode = (ppob && ppob.pin_code)                || '';
+
+  if (pendingFetchIdx >= 0) {
+    /* Per-card fetch: write GSTIN + ALL address fields into this location entry */
+    var idx = pendingFetchIdx;
+    if (gstData.gstin)      locationList[idx].gst_number        = gstData.gstin;
+    if (derived.state_code) locationList[idx].state_code        = derived.state_code;
+    if (derived.state)      locationList[idx].state             = derived.state;
+    if (fullAddr)           locationList[idx].address           = fullAddr;
+    if (city)               locationList[idx].city              = city;
+    if (pincode)            locationList[idx].pincode           = pincode;
+    locationList[idx]._fetched = true;
+
+    /* Auto-fill PAN if blank */
+    if (gstData.gstin && !getField('f_pan_number')) {
+      setField('f_pan_number', gstData.gstin.substring(2, 12));
+    }
+
+    renderLocationList();
+    pendingFetchIdx = -1;
+    return;
+  }
+
+  /* Basic-tab quick fetch: populate firm meta + upsert first location */
+  if (gstData.legal_name) setField('f_legal_name', gstData.legal_name);
+  if (gstData.trade_name) setField('f_name',       gstData.trade_name);
+  if (gstData.gstin)      setField('f_pan_number', gstData.gstin.substring(2, 12));
+
+  if (gstData.gstin) {
+    var existIdx = locationList.findIndex(function(l){ return l.gst_number === gstData.gstin; });
+    var locData = {
+      gst_number:        gstData.gstin,
+      state_code:        derived.state_code,
+      state:             derived.state,
+      registration_type: 'PPOB',
+      address:           fullAddr,
+      city:              city,
+      pincode:           pincode,
+      _fetched:          true,
+    };
+
+    if (existIdx >= 0) {
+      /* Update existing entry */
+      Object.assign(locationList[existIdx], locData);
+    } else if (locationList.length === 1 && !locationList[0].gst_number) {
+      /* Replace the initial blank placeholder */
+      locData.is_default = true;
+      locationList[0] = locData;
+    } else {
+      addLocationItem(locData);
+      return; /* addLocationItem already calls renderLocationList */
+    }
+    renderLocationList();
+  }
+
+  pendingFetchIdx = -1;
+}
+
+/* ══════════════════════════════════════════════════════════
+   FORM RESET
+══════════════════════════════════════════════════════════ */
+function resetForm() {
+  [
+    'f_name','f_legal_name','f_code','f_description','f_business_type','f_industry_type',
+    'f_establishment_year','f_employee_count','f_phone_number','f_secondary_phone',
+    'f_email','f_website','f_gst_number',
+    'f_pan_number','f_cin_number','f_registration_number','f_registration_date',
+    'f_tax_id','f_vat_number','f_license_numbers','f_insurance_details',
+    'f_bank_account_number','f_bank_name','f_bank_branch','f_ifsc_code','f_payment_terms',
+    'f_logo_url','a_fullname','a_username','a_email','a_password',
+  ].forEach(function(id){ setField(id,''); });
+
   setField('f_status','approved');
   setField('f_currency','INR');
   setField('f_timezone','Asia/Kolkata');
@@ -647,215 +792,343 @@ function resetForm() {
   setField('f_invoice_prefix','');
   setField('f_quote_prefix','');
   setField('f_po_prefix','');
-  setField('f_enable_e_invoice',false);
+  setField('f_enable_e_invoice', false);
+
+  locationList = [];
+  addLocationItem(); /* one blank location card to start */
 }
 
+/* ══════════════════════════════════════════════════════════
+   COLLECT FIRM DATA
+   Sends locations[] (unified) — never gst_numbers/addresses.
+   Backend controller already expects req.body.locations.
+══════════════════════════════════════════════════════════ */
 function collectFirmData() {
   var data = {
     name:                getField('f_name'),
-    legal_name:          getField('f_legal_name') || undefined,
-    code:                getField('f_code') || undefined,
-    description:         getField('f_description') || undefined,
-    business_type:       getField('f_business_type') || undefined,
-    industry_type:       getField('f_industry_type') || undefined,
+    legal_name:          getField('f_legal_name')          || undefined,
+    code:                getField('f_code')                || undefined,
+    description:         getField('f_description')         || undefined,
+    business_type:       getField('f_business_type')       || undefined,
+    industry_type:       getField('f_industry_type')       || undefined,
     status:              getField('f_status'),
-    address:             getField('f_address') || undefined,
-    city:                getField('f_city') || undefined,
-    state:               getField('f_state') || undefined,
-    country:             getField('f_country') || undefined,
-    pincode:             getField('f_pincode') || undefined,
-    phone_number:        getField('f_phone_number') || undefined,
-    secondary_phone:     getField('f_secondary_phone') || undefined,
-    email:               getField('f_email') || undefined,
-    website:             getField('f_website') || undefined,
-    gst_number:          getField('f_gst_number') || undefined,
-    pan_number:          getField('f_pan_number') || undefined,
-    cin_number:          getField('f_cin_number') || undefined,
+    phone_number:        getField('f_phone_number')        || undefined,
+    secondary_phone:     getField('f_secondary_phone')     || undefined,
+    email:               getField('f_email')               || undefined,
+    website:             getField('f_website')             || undefined,
+    pan_number:          getField('f_pan_number')          || undefined,
+    cin_number:          getField('f_cin_number')          || undefined,
     registration_number: getField('f_registration_number') || undefined,
-    registration_date:   getField('f_registration_date') || undefined,
-    tax_id:              getField('f_tax_id') || undefined,
-    vat_number:          getField('f_vat_number') || undefined,
-    license_numbers:     getField('f_license_numbers') || undefined,
-    insurance_details:   getField('f_insurance_details') || undefined,
+    registration_date:   getField('f_registration_date')   || undefined,
+    tax_id:              getField('f_tax_id')              || undefined,
+    vat_number:          getField('f_vat_number')          || undefined,
+    license_numbers:     getField('f_license_numbers')     || undefined,
+    insurance_details:   getField('f_insurance_details')   || undefined,
     bank_account_number: getField('f_bank_account_number') || undefined,
-    bank_name:           getField('f_bank_name') || undefined,
-    bank_branch:         getField('f_bank_branch') || undefined,
-    ifsc_code:           getField('f_ifsc_code') || undefined,
-    payment_terms:       getField('f_payment_terms') || undefined,
-    currency:            getField('f_currency') || 'INR',
-    timezone:            getField('f_timezone') || 'Asia/Kolkata',
-    fiscal_year_start:   getField('f_fiscal_year_start') || undefined,
-    invoice_prefix:      getField('f_invoice_prefix') || undefined,
-    quote_prefix:        getField('f_quote_prefix') || undefined,
-    po_prefix:           getField('f_po_prefix') || undefined,
-    logo_url:            getField('f_logo_url') || undefined,
+    bank_name:           getField('f_bank_name')           || undefined,
+    bank_branch:         getField('f_bank_branch')         || undefined,
+    ifsc_code:           getField('f_ifsc_code')           || undefined,
+    payment_terms:       getField('f_payment_terms')       || undefined,
+    currency:            getField('f_currency')            || 'INR',
+    timezone:            getField('f_timezone')            || 'Asia/Kolkata',
+    fiscal_year_start:   getField('f_fiscal_year_start')   || undefined,
+    invoice_prefix:      getField('f_invoice_prefix')      || undefined,
+    quote_prefix:        getField('f_quote_prefix')        || undefined,
+    po_prefix:           getField('f_po_prefix')           || undefined,
+    logo_url:            getField('f_logo_url')            || undefined,
     enable_e_invoice:    getField('f_enable_e_invoice'),
+
+    /*
+     * KEY FIX: send locations[] — the single unified array.
+     * Strip _fetched (UI-only). Skip entries with neither GSTIN nor address.
+     */
+    locations: locationList
+      .filter(function(l){ return l.gst_number || l.address; })
+      .map(function(l){
+        return {
+          gst_number:        l.gst_number        || '',
+          state_code:        l.state_code        || '',
+          state:             l.state             || '',
+          registration_type: l.registration_type || 'PPOB',
+          address:           l.address           || '',
+          city:              l.city              || '',
+          pincode:           l.pincode           || '',
+          is_default:        !!l.is_default,
+        };
+      }),
   };
+
   var estYear = parseInt(document.getElementById('f_establishment_year').value);
   if (!isNaN(estYear)) data.establishment_year = estYear;
   var empCount = parseInt(document.getElementById('f_employee_count').value);
   if (!isNaN(empCount)) data.employee_count = empCount;
+
   return data;
 }
 
-/* ════════════════════════════════════════
-   CREATE MODAL
-════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   OPEN MODALS
+══════════════════════════════════════════════════════════ */
 window.openCreateModal = function() {
-  curMode = 'create'; curIdx = -1;
-  resetForm();
-  switchModalTab('basic');
+  curMode = 'create'; curIdx = -1; resetForm(); switchModalTab('basic');
   document.getElementById('crudModalTitle').innerHTML = '<i class="fas fa-plus"></i> Create Firm';
   document.getElementById('crudSubmitLabel').textContent = 'Create Firm';
-  document.getElementById('crudSubmitBtn').disabled = false;
   document.getElementById('adminTabBtn').style.display = '';
   openModal('crudModal');
 };
 
-/* ════════════════════════════════════════
-   EDIT MODAL
-════════════════════════════════════════ */
 window.showEditModal = function(idx) {
   var f = allFirms[idx]; if (!f) return;
-  curMode = 'edit'; curIdx = idx;
+  curMode = 'edit'; curIdx = idx; resetForm();
 
+  /* Populate all simple fields */
   var fields = {
-    f_name:f.name, f_legal_name:f.legal_name, f_code:f.code, f_description:f.description,
-    f_business_type:f.business_type, f_industry_type:f.industry_type,
-    f_establishment_year:f.establishment_year, f_employee_count:f.employee_count,
-    f_status:f.status||'approved',
-    f_address:f.address, f_city:f.city, f_state:f.state, f_country:f.country, f_pincode:f.pincode,
-    f_phone_number:f.phone_number, f_secondary_phone:f.secondary_phone,
-    f_email:f.email, f_website:f.website,
-    f_gst_number:f.gst_number, f_pan_number:f.pan_number, f_cin_number:f.cin_number,
-    f_registration_number:f.registration_number, f_registration_date:f.registration_date,
-    f_tax_id:f.tax_id, f_vat_number:f.vat_number,
-    f_license_numbers:f.license_numbers, f_insurance_details:f.insurance_details,
-    f_bank_account_number:f.bank_account_number, f_bank_name:f.bank_name,
-    f_bank_branch:f.bank_branch, f_ifsc_code:f.ifsc_code, f_payment_terms:f.payment_terms,
-    f_currency:f.currency||'INR', f_timezone:f.timezone||'Asia/Kolkata',
-    f_fiscal_year_start:f.fiscal_year_start, f_invoice_prefix:f.invoice_prefix,
-    f_quote_prefix:f.quote_prefix, f_po_prefix:f.po_prefix,
-    f_logo_url:f.logo_url, f_enable_e_invoice:f.enable_e_invoice||false
+    f_name: f.name, f_legal_name: f.legal_name, f_code: f.code, f_description: f.description,
+    f_business_type: f.business_type, f_industry_type: f.industry_type,
+    f_establishment_year: f.establishment_year, f_employee_count: f.employee_count,
+    f_status: f.status || 'approved',
+    f_phone_number: f.phone_number, f_secondary_phone: f.secondary_phone,
+    f_email: f.email, f_website: f.website,
+    f_pan_number: f.pan_number, f_cin_number: f.cin_number,
+    f_registration_number: f.registration_number, f_registration_date: f.registration_date,
+    f_tax_id: f.tax_id, f_vat_number: f.vat_number,
+    f_license_numbers: f.license_numbers, f_insurance_details: f.insurance_details,
+    f_bank_account_number: f.bank_account_number, f_bank_name: f.bank_name,
+    f_bank_branch: f.bank_branch, f_ifsc_code: f.ifsc_code, f_payment_terms: f.payment_terms,
+    f_currency: f.currency || 'INR', f_timezone: f.timezone || 'Asia/Kolkata',
+    f_fiscal_year_start: f.fiscal_year_start, f_invoice_prefix: f.invoice_prefix,
+    f_quote_prefix: f.quote_prefix, f_po_prefix: f.po_prefix,
+    f_logo_url: f.logo_url, f_enable_e_invoice: f.enable_e_invoice || false,
   };
-  Object.entries(fields).forEach(function(e){ setField(e[0],e[1]); });
+  Object.entries(fields).forEach(function(e){ setField(e[0], e[1]); });
 
-  /* Sync readonly GST ref on compliance tab */
-  var refEl = document.getElementById('f_gst_number_ref');
-  if (refEl) refEl.value = f.gst_number || '';
+  /* KEY FIX: load from f.locations[] — the single unified array */
+  locationList = [];
+  var locs = (f.locations && f.locations.length) ? f.locations : null;
+
+  if (locs) {
+    locs.forEach(function(l) {
+      locationList.push({
+        gst_number:        l.gst_number        || '',
+        state_code:        l.state_code        || (l.gst_number ? l.gst_number.substring(0,2) : ''),
+        state:             l.state             || '',
+        registration_type: l.registration_type || 'PPOB',
+        address:           l.address           || '',
+        city:              l.city              || '',
+        pincode:           l.pincode           || '',
+        is_default:        !!l.is_default,
+        _fetched:          false,
+      });
+    });
+  } else {
+    /*
+     * Legacy fallback: firm was stored before locations[] was introduced.
+     * Reconstruct one location entry from top-level legacy fields.
+     */
+    locationList.push({
+      gst_number:        f.gst_number  || '',
+      state_code:        f.gst_number ? f.gst_number.substring(0,2) : '',
+      state:             f.state       || '',
+      registration_type: 'PPOB',
+      address:           f.address     || '',
+      city:              f.city        || '',
+      pincode:           f.pincode     || '',
+      is_default:        true,
+      _fetched:          false,
+    });
+  }
+
+  if (!locationList.some(function(l){ return l.is_default; })) locationList[0].is_default = true;
+  renderLocationList();
 
   switchModalTab('basic');
-  document.getElementById('crudModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit: ' + (f.name||'');
+  document.getElementById('crudModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit: ' + f.name;
   document.getElementById('crudSubmitLabel').textContent = 'Save Changes';
-  document.getElementById('crudSubmitBtn').disabled = false;
   document.getElementById('adminTabBtn').style.display = 'none';
   openModal('crudModal');
-  toastr.info('Editing: ' + f.name, 'Edit Mode');
 };
 
-/* ════════════════════════════════════════
-   VIEW MODAL
-════════════════════════════════════════ */
 window.showViewModal = function(idx) {
   var f = allFirms[idx]; if (!f) return;
 
   function ii(label, val, full) {
-    var cls = 'ii' + (full?' full':'');
-    var html = val ? '<div class="iv">'+val+'</div>' : '<div class="iv empty">Not provided</div>';
-    return '<div class="'+cls+'"><div class="il">'+label+'</div>'+html+'</div>';
+    return '<div class="ii '+(full?'full':'')+'"><div class="il">'+label+'</div>'
+      +'<div class="iv '+((!val)?'empty':'')+'">'+(val||'Not provided')+'</div></div>';
   }
   function sec(t) { return '<div class="isec">'+t+'</div>'; }
   function badge(s) {
-    var m={approved:'sbadge-approved',pending:'sbadge-pending',rejected:'sbadge-rejected'};
-    var c=m[(s||'').toLowerCase()]||'sbadge-unknown';
-    return '<span class="sbadge '+c+'">'+(s||'—')+'</span>';
+    var m = { approved:'sbadge-approved', pending:'sbadge-pending', rejected:'sbadge-rejected' };
+    return '<span class="sbadge '+(m[(s||'').toLowerCase()]||'sbadge-unknown')+'">'+(s||'—')+'</span>';
   }
-  var created = f.createdAt ? new Date(f.createdAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+  /* KEY FIX: render locations[] as unified cards (GSTIN + its address together) */
+  var locs = (f.locations && f.locations.length) ? f.locations : [];
+  var locsHtml = locs.length
+    ? locs.map(function(l) {
+        var addrParts = [l.address, l.city, l.state].filter(Boolean).join(', ');
+        if (l.pincode) addrParts += ' — ' + l.pincode;
+        return '<div style="font-size:12px;margin-bottom:10px;padding:8px 10px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+            +'<span style="font-family:monospace;font-weight:700;color:#1e1b4b;letter-spacing:0.5px;">'+(l.gst_number||'—')+'</span>'
+            +(l.state_code ? '<span style="font-size:10px;background:#eef2ff;color:#4338ca;padding:1px 6px;border-radius:3px;font-weight:700;">'+l.state_code+'</span>' : '')
+            +(l.registration_type ? '<span style="font-size:10px;background:#f0fdf4;color:#166534;padding:1px 6px;border-radius:3px;font-weight:600;">'+l.registration_type+'</span>' : '')
+            +(l.is_default ? '<span class="default-badge">Default</span>' : '')
+          +'</div>'
+          +(addrParts ? '<div style="color:#64748b;font-size:11px;"><i class="fas fa-map-marker-alt" style="margin-right:4px;color:#a5b4fc;"></i>'+addrParts+'</div>' : '')
+        +'</div>';
+      }).join('')
+    : '<span style="color:#9ca3af;font-size:12px;">No locations registered</span>';
 
   document.getElementById('viewContent').innerHTML =
-    sec('<i class="fas fa-building" style="margin-right:6px;"></i>Basic Information') +
-    ii('Firm Name',f.name) + ii('Legal Name',f.legal_name) + ii('Code',f.code) +
-    ii('Business Type',f.business_type) + ii('Industry Type',f.industry_type) +
-    ii('Status',badge(f.status)) + ii('Registered',created) +
-    ii('Est. Year',f.establishment_year) + ii('Employees',f.employee_count) +
-    ii('Description',f.description,true) +
-    sec('<i class="fas fa-map-marker-alt" style="margin-right:6px;"></i>Location') +
-    ii('Address',f.address,true) + ii('City',f.city) + ii('State',f.state) +
-    ii('Country',f.country) + ii('Pincode',f.pincode) +
-    sec('<i class="fas fa-phone" style="margin-right:6px;"></i>Contact') +
-    ii('Phone',f.phone_number) + ii('Secondary Phone',f.secondary_phone) +
-    ii('Email',f.email) + ii('Website',f.website) +
-    sec('<i class="fas fa-file-alt" style="margin-right:6px;"></i>Compliance') +
-    ii('GST No.',f.gst_number) + ii('PAN No.',f.pan_number) +
-    ii('CIN No.',f.cin_number) + ii('Reg. Number',f.registration_number) +
-    ii('Reg. Date',f.registration_date) + ii('Tax ID',f.tax_id) +
-    ii('VAT Number',f.vat_number) + ii('Licenses',f.license_numbers) +
-    ii('Insurance',f.insurance_details,true) +
-    sec('<i class="fas fa-university" style="margin-right:6px;"></i>Banking') +
-    ii('Account No.',f.bank_account_number) + ii('Bank Name',f.bank_name) +
-    ii('Branch',f.bank_branch) + ii('IFSC',f.ifsc_code) + ii('Payment Terms',f.payment_terms) +
-    sec('<i class="fas fa-cog" style="margin-right:6px;"></i>Settings') +
-    ii('Currency',f.currency) + ii('Timezone',f.timezone) +
-    ii('Fiscal Year Start',f.fiscal_year_start) +
-    ii('Invoice Prefix',f.invoice_prefix) + ii('Quote Prefix',f.quote_prefix) +
-    ii('PO Prefix',f.po_prefix) +
-    ii('E-Invoice',f.enable_e_invoice?'Enabled':'Disabled');
+    sec('<i class="fas fa-building"></i> Basic Information')
+    +ii('Firm Name',f.name)+ii('Legal Name',f.legal_name)+ii('Code',f.code)+ii('Status',badge(f.status))
+    +ii('Est. Year',f.establishment_year)+ii('Employees',f.employee_count)+ii('Description',f.description,true)
+
+    +sec('<i class="fas fa-map-marker-alt"></i> GST Registrations &amp; Business Locations')
+    +'<div class="ii full"><div class="iv" style="padding:0;">'+locsHtml+'</div></div>'
+
+    +sec('<i class="fas fa-phone"></i> Contact')
+    +ii('Phone',f.phone_number)+ii('Secondary',f.secondary_phone)+ii('Email',f.email)+ii('Website',f.website)
+
+    +sec('<i class="fas fa-file-alt"></i> Compliance')
+    +ii('PAN No.',f.pan_number)+ii('CIN No.',f.cin_number)
+    +ii('Registration No.',f.registration_number)+ii('Tax ID',f.tax_id)
+
+    +sec('<i class="fas fa-university"></i> Banking')
+    +ii('Account No.',f.bank_account_number)+ii('Bank Name',f.bank_name)
+    +ii('IFSC',f.ifsc_code)+ii('Branch',f.bank_branch);
 
   openModal('viewModal');
 };
 
-/* ════════════════════════════════════════
-   DELETE
-════════════════════════════════════════ */
-window.showDeleteModal = function(idx) {
-  var f = allFirms[idx]; if (!f) return;
-  curIdx = idx;
-  document.getElementById('deleteMsg').textContent =
-    'Delete "' + f.name + '"? All associated data must be removed first.';
-  document.getElementById('deleteConfirmBtn').disabled = false;
-  openModal('deleteModal');
-};
+/* ══════════════════════════════════════════════════════════
+   MESSAGE BUS
+══════════════════════════════════════════════════════════ */
+window.addEventListener('message', function(event) {
+  var msg = event.data;
 
-window.confirmDelete = function() {
-  if (curIdx < 0) return;
-  var f = allFirms[curIdx];
-  document.getElementById('deleteConfirmBtn').disabled = true;
-  window.parent.postMessage({ type: 'DELETE_FIRM', firmId: f._id }, '*');
-};
+  if (msg.type === 'FIRMS_DATA') {
+    allFirms = msg.firms || [];
+    initTable(allFirms);
+    updateStats(allFirms);
+    return;
+  }
 
-/* ════════════════════════════════════════
-   FORM SUBMIT
-════════════════════════════════════════ */
-document.getElementById('crudForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-
-  var data = collectFirmData();
-  if (!data.name) { toastr.error('Firm name is required.', 'Validation'); return; }
-
-  var submitBtn = document.getElementById('crudSubmitBtn');
-  submitBtn.disabled = true;
-  document.getElementById('crudSubmitLabel').textContent = 'Saving...';
-
-  if (curMode === 'create') {
-    // Admin account (optional)
-    var af = document.getElementById('a_fullname').value.trim();
-    var au = document.getElementById('a_username').value.trim();
-    var ae = document.getElementById('a_email').value.trim();
-    var ap = document.getElementById('a_password').value;
-    if (af || au || ae || ap) {
-      data.admin_account = { fullname:af, username:au, email:ae, password:ap };
+  if (msg.type === 'GST_DATA') {
+    if (pendingFetchIdx >= 0) {
+      var fb  = document.getElementById('loc-fetch-btn-'+pendingFetchIdx);  if (fb)  fb.disabled  = false;
+      var fi  = document.getElementById('loc-fetch-icon-'+pendingFetchIdx); if (fi)  fi.className = 'fas fa-search';
+    } else {
+      document.getElementById('gstFetchBtn').disabled = false;
+      document.getElementById('gstFetchIcon').className = 'fas fa-search';
     }
-    window.parent.postMessage({ type: 'CREATE_FIRM', data: data }, '*');
-  } else {
-    var f = allFirms[curIdx];
-    window.parent.postMessage({ type: 'UPDATE_FIRM', firmId: f._id, data: data }, '*');
+    populateGstFields(msg.data);
+    toastr.success('GST details fetched!');
+    return;
+  }
+
+  if (msg.type === 'GST_ERROR') {
+    if (pendingFetchIdx >= 0) {
+      var fb2 = document.getElementById('loc-fetch-btn-'+pendingFetchIdx);  if (fb2) fb2.disabled  = false;
+      var fi2 = document.getElementById('loc-fetch-icon-'+pendingFetchIdx); if (fi2) fi2.className = 'fas fa-search';
+    } else {
+      document.getElementById('gstFetchBtn').disabled = false;
+      document.getElementById('gstFetchIcon').className = 'fas fa-search';
+    }
+    pendingFetchIdx = -1;
+    toastr.error(msg.error);
+    return;
+  }
+
+  if (msg.type === 'CRUD_SUCCESS') {
+    toastr.success(msg.message);
+    resetForm();
+    closeModal('crudModal');
+    closeModal('deleteModal');
+    closeModal('bulkDelModal');
+    window.parent.postMessage('IFRAME_READY', '*');
+    return;
+  }
+
+  if (msg.type === 'CRUD_ERROR') {
+    toastr.error(msg.error);
+    document.getElementById('crudSubmitBtn').disabled = false;
+    return;
   }
 });
 
-/* ════════════════════════════════════════
-   BULK SELECTION
-════════════════════════════════════════ */
-function updateBulkBar() {
+/* ══════════════════════════════════════════════════════════
+   DATATABLE
+══════════════════════════════════════════════════════════ */
+function initTable(data) {
+  var rows = data.map(function(f, i) {
+    /* Use default location for GST / city / state columns */
+    var dl = (f.locations && f.locations.find(function(l){ return l.is_default; }))
+           || (f.locations && f.locations[0])
+           || {};
+    return [
+      '<input type="checkbox" class="rcb" data-idx="'+i+'">',
+      i+1, f.name, f.code||'—',
+      dl.city  ||f.city  ||'—',
+      dl.state ||f.state ||'—',
+      f.phone_number||'—', f.email||'—',
+      dl.gst_number||f.gst_number||'—',
+      f.pan_number||'—',
+      f.business_type||'—',
+      '<span class="sbadge sbadge-'+((f.status||'').toLowerCase())+'">'+(f.status||'—')+'</span>',
+      f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '—',
+      '<div style="display:flex;gap:4px;">'
+        +'<button class="abtn abtn-view" onclick="showViewModal('+i+')"><i class="fas fa-eye"></i></button>'
+        +'<button class="abtn abtn-edit" onclick="showEditModal('+i+')"><i class="fas fa-edit"></i></button>'
+        +'<button class="abtn abtn-del"  onclick="showDeleteModal('+i+')"><i class="fas fa-trash"></i></button>'
+      +'</div>',
+    ];
+  });
+
+  if (table) table.destroy();
+  table = $('#firmsTable').DataTable({ data: rows, pageLength: 20, dom: 'rt', order: [[2,'asc']] });
+
+  document.getElementById('gSearch').oninput     = function(){ table.search(this.value).draw(); };
+  document.getElementById('statusFilter').onchange = function(){ table.columns(11).search(this.value).draw(); };
+}
+
+function updateStats(data) {
+  document.getElementById('s-total').textContent    = data.length;
+  document.getElementById('s-approved').textContent = data.filter(function(f){ return f.status==='approved'; }).length;
+  document.getElementById('s-pending').textContent  = data.filter(function(f){ return f.status==='pending';  }).length;
+  document.getElementById('s-rejected').textContent = data.filter(function(f){ return f.status==='rejected'; }).length;
+}
+
+/* ══════════════════════════════════════════════════════════
+   DELETE / BULK DELETE
+══════════════════════════════════════════════════════════ */
+window.showDeleteModal = function(idx) {
+  curIdx = idx;
+  document.getElementById('deleteMsg').textContent = 'Delete firm "'+allFirms[idx].name+'"? This cannot be undone.';
+  openModal('deleteModal');
+};
+window.confirmDelete = function() {
+  window.parent.postMessage({ type: 'DELETE_FIRM', firmId: allFirms[curIdx]._id }, '*');
+};
+window.bulkDeleteSelected = function() {
+  if (!selectedIdxs.length) return;
+  document.getElementById('bulkDelMsg').textContent = 'Delete '+selectedIdxs.length+' selected firm(s)?';
+  openModal('bulkDelModal');
+};
+window.confirmBulkDelete = function() {
+  selectedIdxs.map(function(i){ return allFirms[i]._id; })
+    .forEach(function(id){ window.parent.postMessage({ type: 'DELETE_FIRM', firmId: id }, '*'); });
+};
+window.clearSelection = function() {
+  selectedIdxs = [];
+  document.querySelectorAll('.rcb').forEach(function(cb){ cb.checked = false; });
+  document.getElementById('bulkBar').style.display = 'none';
+};
+
+$(document).on('change', '.rcb', function() {
+  var idx = parseInt(this.dataset.idx);
+  if (this.checked) { if (!selectedIdxs.includes(idx)) selectedIdxs.push(idx); }
+  else              { selectedIdxs = selectedIdxs.filter(function(i){ return i!==idx; }); }
   var bar = document.getElementById('bulkBar');
   if (selectedIdxs.length > 0) {
     bar.style.display = 'flex';
@@ -863,563 +1136,89 @@ function updateBulkBar() {
   } else {
     bar.style.display = 'none';
   }
-}
-function clearSelection() {
-  selectedIdxs = [];
-  document.querySelectorAll('.rcb:checked').forEach(function(c){ c.checked=false; });
-  var sa = document.getElementById('selAll'); if(sa) sa.checked = false;
-  updateBulkBar();
-}
-function bulkDeleteSelected() {
-  if (!selectedIdxs.length) return;
-  document.getElementById('bulkDelMsg').textContent =
-    'Delete ' + selectedIdxs.length + ' selected firm(s)? This cannot be undone.';
-  document.getElementById('bulkDelConfirmBtn').disabled = false;
-  openModal('bulkDelModal');
-}
-window.confirmBulkDelete = function() {
-  var confirmBtn = document.getElementById('bulkDelConfirmBtn');
-  confirmBtn.disabled = true;
-  var ids = selectedIdxs.map(function(i){ return allFirms[i] && allFirms[i]._id; }).filter(Boolean);
-  window.parent.postMessage({ type: 'BULK_DELETE_FIRMS', firmIds: ids }, '*');
-};
+});
 
-/* ════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════
+   FORM SUBMIT
+══════════════════════════════════════════════════════════ */
+document.getElementById('crudForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var data = collectFirmData();
+  document.getElementById('crudSubmitBtn').disabled = true;
+
+  if (curMode === 'create') {
+    var af = getField('a_fullname'), au = getField('a_username');
+    var ae = getField('a_email'),    ap = getField('a_password');
+    if (af||au||ae||ap) data.admin_account = { fullname:af, username:au, email:ae, password:ap };
+    window.parent.postMessage({ type: 'CREATE_FIRM', data: data }, '*');
+  } else {
+    window.parent.postMessage({ type: 'UPDATE_FIRM', firmId: allFirms[curIdx]._id, data: data }, '*');
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   EXPORT HELPERS
+══════════════════════════════════════════════════════════ */
+function getDefLoc(f) {
+  return (f.locations && f.locations.find(function(l){return l.is_default;}))
+      || (f.locations && f.locations[0]) || {};
+}
+function exportToCSV() {
+  var rows = [['#','Firm Name','Code','City','State','Phone','Email','GST No.','PAN No.','Business Type','Status','Registered']];
+  allFirms.forEach(function(f,i){
+    var d = getDefLoc(f);
+    rows.push([i+1,f.name,f.code||'',d.city||f.city||'',d.state||f.state||'',f.phone_number||'',f.email||'',d.gst_number||f.gst_number||'',f.pan_number||'',f.business_type||'',f.status||'',f.createdAt?new Date(f.createdAt).toLocaleDateString():'']);
+  });
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='firms.csv'; a.click();
+}
+function exportToExcel() {
+  var rows = [['#','Firm Name','Code','City','State','Phone','Email','GST No.','PAN No.','Business Type','Status','Registered']];
+  allFirms.forEach(function(f,i){ var d=getDefLoc(f); rows.push([i+1,f.name,f.code||'',d.city||f.city||'',d.state||f.state||'',f.phone_number||'',f.email||'',d.gst_number||f.gst_number||'',f.pan_number||'',f.business_type||'',f.status||'',f.createdAt?new Date(f.createdAt).toLocaleDateString():'']); });
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Firms');
+  XLSX.writeFile(wb, 'firms.xlsx');
+}
+function exportToPDF() {
+  var doc = new window.jspdf.jsPDF({ orientation:'landscape' });
+  doc.text('Firms Directory', 14, 15);
+  var body = allFirms.map(function(f,i){ var d=getDefLoc(f); return [i+1,f.name,d.city||f.city||'—',d.state||f.state||'—',d.gst_number||f.gst_number||'—',f.pan_number||'—',f.status||'—']; });
+  doc.autoTable({ head:[['#','Firm Name','City','State','GST No.','PAN No.','Status']], body:body, startY:20, styles:{fontSize:8} });
+  doc.save('firms.pdf');
+}
+function exportToPrint() { window.print(); }
+
+/* ══════════════════════════════════════════════════════════
    COLUMN VISIBILITY
-════════════════════════════════════════ */
-var CV = [
-  {idx:2,label:'Firm Name',def:true},{idx:3,label:'Code',def:false},
-  {idx:4,label:'City',def:true},{idx:5,label:'State',def:true},
-  {idx:6,label:'Phone',def:true},{idx:7,label:'Email',def:true},
-  {idx:8,label:'GST No.',def:false},{idx:9,label:'PAN No.',def:false},
-  {idx:10,label:'Business Type',def:false},{idx:11,label:'Status',def:true},{idx:12,label:'Registered',def:true}
-];
-function buildCVMenu() {
-  var menu = document.getElementById('cvMenu');
-  menu.innerHTML = CV.map(function(c){
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 14px;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background=\'#f0f4ff\'" onmouseout="this.style.background=\'\'">' +
-      '<input type="checkbox" class="cv-cb" data-col="'+c.idx+'" '+(c.def?'checked':'')+' style="accent-color:#4f46e5;width:14px;height:14px;"> '+c.label+'</label>';
-  }).join('');
-  menu.querySelectorAll('.cv-cb').forEach(function(cb){
-    cb.addEventListener('change', function(){
-      if(table) table.column(parseInt(this.dataset.col)).visible(this.checked);
-    });
-  });
-}
-document.getElementById('cvBtn').addEventListener('click', function(e){
-  e.stopPropagation();
-  var m = document.getElementById('cvMenu');
-  m.style.display = m.style.display === 'none' ? '' : 'none';
+══════════════════════════════════════════════════════════ */
+var colHeaders = ['','#','Firm Name','Code','City','State','Phone','Email','GST No.','PAN No.','Business Type','Status','Registered','Actions'];
+var cvMenu = document.getElementById('cvMenu');
+colHeaders.forEach(function(h,i){
+  if (i===0||i===colHeaders.length-1) return;
+  var lbl = document.createElement('label');
+  lbl.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;';
+  var cb = document.createElement('input'); cb.type='checkbox'; cb.checked=true; cb.style.accentColor='#4f46e5';
+  cb.onchange = function(){ if(table) table.column(i).visible(this.checked); };
+  lbl.appendChild(cb); lbl.appendChild(document.createTextNode(h));
+  cvMenu.appendChild(lbl);
 });
-document.addEventListener('click', function(){ document.getElementById('cvMenu').style.display='none'; });
+document.getElementById('cvBtn').onclick = function(e){ e.stopPropagation(); cvMenu.style.display=cvMenu.style.display==='none'?'block':'none'; };
+document.addEventListener('click', function(){ cvMenu.style.display='none'; });
 
-/* ════════════════════════════════════════
-   STATS
-════════════════════════════════════════ */
-function updateStats() {
-  var data = allFirms;
-  var filtered = table ? table.rows({search:'applied'}).count() : data.length;
-  document.getElementById('s-total').textContent    = data.length;
-  document.getElementById('s-approved').textContent = data.filter(function(f){return (f.status||'').toLowerCase()==='approved';}).length;
-  document.getElementById('s-pending').textContent  = data.filter(function(f){return (f.status||'').toLowerCase()==='pending';}).length;
-  document.getElementById('s-rejected').textContent = data.filter(function(f){return (f.status||'').toLowerCase()==='rejected';}).length;
-  var fw = document.getElementById('s-filter-wrap');
-  if(filtered < data.length){ fw.style.display=''; document.getElementById('s-filtered').textContent=filtered; }
-  else fw.style.display='none';
-}
-
-/* ════════════════════════════════════════
-   HELPERS
-════════════════════════════════════════ */
-function dash(v){ return (v && String(v).trim()) ? String(v).trim() : '—'; }
-function fmtDate(v){ return v ? new Date(v).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'; }
-function badge(s){
-  var m={approved:'sbadge-approved',pending:'sbadge-pending',rejected:'sbadge-rejected'};
-  var c=m[(s||'').toLowerCase()]||'sbadge-unknown';
-  return '<span class="sbadge '+c+'">'+(s||'—')+'</span>';
-}
-
-/* ════════════════════════════════════════
-   EXCEL-STYLE COLUMN FILTER FUNCTIONS (NEW)
-════════════════════════════════════════ */
-function createFilterPanel() {
-  if (filterPanel) return filterPanel;
-  filterPanel = $(`
-    <div id="dtColumnFilterPanel">
-      <input type="text" id="filterSearch" placeholder="Search values..." />
-      <div id="filterList"></div>
-      <div class="panel-footer" style="margin-top:12px;display:flex;gap:6px;">
-        <button id="filterSelectAll">Select All</button>
-        <button id="filterClear">Clear</button>
-        <button id="filterApply" style="background:#4f46e5;color:white;">Apply</button>
-      </div>
-    </div>
-  `);
-  $('body').append(filterPanel);
-
-  $('#filterSearch').on('input', function(){
-    const term = this.value.toLowerCase();
-    $('#filterList label').each(function(){
-      $(this).toggle($(this).text().toLowerCase().includes(term));
-    });
-  });
-
-  $('#filterSelectAll').on('click', function(){
-    $('#filterList input.filter-cb').prop('checked', true);
-    applyColumnFilter();
-  });
-  $('#filterClear').on('click', function(){
-    $('#filterList input.filter-cb').prop('checked', false);
-    applyColumnFilter();
-  });
-  $('#filterApply').on('click', function(){
-    applyColumnFilter();
-    $('#dtColumnFilterPanel').hide();
-  });
-
-  return filterPanel;
-}
-
-function populateFilterList(colIdx) {
-  const listDiv = $('#filterList');
-  listDiv.empty();
-
-  const uniques = new Set();
-  table.rows({search: 'applied'}).data().each(function(row){
-    let val = String(row[colIdx] || '').replace(/<[^>]+>/g, '').trim();
-    if (val && val !== '—' && val !== '') uniques.add(val);
-  });
-
-  const sorted = Array.from(uniques).sort();
-
-  let currentSearch = table.column(colIdx).search();
-  let preSelected = [];
-  if (currentSearch) {
-    const match = currentSearch.match(/\^\((.+)\)\$/);
-    if (match) preSelected = match[1].split('|');
-  }
-
-  sorted.forEach(val => {
-    const checked = preSelected.includes(val) ? 'checked' : '';
-    const label = $(`
-      <label>
-        <input type="checkbox" class="filter-cb" value="${val}" ${checked}>
-        <span>${val}</span>
-      </label>
-    `);
-    listDiv.append(label);
-  });
-
-  $('#filterList input.filter-cb').on('change', applyColumnFilter);
-}
-
-function applyColumnFilter() {
-  const checked = [];
-  $('#filterList input.filter-cb:checked').each(function(){
-    checked.push($.escapeSelector($(this).val()));
-  });
-
-  const regex = checked.length ? '^(' + checked.join('|') + ')$' : '';
-  table.column(currentFilterCol).search(regex, true, false).draw();
-}
-
-function showColumnFilterPanel(colIdx, th) {
-  currentFilterCol = colIdx;
-  const panel = createFilterPanel();
-
-  const offset = th.offset();
-  panel.css({
-    top: offset.top + th.outerHeight() + 4,
-    left: offset.left,
-    display: 'block'
-  });
-
-  populateFilterList(colIdx);
-}
-
-function addExcelFilters() {
-  $('.dt-filter-icon').remove();
-  const totalCols = table.columns().count();
-
-  table.columns().every(function() {
-    const dtColIdx = this.index();
-
-    // Skip checkbox (0), serial # (1), and Actions (last column)
-    if (dtColIdx < 2 || dtColIdx === totalCols - 1) return;
-
-    // Skip hidden columns — their <th> is not in the visible DOM
-    if (!this.visible()) return;
-
-    const th = $(this.header());
-    const icon = $('<i class="fas fa-filter dt-filter-icon"></i>');
-    th.append(icon);
-
-    icon.on('click', function(e) {
-      e.stopImmediatePropagation();
-      showColumnFilterPanel(dtColIdx, th);
-    });
-  });
-}
-
-/* ════════════════════════════════════════
-   INIT DATATABLE
-════════════════════════════════════════ */
-function initTable(data) {
-  if ($.fn.DataTable.isDataTable('#firmsTable')) { table.destroy(); $('#firmsTable tbody').empty(); }
-
-  var rows = data.map(function(f, i){
-    return [
-      '<input type="checkbox" class="rcb" data-idx="'+i+'" style="width:15px;height:15px;accent-color:#4f46e5;cursor:pointer;">',
-      i+1,
-      dash(f.name), dash(f.code), dash(f.city), dash(f.state),
-      dash(f.phone_number), dash(f.email), dash(f.gst_number), dash(f.pan_number),
-      dash(f.business_type), badge(f.status), fmtDate(f.createdAt),
-      '<div style="display:flex;gap:2px;">' +
-        '<button class="abtn abtn-view" onclick="showViewModal('+i+')" title="View"><i class="fas fa-eye"></i></button>' +
-        '<button class="abtn abtn-edit" onclick="showEditModal('+i+')" title="Edit"><i class="fas fa-edit"></i></button>' +
-        '<button class="abtn abtn-del"  onclick="showDeleteModal('+i+')" title="Delete"><i class="fas fa-trash"></i></button>' +
-      '</div>'
-    ];
-  });
-
-  table = $('#firmsTable').DataTable({
-    data: rows,
-    columns:[
-      {title:'<input type="checkbox" id="selAll" style="width:15px;height:15px;accent-color:#4f46e5;cursor:pointer;">',
-       width:'36px',searchable:false,orderable:false},
-      {title:'#',width:'44px'},
-      {title:'Firm Name',minWidth:'150px'},
-      {title:'Code',width:'80px'},
-      {title:'City',width:'100px'},
-      {title:'State',width:'100px'},
-      {title:'Phone',width:'130px'},
-      {title:'Email',minWidth:'160px'},
-      {title:'GST No.',width:'150px'},
-      {title:'PAN No.',width:'110px'},
-      {title:'Business Type',width:'130px'},
-      {title:'Status',width:'100px',searchable:false,orderable:false},
-      {title:'Registered',width:'120px'},
-      {title:'Actions',width:'95px',searchable:false,orderable:false}
-    ],
-    pageLength:20,
-    lengthChange:true,
-    lengthMenu:[[15,20,25,50,100,-1],['15','20','25','50','100','All']],
-    dom:'rt',
-    order:[[2,'asc']],
-    language:{
-      info:'Showing _START_–_END_ of _TOTAL_',
-      infoEmpty:'No records',infoFiltered:'(filtered from _MAX_)',
-      lengthMenu:'Show _MENU_',paginate:{first:'«',previous:'‹',next:'›',last:'»'}
-    },
-    initComplete: function() {
-      table = $('#firmsTable').DataTable();
-
-      $('#ft-length').html($('.dataTables_length').detach());
-      $('#ft-info').html($('.dataTables_info').detach());
-      $('#ft-pages').html($('.dataTables_paginate').detach());
-
-      CV.forEach(function(c){ if(!c.def) table.column(c.idx).visible(false); });
-      updateStats();
-
-      // NEW: Add Excel-style filters
-      addExcelFilters();
-
-      // Select all
-      $(document).on('change','#selAll', function(){
-        var chk=this.checked; selectedIdxs=[];
-        document.querySelectorAll('.rcb').forEach(function(cb){
-          cb.checked=chk; if(chk) selectedIdxs.push(parseInt(cb.dataset.idx));
-        });
-        updateBulkBar();
-      });
-      // Row checkboxes
-      $(document).on('change','.rcb', function(){
-        var idx=parseInt(this.dataset.idx);
-        if(this.checked){ if(selectedIdxs.indexOf(idx)===-1) selectedIdxs.push(idx); }
-        else { selectedIdxs=selectedIdxs.filter(function(i){return i!==idx;}); var sa=document.getElementById('selAll'); if(sa) sa.checked=false; }
-        updateBulkBar();
-      });
-    },
-    drawCallback: function(){ updateStats(); }
-  });
-
-  // Global search
-  document.getElementById('gSearch').oninput = function(){ table.search(this.value).draw(); };
-
-  // Status filter
-  $.fn.dataTable.ext.search.length = 0;
-  $.fn.dataTable.ext.search.push(function(settings, rowData, dataIndex){
-    var fv = document.getElementById('statusFilter').value;
-    if(!fv) return true;
-    var rs = allFirms[dataIndex] ? (allFirms[dataIndex].status||'').toLowerCase() : '';
-    return rs === fv.toLowerCase();
-  });
-  document.getElementById('statusFilter').onchange = function(){ table.draw(); };
-}
-
-/* ════════════════════════════════════════
-   EXPORTS
-════════════════════════════════════════ */
-var HDRS=['#','Firm Name','City','State','Phone','Email','GST No.','PAN No.','Business Type','Status','Registered'];
-function getExportRows(){
-  if (!table) return [];
-  var out=[]; var idx=0;
-  table.rows({search:'applied'}).data().each(function(row){
-    var f=allFirms[idx]||{};
-    out.push([idx+1,dash(f.name),dash(f.city),dash(f.state),dash(f.phone_number),dash(f.email),
-      dash(f.gst_number),dash(f.pan_number),dash(f.business_type),
-      (f.status||'').charAt(0).toUpperCase()+(f.status||'').slice(1),
-      fmtDate(f.createdAt)]);
-    idx++;
-  });
-  return out;
-}
-function exportToCSV(){
-  var rows=[HDRS].concat(getExportRows());
-  var csv=rows.map(function(r){return r.map(function(c){return '"'+(c+'').replace(/"/g,'""')+'"';}).join(',');}).join('\n');
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download='firms_'+new Date().toISOString().slice(0,10)+'.csv';
-  a.click(); URL.revokeObjectURL(a.href);
-  toastr.success('CSV exported!','Export');
-}
-function exportToExcel(){
-  var wb=XLSX.utils.book_new(); var ws=XLSX.utils.aoa_to_sheet([HDRS].concat(getExportRows()));
-  ws['!cols']=HDRS.map(function(){return{wch:18};}); XLSX.utils.book_append_sheet(wb,ws,'Firms');
-  XLSX.writeFile(wb,'firms_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  toastr.success('Excel exported!','Export');
-}
-function exportToPDF(){
-  if(!window.jspdf||!window.jspdf.jsPDF){ toastr.error('jsPDF not ready.','Error'); return; }
-  var doc=new window.jspdf.jsPDF('l','mm','a4');
-  doc.setFontSize(14); doc.setTextColor(79,70,229); doc.text('Firms Directory',14,14);
-  doc.setFontSize(9); doc.setTextColor(140); doc.text('Generated: '+new Date().toLocaleString('en-IN'),14,20);
-  doc.autoTable({head:[HDRS],body:getExportRows(),startY:26,theme:'grid',
-    styles:{font:'helvetica',fontSize:8,cellPadding:3},
-    headStyles:{fillColor:[30,41,59],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[249,250,251]},margin:{left:10,right:10}});
-  doc.save('firms_'+new Date().toISOString().slice(0,10)+'.pdf');
-  toastr.success('PDF exported!','Export');
-}
-function exportToPrint(){
-  var rows=getExportRows();
-  var tr=rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';}).join('');
-  var win=window.open('','','height=700,width=1100');
-  win.document.write('<html><head><title>Firms</title></head><body>');
-  win.document.write('<h2>Firms Directory</h2><p style="font-size:11px;color:#999;">Generated: '+new Date().toLocaleString('en-IN')+'</p>');
-  win.document.write('<table><tr>'+HDRS.map(function(h){return'<th>'+h+'</th>';}).join('')+'</tr>'+tr+'</table></body></html>');
-  win.document.close(); win.print();
-  toastr.success('Print dialog opened!','Export');
-}
-
-/* ════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════
    REFRESH BUTTON
-════════════════════════════════════════ */
-document.getElementById('refreshBtn').addEventListener('click', function(){
-  var icon=document.getElementById('refreshIcon');
-  icon.classList.add('spin'); setTimeout(function(){icon.classList.remove('spin');},700);
-  document.getElementById('gSearch').value='';
-  document.getElementById('statusFilter').value='';
-  if(table) {
-    table.search('').draw();
-    table.columns().search('').draw();   // clears all Excel column filters
-  }
+══════════════════════════════════════════════════════════ */
+document.getElementById('refreshBtn').onclick = function() {
+  var icon = document.getElementById('refreshIcon');
+  icon.style.animation = 'spin 0.8s linear infinite';
   window.parent.postMessage('IFRAME_READY','*');
-});
-
-/* ════════════════════════════════════════
-   GST FETCH
-════════════════════════════════════════ */
-window.triggerGstFetch = function() {
-  var gstin = (document.getElementById('f_gst_number').value || '').trim().toUpperCase();
-
-  if (!gstin) {
-    showGstStatus('Please enter a GST Number first.', 'error');
-    document.getElementById('f_gst_number').focus();
-    return;
-  }
-  if (gstin.length !== 15) {
-    showGstStatus('GST Number must be exactly 15 characters.', 'error');
-    return;
-  }
-
-  var btn   = document.getElementById('gstFetchBtn');
-  var icon  = document.getElementById('gstFetchIcon');
-  var label = document.getElementById('gstFetchLabel');
-  btn.disabled = true;
-  icon.className = 'fas fa-spinner fa-spin';
-  label.textContent = 'Fetching…';
-  showGstStatus('Looking up GST details…', 'info');
-
-  window.parent.postMessage({ type: 'FETCH_GST', gstin: gstin }, '*');
+  setTimeout(function(){ icon.style.animation=''; }, 1200);
 };
 
-function showGstStatus(msg, type) {
-  var el = document.getElementById('gstFetchStatus');
-  if (!el) return;
-  var styles = {
-    info:    'background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;',
-    success: 'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;',
-    error:   'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;',
-  };
-  el.style.cssText = 'display:block;margin-top:5px;font-size:11px;padding:6px 10px;border-radius:5px;' + (styles[type] || styles.info);
-  el.innerHTML = '<i class="fas ' + (type==='error'?'fa-exclamation-circle':type==='success'?'fa-check-circle':'fa-info-circle') + '" style="margin-right:5px;"></i>' + msg;
-}
-
-function resetGstFetchBtn() {
-  var btn   = document.getElementById('gstFetchBtn');
-  var icon  = document.getElementById('gstFetchIcon');
-  var label = document.getElementById('gstFetchLabel');
-  if (btn)   btn.disabled   = false;
-  if (icon)  icon.className = 'fas fa-search';
-  if (label) label.textContent = 'Fetch Details';
-}
-
-function populateGstFields(gstData) {
-  function set(id, val) {
-    if (!val && val !== false) return;
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.value = Array.isArray(val) ? val.join(', ') : val;
-    el.style.transition = 'background 0.3s';
-    el.style.background = '#eef2ff';
-    setTimeout(function(){ el.style.background = ''; }, 1200);
-  }
-
-  set('f_gst_number',  gstData.gstin);
-  set('f_legal_name',  gstData.legal_name);
-  set('f_name',        gstData.trade_name);
-  set('f_business_type', gstData.business_constitution);
-  if (gstData.nature) set('f_industry_type', gstData.nature);
-
-  var addr = gstData.place_of_business_principal && gstData.place_of_business_principal.address;
-  if (addr) {
-    var addrParts = [addr.door_num, addr.street, addr.location, addr.building_name].filter(Boolean).join(', ');
-    if (addrParts) set('f_address', addrParts);
-
-    var city = addr.city;
-    if (!city && addr.location) {
-      var locParts = addr.location.split(' ');
-      city = locParts[locParts.length - 1];
-    }
-    if (!city && addr.district) city = addr.district;
-    if (city) set('f_city', city);
-
-    if (addr.state)    set('f_state',   addr.state);
-    if (addr.pin_code) set('f_pincode', addr.pin_code);
-  }
-
-  var pob = gstData.place_of_business_principal;
-  if (pob && pob.nature && Array.isArray(pob.nature) && pob.nature.length > 0) {
-    set('f_industry_type', pob.nature.join(', '));
-  }
-
-  if (gstData.registration_date) {
-    var regDate = new Date(gstData.registration_date);
-    if (!isNaN(regDate.getTime())) set('f_establishment_year', regDate.getFullYear());
-  }
-
-  if (gstData.status === 'Active') {
-    var statusEl = document.getElementById('f_status');
-    if (statusEl) { statusEl.value = 'approved'; }
-  }
-
-  if (gstData.gstin && typeof gstData.gstin === 'string' && gstData.gstin.length === 15) {
-    set('f_pan_number', gstData.gstin.substring(2, 12));
-  }
-
-  var refEl = document.getElementById('f_gst_number_ref');
-  if (refEl && gstData.gstin) refEl.value = gstData.gstin;
-}
-
-/* ════════════════════════════════════════
-   KEYBOARD SHORTCUTS
-════════════════════════════════════════ */
-document.addEventListener('keydown', function(e){
-  if(e.key==='Escape') {
-    ['crudModal','viewModal','deleteModal','bulkDelModal'].forEach(closeModal);
-    $('#dtColumnFilterPanel').hide();   // close filter panel
-  }
-  if((e.ctrlKey||e.metaKey)&&e.key==='f'){ e.preventDefault(); document.getElementById('gSearch').focus(); }
-  if((e.ctrlKey||e.metaKey)&&e.key==='n'){ e.preventDefault(); openCreateModal(); }
-});
-
-/* Close panel when clicking outside */
-$(document).on('click', function(e){
-  if (!$(e.target).closest('#dtColumnFilterPanel, .dt-filter-icon').length) {
-    $('#dtColumnFilterPanel').hide();
-  }
-});
-
-/* ════════════════════════════════════════
-   RECEIVE MESSAGES FROM PARENT
-════════════════════════════════════════ */
-window.addEventListener('message', function(event) {
-  var msg = event.data;
-
-  if (msg && msg.type === 'FIRMS_DATA') {
-    allFirms = msg.firms || [];
-    selectedIdxs = [];
-    initTable(allFirms);
-    buildCVMenu();
-    document.getElementById('gSearch').value = '';
-    document.getElementById('statusFilter').value = '';
-    toastr.success(allFirms.length + ' firms loaded', 'Ready', { timeOut: 1800 });
-    return;
-  }
-
-  if (msg && msg.type === 'GST_DATA') {
-    resetGstFetchBtn();
-    populateGstFields(msg.data);
-    showGstStatus(
-      'GST details fetched! Fields highlighted in blue were auto-filled. Review before saving.',
-      'success'
-    );
-    toastr.success('GST details fetched successfully!', 'GST Lookup');
-    return;
-  }
-
-  if (msg && msg.type === 'GST_ERROR') {
-    resetGstFetchBtn();
-    showGstStatus(msg.error || 'GST lookup failed. Check the number and try again.', 'error');
-    toastr.error(msg.error || 'GST lookup failed', 'GST Lookup');
-    return;
-  }
-
-  if (msg && msg.type === 'CRUD_SUCCESS') {
-    var labels = {
-      create: 'Firm created successfully!',
-      update: 'Firm updated successfully!',
-      delete: 'Firm deleted successfully!',
-    };
-    toastr.success(msg.message || labels[msg.op] || 'Operation successful!', 'Success');
-    closeModal('crudModal');
-    closeModal('deleteModal');
-    closeModal('bulkDelModal');
-    document.getElementById('crudSubmitBtn').disabled = false;
-    document.getElementById('crudSubmitLabel').textContent = curMode === 'create' ? 'Create Firm' : 'Save Changes';
-    document.getElementById('deleteConfirmBtn').disabled = false;
-    document.getElementById('bulkDelConfirmBtn').disabled = false;
-    selectedIdxs = [];
-    return;
-  }
-
-  if (msg && msg.type === 'CRUD_ERROR') {
-    toastr.error(msg.error || 'Operation failed', 'Error');
-    document.getElementById('crudSubmitBtn').disabled = false;
-    document.getElementById('crudSubmitLabel').textContent = curMode === 'create' ? 'Create Firm' : 'Save Changes';
-    document.getElementById('deleteConfirmBtn').disabled = false;
-    document.getElementById('bulkDelConfirmBtn').disabled = false;
-    return;
-  }
-});
-
-/* ════════════════════════════════════════
-   INIT
-════════════════════════════════════════ */
-buildCVMenu();
+/* ══════════════════════════════════════════════════════════
+   BOOT
+══════════════════════════════════════════════════════════ */
 window.parent.postMessage('IFRAME_READY', '*');
-toastr.info('Ctrl+N → new firm &nbsp;|&nbsp; Ctrl+F → search &nbsp;|&nbsp; ESC → close modal &nbsp;|&nbsp; Click <i class="fas fa-filter"></i> in column headers for Excel filters', 'Firms Grid', { timeOut: 3000 });
 </script>
 </body>
 </html>

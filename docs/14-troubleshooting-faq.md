@@ -37,29 +37,27 @@ DEBUG=* npm start
 
 **Symptoms:**
 - "Database connection failed" errors
-- Turso authentication errors
+- MongoDB authentication errors
 - Timeout errors
 
 **Solutions:**
 
 ```bash
-# Test Turso connection
-turso db ping your-database-name
-
-# Verify database URL format
-echo $TURSO_DATABASE_URL  # Should start with libsql://
-
-# Check authentication token
-turso db tokens list
+# Verify MongoDB URI format
+echo $MONGODB_URI  # Should start with mongodb+srv://
 
 # Test database connectivity
 node -e "
-const { createClient } = require('@libsql/client');
-const client = createClient({
-  url: process.env.TURSO_DATABASE_URL,
-  authToken: process.env.TURSO_AUTH_TOKEN
-});
-client.execute('SELECT 1').then(() => console.log('Connected'));
+const mongoose = require('mongoose');
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log('Connected');
+    process.exit(0);
+  })
+  .catch(err => {
+    console.error('Connection failed:', err.message);
+    process.exit(1);
+  });
 "
 ```
 
@@ -225,11 +223,11 @@ const response = await fetch(`/api/master-rolls/${employeeId}`);
 SELECT COUNT(*) as count FROM master_rolls
 WHERE aadhar = ? AND firm_id = ?;
 
--- Handle unique constraint violations
+// Handle unique constraint violations
 try {
-  const result = db.run(insertQuery, params);
+  await model.save();
 } catch (error) {
-  if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+  if (error.code === 11000) {
     throw new Error('Duplicate entry found');
   }
   throw error;
@@ -259,8 +257,7 @@ pm2 logs business-app --lines 100
 # Monitor memory usage
 pm2 monit
 
-# Check database status
-turso db show your-database-name
+# Check database status on MongoDB Atlas dashboard
 
 # Restart application
 pm2 restart business-app
@@ -755,13 +752,10 @@ A:
 ### Technical Questions
 
 **Q: How do I monitor application performance?**
-A: Use PM2 monitoring: `pm2 monit`. Check logs with `pm2 logs`. Monitor database with Turso dashboard.
+A: Use PM2 monitoring: `pm2 monit`. Check logs with `pm2 logs`. Monitor database with MongoDB Atlas dashboard.
 
 **Q: How do I backup my data?**
-A: Turso provides automatic backups. For manual backups:
-```bash
-turso db shell your-db ".backup backup.db"
-```
+A: MongoDB Atlas provides automatic backups. For manual backups, use `mongodump`.
 
 **Q: How do I update the application?**
 A:

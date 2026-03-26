@@ -84,12 +84,10 @@ vercel --prod
 Add to Vercel Dashboard:
 
 ```
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 ACCESS_TOKEN_SECRET=your-strong-secret-key
 REFRESH_TOKEN_SECRET=your-strong-secret-key
-JWT_SECRET=your-strong-secret-key
-JWT_REFRESH_SECRET=your-strong-secret-key
 RAPIDAPI_KEY=your-api-key
 NODE_ENV=production
 ```
@@ -153,7 +151,7 @@ Your deployment is successful when:
 | Issue | Solution |
 |-------|----------|
 | "Cannot find module" | Run `npm install` |
-| Database connection fails | Verify TURSO credentials |
+| Database connection fails | Verify MongoDB credentials |
 | Static files return 404 | Check `/client/public` files |
 | Cookies not working | Ensure `secure: true` for HTTPS |
 | 502 Bad Gateway | Check `vercel logs --prod` |
@@ -166,7 +164,7 @@ See `DEPLOYMENT_CHECKLIST.md` for more issues.
 
 - **Vercel Docs**: https://vercel.com/docs
 - **Vercel Support**: https://vercel.com/support
-- **Turso Docs**: https://docs.turso.tech
+- **MongoDB Docs**: https://www.mongodb.com/docs
 - **Check Logs**: `vercel logs --prod`
 
 ---
@@ -196,7 +194,7 @@ See `DEPLOYMENT_CHECKLIST.md` for more issues.
 
 - [ ] Vercel account created
 - [ ] Git repository set up
-- [ ] Turso database created
+- [ ] MongoDB Atlas database created
 - [ ] Environment variables prepared
 - [ ] Code committed and pushed
 - [ ] Documentation reviewed
@@ -219,7 +217,7 @@ See `DEPLOYMENT_CHECKLIST.md` for more issues.
 - **Type**: Node.js SPA Business Management
 - **Frontend**: Vanilla JavaScript + Navigo.js
 - **Backend**: Express.js
-- **Database**: Turso (SQLite Cloud)
+- **Database**: MongoDB Atlas (Serverless-friendly)
 - **Auth**: JWT dual-token system
 - **Features**: Inventory, Wages, Master Roll, Accounting, Ledger
 

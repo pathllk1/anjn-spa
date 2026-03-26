@@ -1,5 +1,3 @@
-
-
 import mongoose from 'mongoose';
 import {
   Stock, Party, Bill, StockReg, Ledger, Firm,
@@ -20,8 +18,40 @@ export {
   getBillById, getAllBills, exportBillsExcel, exportBillsToPdf,
   getStockBatches, getStockMovements, exportStockMovementsToExcel,
   getStockMovementsByStock, createStockMovement,
-  getOtherChargesTypes, getCurrentUserFirmName, lookupGST,
+  getOtherChargesTypes, lookupGST,
 } from '../sharedStockHandlers.js';
+
+/* ── Sales-specific: getCurrentUserFirmName (includes locations[]) ─────────
+ *
+ * FIX: The shared handler returned only { name } from the Firm document.
+ * With multiple GST registrations the frontend needs locations[] so it can:
+ *   1. Show a "billing from GSTIN" dropdown when a firm has >1 registration
+ *   2. Auto-determine intra vs inter-state when a party is selected
+ *   3. Send back meta.firmGstin on save so we can validate server-side
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const getCurrentUserFirmName = async (req, res) => {
+  try {
+    const firmId = getFirmId(req, res, 'GET_CURRENT_FIRM');
+    if (!firmId) return;
+
+    const firm = await Firm.findById(firmId)
+      .select('name locations')
+      .lean();
+
+    if (!firm) return res.status(404).json({ success: false, error: 'Firm not found' });
+
+    res.json({
+      success: true,
+      data: {
+        name:      firm.name,
+        locations: firm.locations || [],
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
 
 /* ── Sales-specific: party item history (type: SALE) ─────────────────────── */
 
@@ -86,7 +116,7 @@ export const getPartyBalance = async (req, res) => {
 
     const debit   = result?.total_debit  ?? 0;
     const credit  = result?.total_credit ?? 0;
-    const balance = debit - credit; // positive = still receivable from customer
+    const balance = debit - credit;
     const balanceType = balance > 0 ? 'Debit' : balance < 0 ? 'Credit' : 'Nil';
     res.json({ success: true, data: { partyId, balance, balance_type: balanceType, outstanding: Math.abs(balance), debit, credit } });
   } catch (err) {
@@ -94,9 +124,69 @@ export const getPartyBalance = async (req, res) => {
   }
 };
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════════
+   SHARED HELPERS
+════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Resolve and validate the active firm location for a bill.
+ *
+ * firmGstin (from meta.firmGstin) is the GSTIN the frontend says was selected.
+ * If absent, fall back to the firm's default location.
+ *
+ * Returns { firmLoc, firmStateCode } or throws with a descriptive error.
+ */
+async function resolveFirmLocation(firmId, firmGstin) {
+  const firmDoc = await Firm.findById(firmId).select('locations').lean();
+  const locations = firmDoc?.locations || [];
+
+  let firmLoc = null;
+
+  if (firmGstin) {
+    firmLoc = locations.find(l => l.gst_number === firmGstin);
+    if (!firmLoc) {
+      throw new Error(`Firm GSTIN ${firmGstin} not found in firm's registered locations`);
+    }
+  } else {
+    firmLoc = locations.find(l => l.is_default) || locations[0] || null;
+  }
+
+  const firmStateCode = firmLoc?.state_code || firmLoc?.gst_number?.substring(0, 2) || null;
+
+  return { firmLoc, firmStateCode };
+}
+
+/**
+ * Validate GST bill type against firm and party state codes.
+ *
+ * Section 8 IGST Act:
+ *   - same state  → intra-state (CGST + SGST)   — IGST is illegal
+ *   - diff states → inter-state (IGST)           — CGST/SGST is illegal
+ *
+ * Skips validation when:
+ *   - party is UNREGISTERED (B2C / unregistered dealer)
+ *   - reverse charge (special handling)
+ *   - either state code cannot be determined
+ */
+function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCharge) {
+  if (reverseCharge) return null; // reverse charge has different place-of-supply rules
+  if (!firmStateCode || !partyStateCode) return null; // cannot determine
+
+  const sameState  = firmStateCode === partyStateCode;
+  const sentIntra  = billType === 'intra-state' || billType === 'INTRA-STATE';
+
+  if (sameState && !sentIntra) {
+    return `GST type mismatch: firm state (${firmStateCode}) and party state (${partyStateCode}) are the same — must use CGST+SGST (intra-state), not IGST.`;
+  }
+  if (!sameState && sentIntra) {
+    return `GST type mismatch: firm state (${firmStateCode}) and party state (${partyStateCode}) differ — must use IGST (inter-state), not CGST+SGST.`;
+  }
+  return null; // all good
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    CREATE BILL (SALES)
-═══════════════════════════════════════════════════════════════════════════ */
+════════════════════════════════════════════════════════════════════════════ */
 
 export const createBill = async (req, res) => {
   const { meta, party, cart, otherCharges, consignee } = req.body;
@@ -112,14 +202,31 @@ export const createBill = async (req, res) => {
     return res.status(400).json({ error: 'Invalid party ID' });
   }
 
-  // BUG FIX — was Party.findById(party) with no firm_id scope.
-  // A party ObjectId from a different firm would be accepted, writing that
-  // firm's party name, GSTIN, state, address etc. into this firm's bill and
-  // ledger. Fix: scope the lookup to this firm so any cross-firm ID → 404.
   const partyDoc = await Party.findOne({ _id: partyIdRaw, firm_id: firmId }).lean();
   if (!partyDoc) {
     return res.status(404).json({ error: 'Party not found' });
   }
+
+  // ── FIX: Resolve firm location + validate GST bill type ─────────────────
+  let firmLoc, firmStateCode;
+  try {
+    ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
+  } catch (locErr) {
+    return res.status(400).json({ error: locErr.message });
+  }
+
+  // Only validate when party has a GST number (skip B2C / UNREGISTERED)
+  const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
+    ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
+    : null;
+
+  const gstTypeError = validateGstBillType(
+    meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
+  );
+  if (gstTypeError) {
+    return res.status(400).json({ error: gstTypeError });
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   const referenceNo = normalizeOptionalText(meta?.referenceNo, 80);
   const vehicleNo   = normalizeOptionalText(meta?.vehicleNo, 40);
@@ -145,10 +252,9 @@ export const createBill = async (req, res) => {
 
   try {
     const billNo    = await getNextBillNumber(firmId, 'SALES');
-    const voucherId = await getNextVoucherNumber(firmId); // Number
+    const voucherId = await getNextVoucherNumber(firmId);
 
     const gstEnabled = await isGstEnabled(firmId);
-    // Sales uses getEffectiveItemQty for service items
     const { gtot, cgst, sgst, igst, ntot, rof } = calcBillTotals(
       cart, otherCharges, gstEnabled, meta.billType, meta.reverseCharge, getEffectiveItemQty
     );
@@ -161,6 +267,12 @@ export const createBill = async (req, res) => {
       bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
       addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
       state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
+
+      // FIX: Store the firm GSTIN / location used for this bill
+      firm_gstin:      firmLoc?.gst_number  || null,
+      firm_state:      firmLoc?.state       || null,
+      firm_state_code: firmStateCode        || null,
+
       gtot, ntot, rof, btype: 'SALES', bill_subtype: billSubtype,
       usern: actorUsername, party_id: partyDoc._id,
       other_charges: otherCharges?.length > 0 ? otherCharges : null,
@@ -173,7 +285,6 @@ export const createBill = async (req, res) => {
 
     const billId = newBill._id;
 
-    // B. Process cart — deduct stock, collect StockReg docs + COGS lines
     const stockRegDocs = [];
     const cogsLines    = [];
 
@@ -183,7 +294,6 @@ export const createBill = async (req, res) => {
       const lineTotal    = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
 
       if (serviceItem) {
-        // Service item — no stock movement, no COGS
         const stockRegId = new mongoose.Types.ObjectId();
         stockRegDocs.push({
           _id: stockRegId, firm_id: firmId, type: 'SALE', bno: billNo,
@@ -194,13 +304,11 @@ export const createBill = async (req, res) => {
           batch: null, hsn: normalizeOptionalText(item.hsn, 40),
           qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
           rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
-          cost_rate: null, // service items have no cost
-          stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
+          cost_rate: null, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
         });
         continue;
       }
 
-      // Goods item — deduct stock
       const stockRecord = await Stock.findOne({ _id: item.stockId, firm_id: firmId })
         .session(session).lean();
       if (!stockRecord)
@@ -222,15 +330,12 @@ export const createBill = async (req, res) => {
       if (batchIndex === -1)
         throw new Error(`Batch "${item.batch || '(No Batch)'}" not found for item ${item.item}`);
 
-      // WAC cost at moment of sale (BEFORE deducting) — used for COGS
       const wacCostRate = stockRecord.rate;
       const cogsValue   = effectiveQty * wacCostRate;
 
-      // Deduct. Negative stock intentionally allowed (back-dated entries).
       batches[batchIndex].qty -= effectiveQty;
       const newTotalQty = batches.reduce((s, b) => s + (parseFloat(b.qty) || 0), 0);
 
-      // On sale: rate (WAC) does NOT change. Total reduces proportionally.
       await Stock.findOneAndUpdate(
         { _id: item.stockId, firm_id: firmId },
         { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
@@ -247,15 +352,13 @@ export const createBill = async (req, res) => {
         batch: item.batch || null, hsn: normalizeOptionalText(item.hsn, 40),
         qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
         rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
-        // Store WAC at time of sale for accurate credit-note COGS reversal
         cost_rate: wacCostRate,
         stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: newTotalQty,
       });
 
-      // COGS line for ledger posting
       cogsLines.push({
         stockId:    item.stockId,
-        stockRegId, // pre-assigned _id
+        stockRegId,
         item:       normalizeOptionalText(item.item, 200),
         cogsValue,
       });
@@ -263,7 +366,6 @@ export const createBill = async (req, res) => {
 
     await StockReg.insertMany(stockRegDocs, { session });
 
-    // C. Compute taxableItemsTotal for Sales A/c CR
     const taxableItemsTotal = cart.reduce(
       (sum, item) => sum + (getEffectiveItemQty(item) * item.rate * (1 - (item.disc || 0) / 100)), 0
     );
@@ -285,9 +387,9 @@ export const createBill = async (req, res) => {
   }
 };
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════════
    UPDATE BILL (SALES)
-═══════════════════════════════════════════════════════════════════════════ */
+════════════════════════════════════════════════════════════════════════════ */
 
 export const updateBill = async (req, res) => {
   const session = await mongoose.startSession();
@@ -315,6 +417,28 @@ export const updateBill = async (req, res) => {
       return res.status(404).json({ error: 'Party not found or does not belong to your firm' });
     }
 
+    // ── FIX: Resolve firm location + validate GST bill type ─────────────────
+    let firmLoc, firmStateCode;
+    try {
+      ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
+    } catch (locErr) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: locErr.message });
+    }
+
+    const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
+      ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
+      : null;
+
+    const gstTypeError = validateGstBillType(
+      meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
+    );
+    if (gstTypeError) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: gstTypeError });
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     // Validate cart
     for (const item of cart) {
       const serviceItem = isServiceItem(item);
@@ -336,7 +460,7 @@ export const updateBill = async (req, res) => {
     // Step 1: Restore stock from old sale (add back)
     const existingItems = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const ei of existingItems) {
-      if (!ei.stock_id) continue; // service item
+      if (!ei.stock_id) continue;
       const stockRecord = await Stock.findOne({ _id: ei.stock_id, firm_id: firmId }).session(session).lean();
       if (!stockRecord) continue;
 
@@ -351,12 +475,10 @@ export const updateBill = async (req, res) => {
       if (batchIndex !== -1) {
         batches[batchIndex].qty += ei.qty;
       } else {
-        // Batch was removed since original sale — recreate it
         batches.push({ batch: ei.batch || null, qty: ei.qty, rate: ei.rate, expiry: null, mrp: null });
       }
 
       const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
-      // Rate stays the same on stock restore from sale
       await Stock.findOneAndUpdate(
         { _id: ei.stock_id, firm_id: firmId },
         { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
@@ -373,13 +495,19 @@ export const updateBill = async (req, res) => {
     const firmRecord = await Firm.findById(firmId).select('name').lean();
     const firmName   = firmRecord?.name ?? existingBill.firm ?? '';
 
-    // Step 3: Update bill header
+    // Step 3: Update bill header — including the firm GSTIN fields
     await Bill.findOneAndUpdate(
       { _id: billId, firm_id: firmId },
       { $set: {
           bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
           addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
           state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
+
+          // FIX: Update firm GSTIN fields in case the user changed the billing location
+          firm_gstin:      firmLoc?.gst_number  || null,
+          firm_state:      firmLoc?.state       || null,
+          firm_state_code: firmStateCode        || null,
+
           gtot, ntot, rof, btype: 'SALES',
           bill_subtype: meta?.billType ? String(meta.billType).toUpperCase() : null,
           usern: actorUsername, party_id: partyDoc._id,
@@ -478,7 +606,7 @@ export const updateBill = async (req, res) => {
       (sum, item) => sum + (getEffectiveItemQty(item) * item.rate * (1 - (item.disc || 0) / 100)), 0
     );
 
-    // Step 6: Delete old sales ledger (COGS included — same voucher_id) and re-post
+    // Step 6: Delete old sales ledger and re-post
     await Ledger.deleteMany({ voucher_id: existingBill.voucher_id, voucher_type: 'SALES', firm_id: firmId }, { session });
     await postSalesLedger({
       firmId, billId, voucherId: existingBill.voucher_id, billNo: existingBill.bno,
@@ -497,9 +625,9 @@ export const updateBill = async (req, res) => {
   }
 };
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════════
    CANCEL BILL (SALES)
-═══════════════════════════════════════════════════════════════════════════ */
+════════════════════════════════════════════════════════════════════════════ */
 
 export const cancelBill = async (req, res) => {
   const session = await mongoose.startSession();
@@ -518,10 +646,9 @@ export const cancelBill = async (req, res) => {
     if (!bill) { await session.abortTransaction(); return res.status(404).json({ error: 'Bill not found' }); }
     if (bill.status === 'CANCELLED') { await session.abortTransaction(); return res.status(400).json({ error: 'Bill is already cancelled' }); }
 
-    // Restore stock — add back the sold qty
     const items = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const item of items) {
-      if (!item.stock_id) continue; // service items have no stock
+      if (!item.stock_id) continue;
       const stockRecord = await Stock.findOne({ _id: item.stock_id, firm_id: firmId }).session(session).lean();
       if (!stockRecord) continue;
 
@@ -540,7 +667,6 @@ export const cancelBill = async (req, res) => {
       }
 
       const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
-      // Rate unchanged on stock restore
       await Stock.findOneAndUpdate(
         { _id: item.stock_id, firm_id: firmId },
         { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
@@ -548,7 +674,6 @@ export const cancelBill = async (req, res) => {
       );
     }
 
-    // Delete all ledger entries for this bill — COGS and revenue are both under voucher_id + SALES
     await Ledger.deleteMany({ voucher_id: bill.voucher_id, voucher_type: 'SALES', firm_id: firmId }, { session });
 
     await Bill.findOneAndUpdate(

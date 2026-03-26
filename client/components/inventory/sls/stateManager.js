@@ -25,6 +25,13 @@ export function createInitialState() {
         otherCharges:    [],
         currentFirmName: 'Your Company Name',
         gstEnabled:      true,
+
+        // FIX: Firm GST locations — needed for multi-GSTIN tax-type determination.
+        // firmLocations[]  = all locations from Firm.locations
+        // activeFirmLocation = whichever the user has selected for this bill
+        //   (defaults to the is_default location; user can change via dropdown)
+        firmLocations:      [],
+        activeFirmLocation: null,
     };
 }
 
@@ -40,6 +47,16 @@ export async function fetchCurrentUserFirmName(state) {
         if (data.success && data.data?.name) {
             state.currentFirmName      = data.data.name;
             window.currentUserFirmName = data.data.name;
+
+            // FIX: also populate firmLocations from the same response
+            // (current-firm API already returns the full firm object including locations[])
+            if (Array.isArray(data.data.locations)) {
+                state.firmLocations = data.data.locations;
+                state.activeFirmLocation =
+                    data.data.locations.find(l => l.is_default) ||
+                    data.data.locations[0] ||
+                    null;
+            }
         } else if (!data.success) {
             throw new Error(data.error || 'Failed to fetch firm name');
         }
@@ -72,8 +89,6 @@ export async function fetchNextBillNumber(state) {
 }
 
 export async function loadExistingBillData(state, billId) {
-    // FIX: Removed all [LOAD_BILL_DATA] console.logs — 15+ debug statements
-    // cluttered production logs with internal data structures.
     try {
         const response = await fetch(`/api/inventory/sales/bills/${billId}`, {
             method:      'GET',
@@ -112,6 +127,14 @@ export async function loadExistingBillData(state, billId) {
                 pin:        bill.pin        || null,
                 state_code: bill.state_code || null,
             };
+        }
+
+        // FIX: Restore the active firm location that was used when this bill was saved.
+        // bill.firm_gstin stores exactly which GSTIN was active — match it back into
+        // firmLocations so the header dropdown reflects the correct selection.
+        if (bill.firm_gstin && state.firmLocations.length > 0) {
+            const match = state.firmLocations.find(l => l.gst_number === bill.firm_gstin);
+            if (match) state.activeFirmLocation = match;
         }
 
         if (bill.consignee_name || bill.consignee_address) {
@@ -234,9 +257,57 @@ export async function fetchData(state) {
             state.gstEnabled = true;
         }
 
+        // FIX: Firm locations — if fetchCurrentUserFirmName hasn't run yet (or
+        // returned before locations were available), populate them now.
+        // This is a safety net; the primary path is fetchCurrentUserFirmName().
+        if (state.firmLocations.length === 0) {
+            try {
+                const firmRes = await fetch('/api/inventory/sales/current-firm', {
+                    method: 'GET', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (firmRes.ok) {
+                    const fd = await firmRes.json();
+                    if (fd.success && Array.isArray(fd.data?.locations)) {
+                        state.firmLocations = fd.data.locations;
+                        if (!state.activeFirmLocation) {
+                            state.activeFirmLocation =
+                                fd.data.locations.find(l => l.is_default) ||
+                                fd.data.locations[0] ||
+                                null;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not fetch firm locations:', e.message);
+            }
+        }
+
         return true;
     } catch (err) {
         console.error('Failed to load data:', err);
         throw err;
     }
+}
+
+/**
+ * Determine the correct GST bill type by comparing firm location state code
+ * against the party's state code (both derived from GSTIN[0:2]).
+ *
+ * Returns 'intra-state' | 'inter-state' | null (null = cannot determine).
+ *
+ * GST law rule: Section 8 IGST Act
+ *   - Supplier state == recipient state → CGST + SGST (intra-state)
+ *   - Supplier state != recipient state → IGST (inter-state)
+ */
+export function determineGstBillType(activeFirmLocation, selectedParty) {
+    const firmCode  = activeFirmLocation?.state_code ||
+                      activeFirmLocation?.gst_number?.substring(0, 2);
+    const partyCode = selectedParty?.state_code ||
+                      (selectedParty?.gstin && selectedParty.gstin !== 'UNREGISTERED'
+                          ? selectedParty.gstin.substring(0, 2)
+                          : null);
+
+    if (!firmCode || !partyCode) return null;
+    return firmCode === partyCode ? 'intra-state' : 'inter-state';
 }

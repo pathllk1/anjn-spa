@@ -236,8 +236,7 @@ Data export capabilities in multiple formats with PDF generation.
 - Enhanced middleware for security
 
 ### Database Support
-- `@libsql/client` - SQL database support
-- `@prisma/client` - ORM for SQL databases
+- `mongoose` & `@prisma/client` - MongoDB database support with Mongoose ODM and Prisma ORM for schema management
 
 ## Summary
 

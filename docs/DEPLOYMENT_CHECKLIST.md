@@ -20,12 +20,12 @@
 - [ ] Database credentials are in environment variables only
 
 ### Database
-- [ ] Turso database is created and accessible
-- [ ] Database URL is correct
-- [ ] Auth token is valid and not expired
-- [ ] All tables are created (automatic on first run)
-- [ ] Database backups are configured
-- [ ] Connection pooling is optimized
+- [ ] MongoDB Atlas database is created and accessible
+- [ ] MONGODB_URI and DATABASE_URL are correct
+- [ ] Database user has proper read/write permissions
+- [ ] All collections are created (automatic or via prisma db push)
+- [ ] Database backups are configured in Atlas
+- [ ] Connection pooling is optimized for serverless
 
 ### Frontend
 - [ ] All static assets are in `/client/public`
@@ -69,12 +69,10 @@
 ### Step 2: Environment Variables
 - [ ] Create `.env.production` locally for testing
 - [ ] Verify all required variables are set:
-  - [ ] `TURSO_DATABASE_URL`
-  - [ ] `TURSO_AUTH_TOKEN`
+  - [ ] `MONGODB_URI`
+  - [ ] `DATABASE_URL`
   - [ ] `ACCESS_TOKEN_SECRET`
   - [ ] `REFRESH_TOKEN_SECRET`
-  - [ ] `JWT_SECRET`
-  - [ ] `JWT_REFRESH_SECRET`
   - [ ] `RAPIDAPI_KEY`
   - [ ] `NODE_ENV=production`
 
@@ -123,9 +121,10 @@ vercel logs --prod
 
 ### Issue: Database connection fails
 **Solution**:
-- Verify `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in Vercel dashboard
-- Check Turso dashboard for database status
-- Verify network connectivity
+- Verify `MONGODB_URI` and `DATABASE_URL` in Vercel dashboard
+- Check MongoDB Atlas dashboard for database status
+- Ensure IP whitelist includes Vercel (or use `0.0.0.0/0`)
+- Verify database user has correct permissions
 
 ### Issue: Static files return 404
 **Solution**:
@@ -204,7 +203,7 @@ vercel promote <deployment-url>
 - [ ] CSRF protection is enabled
 - [ ] Rate limiting is configured
 - [ ] Input validation is implemented
-- [ ] SQL injection is prevented (using prepared statements)
+- [ ] SQL injection is prevented (using Mongoose/Prisma)
 - [ ] Authentication is secure (JWT with refresh tokens)
 - [ ] Authorization is properly enforced
 - [ ] Sensitive data is not logged

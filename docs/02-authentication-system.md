@@ -94,47 +94,46 @@ const payload = {
 };
 ```
 
-## Database Schema
+## Database Schema (Prisma/Mongoose Models)
 
-### Users Table
-```sql
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE,
-  fullname TEXT,
-  password TEXT NOT NULL,
-  role TEXT NOT NULL,
-  firm_id INTEGER,
-  status TEXT DEFAULT 'pending',
-  last_login TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (firm_id) REFERENCES firms(id)
-);
+### User Model
+```prisma
+model User {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  username      String     @unique
+  email         String     @unique
+  fullname      String
+  password      String
+  role          Role       @default(user)
+  firm_id       String?    @db.ObjectId
+  status        UserStatus @default(pending)
+  last_login    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
 ```
 
-### Firms Table
-```sql
-CREATE TABLE firms (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  code TEXT UNIQUE NOT NULL,
-  description TEXT,
-  status TEXT DEFAULT 'pending'
-);
+### Firm Model
+```prisma
+model Firm {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  name          String     @unique
+  code          String     @unique
+  description   String?
+  status        FirmStatus @default(approved)
+  createdAt     DateTime   @default(now())
+}
 ```
 
-### Refresh Tokens Table
-```sql
-CREATE TABLE refresh_tokens (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  token_hash TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+### Refresh Token Model
+```prisma
+model RefreshToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  user_id    String   @db.ObjectId
+  token_hash String
+  expires_at DateTime
+  createdAt  DateTime @default(now())
+}
 ```
 
 ## API Endpoints
@@ -229,8 +228,8 @@ const handleAuthError = (error) => {
 NODE_ENV=production
 ACCESS_TOKEN_SECRET=your-secure-access-secret
 REFRESH_TOKEN_SECRET=your-secure-refresh-secret
-TURSO_DATABASE_URL=your-turso-url
-TURSO_AUTH_TOKEN=your-turso-token
+MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://user:pass@cluster.mongodb.net/dbname
 ```
 
 ## Testing

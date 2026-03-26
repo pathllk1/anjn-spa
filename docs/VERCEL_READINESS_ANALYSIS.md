@@ -19,7 +19,8 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
 
 2. **Technology Stack**
    - Express.js: Industry-standard, Vercel-compatible
-   - Turso (SQLite Cloud): Serverless-friendly database
+   - MongoDB (Atlas): Serverless-friendly cloud database
+   - Mongoose & Prisma: Robust ORM/ODM for MongoDB
    - Vanilla JavaScript: No build step required for frontend
    - TailwindCSS: Utility-first CSS framework
 
@@ -64,7 +65,7 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
 | HTTPS/SSL | ✅ | Automatic |
 | Custom Domains | ✅ | Supported |
 | Serverless Functions | ✅ | Compatible |
-| Database (Turso) | ✅ | Cloud-based, no local storage |
+| Database (MongoDB Atlas) | ✅ | Cloud-based, no local storage |
 | Cookies | ✅ | Supported with HTTPS |
 | CORS | ✅ | Configurable |
 
@@ -75,7 +76,7 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
 | Function Timeout | Default 60s | Increase in vercel.json if needed |
 | Memory Limit | 1024MB default | Sufficient for most operations |
 | Cold Starts | ~1-2s | Acceptable for business app |
-| File System | Read-only | Use Turso for persistence |
+| File System | Read-only | Use MongoDB Atlas for persistence |
 | Session Storage | In-memory | Use cookies (already implemented) |
 
 ---
@@ -110,9 +111,9 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
 ### ⚠️ Issues Found
 
 1. **Database Connection**
-   - File path references: `path.join(__dirname, '..', 'data.sqlite')`
+   - File path references: `path.join(__dirname, '..', 'data.mongodb')`
    - **Issue**: Vercel has read-only filesystem
-   - **Status**: Already using Turso (cloud), so not an issue
+   - **Status**: Already using MongoDB Atlas (cloud), so not an issue
 
 2. **Static File Paths**
    - Uses `__dirname` for path resolution
@@ -244,7 +245,7 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
 
 ## 7. Database Assessment
 
-### ✅ Turso Integration
+### ✅ MongoDB Atlas Integration
 
 1. **Cloud-Based**
    - No local file storage needed
@@ -252,19 +253,19 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
    - Global distribution
 
 2. **Schema Management**
-   - Automatic table creation
-   - Migration support
-   - Proper foreign keys and constraints
+   - Automatic collection creation
+   - Mongoose schemas and Prisma models
+   - Proper indexing and data isolation
 
 3. **Performance**
-   - Prepared statements
+   - Optimized queries
    - Proper indexing
-   - Connection retry logic
+   - Connection pooling support
 
 ### ⚠️ Database Recommendations
 
 1. **Monitoring**
-   - [ ] Set up Turso dashboard monitoring
+   - [ ] Set up MongoDB Atlas dashboard monitoring
    - [ ] Monitor query performance
    - [ ] Track connection pool usage
 
@@ -289,9 +290,9 @@ Your Node.js SPA Business Management Application is **production-ready for Verce
 NODE_ENV=production
 PORT=3000
 
-# Database (Turso)
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+# Database (MongoDB)
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 
 # JWT Secrets (MUST be strong and unique)
 ACCESS_TOKEN_SECRET=your-strong-access-token-secret-key-here
@@ -357,8 +358,8 @@ vercel login
 vercel --prod
 
 # 4. Add environment variables
-vercel env add TURSO_DATABASE_URL
-vercel env add TURSO_AUTH_TOKEN
+vercel env add MONGODB_URI
+vercel env add DATABASE_URL
 # ... add other variables
 
 # 5. Redeploy with environment variables
@@ -377,7 +378,7 @@ See `VERCEL_DEPLOYMENT_GUIDE.md` for comprehensive instructions.
 
 1. **Error Tracking**: Sentry
 2. **Performance Monitoring**: Vercel Analytics
-3. **Database Monitoring**: Turso Dashboard
+3. **Database Monitoring**: MongoDB Atlas Dashboard
 4. **Log Aggregation**: Vercel Logs
 
 ### Maintenance Schedule
@@ -449,7 +450,7 @@ Your deployment is successful when:
 ### Documentation
 - [Vercel Documentation](https://vercel.com/docs)
 - [Express.js Guide](https://expressjs.com)
-- [Turso Documentation](https://docs.turso.tech)
+- [MongoDB Atlas Documentation](https://www.mongodb.com/docs/atlas/)
 - [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
 
 ### Troubleshooting
@@ -460,7 +461,7 @@ Your deployment is successful when:
 
 ### Contact
 - Vercel Support: [vercel.com/support](https://vercel.com/support)
-- Turso Support: [turso.tech/support](https://turso.tech/support)
+- MongoDB Atlas Support: [support.mongodb.com](https://support.mongodb.com)
 - GitHub Issues: Create issue in your repository
 
 ---

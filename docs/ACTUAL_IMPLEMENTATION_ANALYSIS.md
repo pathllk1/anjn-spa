@@ -111,12 +111,11 @@
 ## 5. Dependencies Analysis
 
 ### ✅ Actually Used:
-- `@libsql/client` - SQL database support
-- `@prisma/client` - ORM
+- `mongoose` - MongoDB ODM (Primary database access)
+- `prisma` & `@prisma/client` - Database ORM (Schema management)
 - `bcrypt` - Password hashing
 - `exceljs` - Excel export
 - `jsonwebtoken` - JWT tokens
-- `mongoose` - MongoDB ODM
 - `pdfmake` - PDF generation
 - `xss` - XSS protection
 

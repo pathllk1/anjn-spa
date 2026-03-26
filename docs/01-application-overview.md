@@ -8,7 +8,8 @@ This is a comprehensive business management Single Page Application (SPA) built 
 
 ### Backend (Node.js + Express)
 - **Framework**: Express.js with ES modules
-- **Database**: Turso (SQLite cloud database)
+- **Database**: MongoDB (Atlas or self-hosted)
+- **ORM/ODM**: Mongoose and Prisma
 - **Authentication**: JWT dual-token system (Access + Refresh tokens)
 - **Security**: HTTP-only cookies, CSP headers, XSS protection
 - **Architecture**: RESTful API with modular controllers and routes
@@ -80,7 +81,8 @@ This is a comprehensive business management Single Page Application (SPA) built 
 
 ### Backend Dependencies
 - `express`: Web framework
-- `libsql`: Turso database client
+- `mongoose`: MongoDB ODM
+- `prisma`: Database ORM
 - `jsonwebtoken`: JWT token handling
 - `bcrypt`: Password hashing
 - `cookie-parser`: Cookie handling
@@ -95,12 +97,16 @@ This is a comprehensive business management Single Page Application (SPA) built 
 
 ## Database Schema
 
-The application uses Turso (SQLite cloud) with the following key tables:
-- `users`: User authentication and profiles
-- `firms`: Multi-firm support
-- `inventory_*`: Inventory management tables
-- `wages_*`: Wages management tables
-- `master_roll_*`: Employee master data
+The application uses MongoDB (managed via Mongoose and Prisma) with the following key collections:
+- `users`: User authentication, roles, and profiles
+- `firms`: Multi-firm data isolation and settings
+- `masterrolls`: Employee master data and personnel records
+- `wages`: Payroll and wage calculations
+- `stocks`: Inventory tracking and stock management
+- `parties`: Supplier and customer information
+- `bills`: Sales and purchase transactions
+- `ledgers`: Double-entry accounting records
+- `refresh_tokens`: Session management and security tracking
 
 ## Security Features
 

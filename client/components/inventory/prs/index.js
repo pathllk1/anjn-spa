@@ -3,7 +3,7 @@
  * Coordinates all components and manages the application lifecycle
  */
 
-import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBillData } from './stateManager.js';
+import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBillData, determineGstBillType } from './stateManager.js';
 import { formatCurrency, populateConsigneeFromBillTo, getPartyId, escHtml } from './utils.js';
 import { addOtherCharge, removeOtherCharge, updateOtherCharge } from './otherChargesManager.js';
 import { addItemToCart, removeItemFromCart, updateCartItem, updateCartItemNarration, clearCart } from './cartManager.js';
@@ -19,26 +19,23 @@ import { showToast } from './toast.js';
 import { exportInvoiceToPDF } from './invoiceExport.js';
 import { fetchWithCSRF } from '../../../utils/api.js';
 
-
 export function initPurchaseSystem(router) {
     const container = document.getElementById('purchase-system');
     if (!container) return;
 
-    // FIX: Removed all [LOAD_BILL_DATA] and URL/param debug console.log calls
-
-    const urlParams      = new URLSearchParams(window.location.search);
+    const urlParams       = new URLSearchParams(window.location.search);
     const editBillIdParam = urlParams.get('edit');
     const sessionEditId   = sessionStorage.getItem('editBillId');
     const finalEditParam  = editBillIdParam || sessionEditId;
 
-    let editBillId  = null;
-    let isEditMode  = false;
+    let editBillId = null;
+    let isEditMode = false;
 
     if (finalEditParam) {
         const isValidObjectId = /^[a-f\d]{24}$/i.test(finalEditParam);
         if (isValidObjectId) {
-            editBillId  = finalEditParam;
-            isEditMode  = true;
+            editBillId = finalEditParam;
+            isEditMode = true;
         } else {
             console.warn('Invalid edit bill ID:', finalEditParam);
             sessionStorage.removeItem('editBillId');
@@ -49,6 +46,7 @@ export function initPurchaseSystem(router) {
 
     const state = createInitialState();
 
+    // fetchCurrentUserFirmName now also populates state.firmLocations
     fetchCurrentUserFirmName(state);
 
     if (isEditMode) {
@@ -70,7 +68,6 @@ export function initPurchaseSystem(router) {
             renderMainLayout(isEditMode);
         }).catch(err => {
             console.error('Failed to load data:', err);
-            // FIX: escHtml on err.message before innerHTML interpolation
             container.innerHTML = `
                 <div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
                     <h3 class="font-bold text-lg">System Error</h3>
@@ -83,7 +80,6 @@ export function initPurchaseSystem(router) {
     }
 
     function showEditError(container, errorMessage, billId) {
-        // FIX: escHtml on both errorMessage (JS Error.message, not DB-sanitized) and billId
         container.innerHTML = `
             <div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
                 <h3 class="font-bold text-lg">Edit Bill Error</h3>
@@ -102,6 +98,56 @@ export function initPurchaseSystem(router) {
             </div>`;
     }
 
+    /* ── Auto-determine GST bill type from firm location vs supplier state ─────
+     *
+     * FIX: Same logic as the sales system. When the user selects a supplier or
+     * changes the active firm GSTIN, we compare state codes and automatically
+     * set the bill type dropdown.  The backend also validates before saving.
+     *
+     * For purchases the "recipient" is our firm (activeFirmLocation) and the
+     * "supplier" is the party (selectedParty).  The intra/inter-state rule is
+     * identical to sales — only the ITC implication differs.
+     */
+    function autoSetBillType() {
+        const detectedType = determineGstBillType(state.activeFirmLocation, state.selectedParty);
+        if (!detectedType) return;
+
+        state.meta.billType = detectedType;
+
+        const sel = document.getElementById('billTypeSelector');
+        if (sel) sel.value = detectedType;
+
+        const totals = document.getElementById('totals-section');
+        if (totals) totals.innerHTML = renderTotals(state);
+    }
+
+    /* ── Firm GSTIN selector ───────────────────────────────────────────────────
+     *
+     * FIX: Shown only when the firm has more than one GST registration.
+     * For purchases this tells the system which of our GSTINs is *receiving*
+     * these goods — the ITC (Input Tax Credit) accrues to that specific GSTIN.
+     */
+    function renderFirmGstinSelector() {
+        const locs = state.firmLocations;
+        if (!locs || locs.length <= 1) return '';
+
+        const options = locs.map(l => {
+            const label    = `${l.gst_number || 'No GSTIN'} — ${l.state || l.state_code || ''}${l.is_default ? ' (Default)' : ''}`;
+            const selected = state.activeFirmLocation?.gst_number === l.gst_number ? 'selected' : '';
+            return `<option value="${escHtml(l.gst_number || '')}" ${selected}>${escHtml(label)}</option>`;
+        }).join('');
+
+        return `
+            <div class="flex flex-col">
+                <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Receiving GSTIN</label>
+                <select id="firmGstinSelector"
+                        class="border border-orange-300 bg-orange-50 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-orange-400 outline-none text-slate-700 font-medium"
+                        title="Select which firm GSTIN is receiving these goods (ITC will accrue to this GSTIN)">
+                    ${options}
+                </select>
+            </div>`;
+    }
+
     function renderMainLayout(isEditMode = false) {
         container.innerHTML = `
         <div class="h-[calc(100vh-140px)] flex flex-col bg-gray-50 text-slate-800 font-sans text-sm border border-gray-300 rounded-lg shadow-sm overflow-hidden">
@@ -114,7 +160,7 @@ export function initPurchaseSystem(router) {
                         ${isEditMode ? '<span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full border border-orange-200">EDIT MODE</span>' : ''}
                     </div>
                     <div class="flex flex-col">
-                        <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Bill No</label>
+                        <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Supplier Bill No</label>
                         <input type="text" id="supplier-bill-no" value="${escHtml(state.meta.supplierBillNo || '')}"
                                class="border border-amber-300 rounded px-2 py-1 text-xs font-bold w-40 bg-amber-50 text-slate-700 focus:ring-1 focus:ring-amber-500 outline-none"
                                placeholder="Enter supplier bill no"
@@ -125,6 +171,10 @@ export function initPurchaseSystem(router) {
                         <input type="date" value="${escHtml(state.meta.billDate)}"
                                class="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none text-slate-700">
                     </div>
+
+                    <!-- FIX: Receiving GSTIN selector — only shown when firm has multiple GST registrations -->
+                    ${renderFirmGstinSelector()}
+
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Transaction Type</label>
                         <select id="billTypeSelector" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 font-medium">
@@ -145,6 +195,7 @@ export function initPurchaseSystem(router) {
 
                 <div class="flex flex-wrap gap-2">
                     <button id="btn-other-charges" class="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap">Other Charges</button>
+                    <button id="btn-add-item"      class="px-3 py-1.5 text-xs text-indigo-600 border border-indigo-200 bg-indigo-50 rounded hover:bg-indigo-100 transition-colors whitespace-nowrap">Add Items (F2)</button>
                     <button id="btn-reset"         class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
                     <button id="btn-save"          class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
                         <span id="save-icon">💾</span>
@@ -160,7 +211,7 @@ export function initPurchaseSystem(router) {
                 <!-- Sidebar -->
                 <div class="w-full md:w-64 bg-slate-50 border-r border-gray-200 flex flex-col overflow-y-auto z-10">
                     <div class="p-3 border-b border-gray-200 bg-white">
-                        <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Bill To</label>
+                        <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Supplier (Bill From)</label>
                         <div id="party-display">
                             <div class="group bg-blue-50 p-3 rounded border border-blue-200 shadow-sm">
                                 <h3 class="font-bold text-sm text-blue-900 truncate">Loading…</h3>
@@ -266,7 +317,7 @@ export function initPurchaseSystem(router) {
 
                     <div class="p-2 border-t border-dashed border-gray-200 bg-gray-50 shrink-0">
                         <button id="btn-add-item" class="w-full py-2 border border-dashed border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-xs font-bold transition-colors uppercase tracking-wide">
-                            + Add Items (F2) &nbsp;|&nbsp; Select Party (F3) &nbsp;|&nbsp; Charges (F4) &nbsp;|&nbsp; Save (F8) &nbsp;|&nbsp; Reset (F9)
+                            + Add Items (F2) &nbsp;|&nbsp; Select Supplier (F3) &nbsp;|&nbsp; Charges (F4) &nbsp;|&nbsp; Save (F8) &nbsp;|&nbsp; Reset (F9)
                         </button>
                     </div>
 
@@ -301,16 +352,10 @@ export function initPurchaseSystem(router) {
                 <div class="p-5 flex flex-col gap-2">
                     <button id="download-pdf-btn"
                             class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
                         Download PDF
                     </button>
                     <button id="download-excel-btn"
                             class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
                         Download Excel
                     </button>
                     <button id="close-modal-btn"
@@ -333,6 +378,8 @@ export function initPurchaseSystem(router) {
                         onSelectParty: async (party) => {
                             state.selectedParty = party;
                             state.historyCache  = {};
+                            // FIX: Auto-detect bill type after supplier is selected
+                            autoSetBillType();
                             renderMainLayout(isEditMode);
                         },
                         onCreateParty: () => {
@@ -340,6 +387,8 @@ export function initPurchaseSystem(router) {
                                 state.parties.push(newParty);
                                 state.selectedParty = newParty;
                                 state.historyCache  = {};
+                                // FIX: Auto-detect bill type after new supplier is created
+                                autoSetBillType();
                                 renderMainLayout(isEditMode);
                             });
                         },
@@ -357,7 +406,6 @@ export function initPurchaseSystem(router) {
         attachEventListeners(isEditMode, editBillId || null);
     }
 
-    // ── Helper: refresh stocks list ────────────────────────────────────────
     async function refreshStocks() {
         try {
             const response = await fetch('/api/inventory/purchase/stocks', {
@@ -373,9 +421,8 @@ export function initPurchaseSystem(router) {
         }
     }
 
-    // ── Stock modal callbacks ─────────────────────────────────────────────
     function buildStockModalCallbacks(isEditMode) {
-        const callbacks = {
+        return {
             onSelectStock: async (stock, showBatchModal) => {
                 if (showBatchModal) {
                     await showBatchSelectionModal(stock, (stockWithBatch) => {
@@ -403,12 +450,10 @@ export function initPurchaseSystem(router) {
                 openPartyItemHistoryModal(stock, state);
             },
         };
-        return callbacks;
     }
 
     function attachEventListeners(isEditMode = false, editBillId = null) {
 
-        // Save button spinner helpers
         const showSaveSpinner = () => {
             document.getElementById('btn-save')?.setAttribute('disabled', 'true');
             document.getElementById('save-icon')?.classList.add('hidden');
@@ -424,18 +469,16 @@ export function initPurchaseSystem(router) {
 
         // Add item
         const addBtn = document.getElementById('btn-add-item');
-        if (addBtn) {
-            addBtn.onclick = () => openStockModal(state, buildStockModalCallbacks(isEditMode));
-        }
+        if (addBtn) addBtn.onclick = () => openStockModal(state, buildStockModalCallbacks(isEditMode));
 
         // Other charges
         const chargesBtn = document.getElementById('btn-other-charges');
         if (chargesBtn) {
             chargesBtn.onclick = () => {
                 openOtherChargesModal(state, {
-                    onAddCharge:    (charge)      => addOtherCharge(state, charge),
-                    onRemoveCharge: (idx)          => removeOtherCharge(state, idx),
-                    onUpdateCharge: (idx, charge)  => updateOtherCharge(state, idx, charge),
+                    onAddCharge:    (charge)     => addOtherCharge(state, charge),
+                    onRemoveCharge: (idx)         => removeOtherCharge(state, idx),
+                    onUpdateCharge: (idx, charge) => updateOtherCharge(state, idx, charge),
                     formatCurrency,
                     onSave: () => {
                         const totals = document.getElementById('totals-section');
@@ -456,6 +499,16 @@ export function initPurchaseSystem(router) {
             };
         }
 
+        // FIX: Receiving GSTIN selector — update activeFirmLocation and re-derive bill type
+        const firmGstinSelector = document.getElementById('firmGstinSelector');
+        if (firmGstinSelector) {
+            firmGstinSelector.onchange = (e) => {
+                const selectedGstin = e.target.value;
+                state.activeFirmLocation = state.firmLocations.find(l => l.gst_number === selectedGstin) || null;
+                autoSetBillType();
+            };
+        }
+
         // Save
         const saveBtn = document.getElementById('btn-save');
         if (saveBtn) {
@@ -465,7 +518,7 @@ export function initPurchaseSystem(router) {
                     return;
                 }
                 if (!state.selectedParty) {
-                    showToast('Please select a party before saving.', 'error');
+                    showToast('Please select a supplier before saving.', 'error');
                     return;
                 }
 
@@ -486,15 +539,21 @@ export function initPurchaseSystem(router) {
                 try {
                     const partyId  = getPartyId(state.selectedParty);
                     const billData = {
-                        meta:         state.meta,
+                        meta: {
+                            ...state.meta,
+                            // FIX: send the active firm GSTIN so the backend can
+                            // validate the bill type and record it on the bill document.
+                            // For purchases this is the *receiving* GSTIN — ITC accrues here.
+                            firmGstin: state.activeFirmLocation?.gst_number || null,
+                        },
                         party:        partyId,
                         cart:         state.cart,
                         otherCharges: state.otherCharges,
                         consignee:    state.selectedConsignee,
                     };
 
-                    const method   = isEditMode ? 'PUT' : 'POST';
-                    const url      = isEditMode
+                    const method = isEditMode ? 'PUT' : 'POST';
+                    const url    = isEditMode
                         ? `/api/inventory/purchase/bills/${editBillId}`
                         : '/api/inventory/purchase/bills';
 
@@ -577,8 +636,6 @@ export function initPurchaseSystem(router) {
             };
         }
 
-        // FIX: Removed stray `state.meta.vehicle_no = ''` that was silently clearing vehicle number on every render
-
         // Reverse charge
         const rcToggle = document.getElementById('reverse-charge-toggle');
         if (rcToggle) {
@@ -604,18 +661,18 @@ export function initPurchaseSystem(router) {
             const el = document.getElementById(id);
             if (el) el.oninput = (e) => setter(e.target.value);
         };
-        bindInput('supplier-bill-no',              v => { state.meta.supplierBillNo   = v; });
-        bindInput('reference-no',                  v => { state.meta.referenceNo     = v; });
-        bindInput('vehicle-no',                    v => { state.meta.vehicleNo        = v; });
-        bindInput('narration',                     v => { state.meta.narration        = v; });
-        bindInput('dispatch-through',              v => { state.meta.dispatchThrough  = v; });
-        bindInput('consignee-name',                v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.name = v; });
-        bindInput('consignee-gstin',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.gstin = v; });
-        bindInput('consignee-state',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.state = v; });
-        bindInput('consignee-pin',                 v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.pin = v; });
-        bindInput('consignee-contact',             v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.contact = v; });
+        bindInput('supplier-bill-no',                v => { state.meta.supplierBillNo   = v; });
+        bindInput('reference-no',                    v => { state.meta.referenceNo      = v; });
+        bindInput('vehicle-no',                      v => { state.meta.vehicleNo        = v; });
+        bindInput('narration',                       v => { state.meta.narration        = v; });
+        bindInput('dispatch-through',                v => { state.meta.dispatchThrough  = v; });
+        bindInput('consignee-name',                  v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.name = v; });
+        bindInput('consignee-gstin',                 v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.gstin = v; });
+        bindInput('consignee-state',                 v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.state = v; });
+        bindInput('consignee-pin',                   v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.pin = v; });
+        bindInput('consignee-contact',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.contact = v; });
         bindInput('consignee-delivery-instructions', v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.deliveryInstructions = v; });
-        bindInput('consignee-address',             v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.address = v; });
+        bindInput('consignee-address',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.address = v; });
 
         // Bill date
         const billDateInput = document.querySelector('input[type="date"]');
@@ -636,10 +693,9 @@ export function initPurchaseSystem(router) {
         else if (e.key === 'F9') { e.preventDefault(); document.getElementById('btn-reset')?.click(); }
     });
 
-    // ── Save confirmation modal ───────────────────────────────────────────
     function showSaveConfirmationModal(billId, billNo, isEditMode) {
-        const modal     = document.getElementById('save-confirmation-modal');
-        const billNoEl  = document.getElementById('modal-bill-no');
+        const modal    = document.getElementById('save-confirmation-modal');
+        const billNoEl = document.getElementById('modal-bill-no');
         if (billNoEl) billNoEl.textContent = billNo;
         modal.classList.remove('hidden');
 
@@ -668,10 +724,6 @@ export function initPurchaseSystem(router) {
         document.getElementById('save-confirmation-modal')?.classList.add('hidden');
     }
 
-    // FIX: Uses credentials:'same-origin' (cookie auth).
-    // Original code sent localStorage.getItem('token') in an Authorization header —
-    // mixing auth strategies and defeating the HttpOnly cookie security model.
-    // FIX: alert() → showToast
     function downloadFile(url, filename, _mimeType, billId, handleAfterModal) {
         fetch(url, { method: 'GET', credentials: 'same-origin' })
             .then(response => {

@@ -209,8 +209,8 @@ Before you start, ensure you have:
 
 - [ ] Vercel account created
 - [ ] Git repository set up
-- [ ] Turso database created
-- [ ] Database credentials ready
+- [ ] MongoDB Atlas database created
+- [ ] Database connection strings ready
 - [ ] JWT secrets generated
 - [ ] RAPIDAPI key obtained
 - [ ] Node.js v18+ installed
@@ -224,12 +224,10 @@ Before you start, ensure you have:
 Add these to Vercel Dashboard:
 
 ```
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=your-auth-token
+MONGODB_URI=mongodb+srv://your-database.mongodb.net/dbname
+DATABASE_URL=mongodb+srv://your-database.mongodb.net/dbname
 ACCESS_TOKEN_SECRET=your-strong-secret-key
 REFRESH_TOKEN_SECRET=your-strong-secret-key
-JWT_SECRET=your-strong-secret-key
-JWT_REFRESH_SECRET=your-strong-secret-key
 RAPIDAPI_KEY=your-api-key
 NODE_ENV=production
 ```
@@ -314,7 +312,7 @@ See `.env.example` for complete list.
 - Solution: Run `npm install` and verify dependencies
 
 **Database connection fails**
-- Solution: Verify TURSO_DATABASE_URL and TURSO_AUTH_TOKEN
+- Solution: Verify MONGODB_URI and DATABASE_URL
 
 **Static files return 404**
 - Solution: Verify files in `/client/public` and check vercel.json
@@ -333,9 +331,9 @@ See `DEPLOYMENT_CHECKLIST.md` for more issues and solutions.
 
 - **Vercel Documentation**: https://vercel.com/docs
 - **Express.js Guide**: https://expressjs.com
-- **Turso Documentation**: https://docs.turso.tech
+- **MongoDB Documentation**: https://www.mongodb.com/docs
 - **Vercel Support**: https://vercel.com/support
-- **Turso Support**: https://turso.tech/support
+- **MongoDB Support**: https://www.mongodb.com/support
 
 ---
 
@@ -425,12 +423,12 @@ Your deployment is successful when:
 
 **Type**: Node.js SPA Business Management Application
 **Frontend**: Vanilla JavaScript with Navigo.js routing
-**Backend**: Express.js with Turso database
+**Backend**: Express.js with MongoDB database
 **Authentication**: JWT dual-token system
 **Features**: Inventory, Wages, Master Roll, Accounting, Ledger
 
 **Deployment Target**: Vercel (Serverless)
-**Database**: Turso (SQLite Cloud)
+**Database**: MongoDB Atlas (Serverless-friendly)
 **Status**: Production Ready
 
 ---
