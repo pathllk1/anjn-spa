@@ -36,6 +36,7 @@ When a sales bill fails to load in edit mode, the error page shows a "Back to Sa
 
 **Severity:** Medium  
 **File:** `client/components/inventory/stocks/index.js`
+**Status:** ✅ FIXED
 
 ### Issue Description
 The Stock Management system uses FontAwesome icon classes (`fas fa-*`) throughout the UI (e.g., `fa-boxes`, `fa-rupee-sign`, `fa-exclamation-triangle`), but FontAwesome is not loaded anywhere in the application. This results in broken icons showing as empty squares or text placeholders.
@@ -46,12 +47,22 @@ The Stock Management system uses FontAwesome icon classes (`fas fa-*`) throughou
 - Line 407: `<i class="fas fa-exclamation-triangle text-yellow-600"></i>`
 - Line 418: `<i class="fas fa-weight text-purple-600"></i>`
 
-### Suggested Fix
-Replace FontAwesome icons with inline SVG icons (consistent with rest of app) or add FontAwesome CDN to index.html:
+### Fix Applied
+Replaced all FontAwesome icons with Heroicons (inline SVGs) to match the rest of the application:
+- `fa-boxes` → Archive Box icon
+- `fa-rupee-sign` → Currency Rupee icon
+- `fa-exclamation-triangle` → Exclamation Triangle icon
+- `fa-weight` → Scale icon
+- `fa-search` → Magnifying Glass icon
+- `fa-plus` → Plus icon
+- `fa-file-excel` → Document icon
+- `fa-sync-alt` → Arrow Path icon
+- `fa-chevron-left` → Chevron Left icon
+- `fa-chevron-right` → Chevron Right icon
+- `fa-th-large` → Squares 2x2 icon
+- `fa-redo` → Arrow Path icon
 
-```html
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-```
+**Fixed on:** March 28, 2026
 
 ---
 
@@ -210,7 +221,7 @@ element.title = stock.item; // Browser handles escaping automatically
 | Bug | Severity | File | Status |
 |-----|----------|------|--------|
 | Broken sales report link | Medium | `sls/index.js` | Needs Fix |
-| Missing FontAwesome icons | Medium | `stocks/index.js` | Needs Fix |
+| Missing FontAwesome icons | Medium | `stocks/index.js` | ✅ Fixed |
 | Case-sensitive stock search | Low | `stocks/index.js` | Needs Fix |
 | Validation timing issue | Medium | `prs/index.js`, `sls/index.js` | Needs Fix |
 | Placeholder categories page | Low | `inventory-categories.js` | Needs Decision |

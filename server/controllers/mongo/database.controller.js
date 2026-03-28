@@ -3,15 +3,19 @@
  * SUPER ADMIN DATABASE CONTROLLER
  * Handles database browsing, collection queries, filtering, and exports
  *
- * Backup destinations (both run in parallel via Promise.allSettled):
- *   1. Infini-Cloud  — WebDAV PUT          (env: INFINI_CLOUD_WEBDAV_*)
- *   2. Vercel Blob   — @vercel/blob put()  (env: BLOB_READ_WRITE_TOKEN)
+ * Backup destinations (all three run in parallel via Promise.allSettled):
+ *   1. Infini-Cloud   — WebDAV PUT          (env: INFINI_CLOUD_WEBDAV_*)
+ *   2. Vercel Blob    — @vercel/blob put()  (env: BLOB_READ_WRITE_TOKEN)
+ *   3. Backblaze B2   — Native B2 API v2    (env: B2_APPLICATION_KEY_ID,
+ *                                                 B2_APPLICATION_KEY,
+ *                                                 B2_BUCKET_ID,
+ *                                                 B2_BUCKET_PREFIX [optional])
  *
  * Failure isolation guarantee:
  *   • Each destination runs in its own Promise branch.
  *   • Promise.allSettled is used — it NEVER short-circuits on rejection.
- *   • A failure in one branch cannot cancel, throw into, or delay the other.
- *   • HTTP 207 Multi-Status when one succeeds and one fails.
+ *   • A failure in one branch cannot cancel, throw into, or delay the other two.
+ *   • HTTP 207 Multi-Status when ≥1 succeeds and ≥1 fails.
  *   • HTTP 500 only when EVERY configured destination fails.
  *   • HTTP 503 when no providers are configured at all.
  * ════════════════════════════════════════════════════════════════════════════════
@@ -19,6 +23,9 @@
 
 import mongoose           from 'mongoose';
 import { gzipSync }       from 'zlib';
+import { createHash }     from 'crypto';
+import { serialize as bsonSerialize } from 'bson';   // already installed — hard dep of mongoose
+import axios              from 'axios';
 import { put as blobPut } from '@vercel/blob';
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
@@ -29,21 +36,6 @@ function ensureSuperAdmin(req, res) {
     return false;
   }
   return true;
-}
-
-// ─── Deep-transform for backup serialisation ─────────────────────────────────
-
-function transformForBackup(value) {
-  if (value instanceof mongoose.Types.ObjectId) return value.toString();
-  if (value instanceof Date)                    return value.toISOString();
-  if (Buffer.isBuffer(value))                   return { __type: 'Buffer', data: value.toString('base64') };
-  if (Array.isArray(value))                     return value.map(transformForBackup);
-  if (value && typeof value === 'object') {
-    const out = {};
-    for (const [k, v] of Object.entries(value)) out[k] = transformForBackup(v);
-    return out;
-  }
-  return value;
 }
 
 // ─── Shallow transform for browsing responses ────────────────────────────────
@@ -142,9 +134,114 @@ async function uploadToVercelBlob(buffer, fileName) {
   return blob.url;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// COLLECTION BROWSING ENDPOINTS  (unchanged logic, refactored to shallowTransform)
-// ═════════════════════════════════════════════════════════════════════════════
+/**
+ * Upload a Buffer to Backblaze B2 using the native B2 API v2 (three-step flow).
+ *
+ * WHY AXIOS (not native fetch):
+ *   The Fetch spec treats Content-Length as a "forbidden header" — native fetch / undici
+ *   silently strips it. B2 does NOT support chunked transfer encoding and requires a
+ *   correct Content-Length on every upload. When fetch strips the header, B2 accepts the
+ *   HTTP handshake (returns 200) but discards the body, resulting in a ghost "success"
+ *   with no file stored. axios is not bound by the browser Fetch spec and always sends
+ *   Content-Length exactly as provided — this is the standard fix used across the Node.js
+ *   B2 ecosystem.
+ *
+ * Step 1 — b2_authorize_account  → authorizationToken + apiUrl + downloadUrl
+ * Step 2 — b2_get_upload_url     → per-upload uploadUrl + authorizationToken
+ * Step 3 — POST the file          → verified with SHA-1 checksum
+ *
+ * Throws on any network or API error.
+ * The caller (backupDatabase) wraps this in Promise.allSettled,
+ * so a throw here CANNOT affect Infini-Cloud or Vercel Blob uploads.
+ *
+ * Env vars required:
+ *   B2_APPLICATION_KEY_ID   — the key ID (keyID field in B2 dashboard)
+ *   B2_APPLICATION_KEY      — the application key (secret)
+ *   B2_BUCKET_ID            — bucket ID (NOT bucket name)
+ *   B2_BUCKET_PREFIX        — optional subdirectory prefix inside the bucket
+ *
+ * @param   {Buffer} buffer    gzip-compressed JSON
+ * @param   {string} fileName  target filename in the B2 bucket
+ * @returns {string}           friendly download URL for the uploaded file
+ */
+async function uploadToBackblazeB2(buffer, fileName) {
+  const keyId    = String(process.env.B2_APPLICATION_KEY_ID || '').trim();
+  const appKey   = String(process.env.B2_APPLICATION_KEY    || '').trim();
+  const bucketId = String(process.env.B2_BUCKET_ID          || '').trim();
+  const prefix   = String(process.env.B2_BUCKET_PREFIX      || '').trim().replace(/^\/+|\/+$/g, '');
+
+  if (!keyId || !appKey) throw new Error('B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY not configured');
+  if (!bucketId)         throw new Error('B2_BUCKET_ID is not configured');
+
+  // ── Step 1: Authorise account ─────────────────────────────────────────────
+  let auth;
+  try {
+    const authResp = await axios.get('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${keyId}:${appKey}`).toString('base64')}`,
+      },
+    });
+    auth = authResp.data;
+  } catch (err) {
+    const status = err.response?.status;
+    const data   = JSON.stringify(err.response?.data ?? '');
+    throw new Error(`B2 authorize_account failed (${status}): ${data.slice(0, 200)}`);
+  }
+  // auth.apiUrl, auth.authorizationToken, auth.downloadUrl
+
+  // ── Step 2: Get upload URL (bucket-level, short-lived token) ──────────────
+  let uploadInfo;
+  try {
+    const urlResp = await axios.post(
+      `${auth.apiUrl}/b2api/v2/b2_get_upload_url`,
+      { bucketId },
+      { headers: { Authorization: auth.authorizationToken } },
+    );
+    uploadInfo = urlResp.data;
+  } catch (err) {
+    const status = err.response?.status;
+    const data   = JSON.stringify(err.response?.data ?? '');
+    throw new Error(`B2 get_upload_url failed (${status}): ${data.slice(0, 200)}`);
+  }
+  // uploadInfo.uploadUrl, uploadInfo.authorizationToken
+
+  // ── Step 3: Upload the file — axios sends Content-Length correctly ─────────
+  //
+  // Native fetch treats Content-Length as a forbidden header and silently strips it.
+  // B2 does not support chunked transfer encoding and discards such bodies while
+  // still returning HTTP 200. axios does not follow the browser forbidden-header
+  // list, so Content-Length is always sent with the exact byte count.
+  //
+  const targetName = prefix ? `${prefix}/${fileName}` : fileName;
+  const sha1       = createHash('sha1').update(buffer).digest('hex');
+
+  let fileInfo;
+  try {
+    const uploadResp = await axios.post(uploadInfo.uploadUrl, buffer, {
+      headers: {
+        Authorization:       uploadInfo.authorizationToken,
+        'X-Bz-File-Name':    encodeURIComponent(targetName),
+        'Content-Type':      'application/gzip',
+        'Content-Length':    buffer.length,          // axios sends this; fetch would strip it
+        'X-Bz-Content-Sha1': sha1,
+      },
+      maxBodyLength:    Infinity,  // prevent axios from capping large buffer uploads
+      maxContentLength: Infinity,
+    });
+    fileInfo = uploadResp.data;
+  } catch (err) {
+    const status = err.response?.status;
+    const data   = JSON.stringify(err.response?.data ?? '');
+    throw new Error(`B2 upload failed (${status}): ${data.slice(0, 200)}`);
+  }
+
+  console.log(`[DATABASE] B2 upload confirmed — fileId:${fileInfo.fileId} name:${fileInfo.fileName}`);
+
+  // Construct the friendly download URL: {downloadUrl}/file/{bucketName}/{encodedPath}
+  return `${auth.downloadUrl}/file/${fileInfo.bucketName}/${encodeURIComponent(targetName)}`;
+}
+
+
 
 /** GET /api/super-admin/database/collections */
 export const getCollections = async (req, res) => {
@@ -368,6 +465,11 @@ export const getBackupStatus = async (req, res) => {
     process.env.INFINI_CLOUD_WEBDAV_PASSWORD
   );
   const vercelConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  const b2Configured     = Boolean(
+    process.env.B2_APPLICATION_KEY_ID &&
+    process.env.B2_APPLICATION_KEY    &&
+    process.env.B2_BUCKET_ID
+  );
 
   res.json({
     success: true,
@@ -376,18 +478,24 @@ export const getBackupStatus = async (req, res) => {
         name:       'Infini-Cloud WebDAV',
         configured: infiniConfigured,
         directory:  String(process.env.INFINI_CLOUD_WEBDAV_DIRECTORY || '').trim() || '/',
-        format:     'json.gz',
+        format:     'bson.gz',
       },
       vercelBlob: {
         name:       'Vercel Blob',
         configured: vercelConfigured,
-        format:     'json.gz',
+        format:     'bson.gz',
+      },
+      backblazeB2: {
+        name:       'Backblaze B2',
+        configured: b2Configured,
+        prefix:     String(process.env.B2_BUCKET_PREFIX || '').trim() || '/',
+        format:     'bson.gz',
       },
     },
     // Flat legacy fields for backwards-compat with existing frontend code
-    configured: infiniConfigured || vercelConfigured,
-    provider:   'Infini-Cloud WebDAV + Vercel Blob',
-    format:     'json.gz',
+    configured: infiniConfigured || vercelConfigured || b2Configured,
+    provider:   'Infini-Cloud WebDAV + Vercel Blob + Backblaze B2',
+    format:     'bson.gz',
   });
 };
 
@@ -399,18 +507,18 @@ export const getBackupStatus = async (req, res) => {
  * ┌──────────────────────────────────────────────────────────────────────┐
  * │  ISOLATION MECHANISM                                                   │
  * │                                                                        │
- * │  Promise.allSettled([infiniUpload, vercelUpload])                      │
+ * │  Promise.allSettled([infiniUpload, vercelUpload, b2Upload])            │
  * │                                                                        │
  * │  allSettled NEVER rejects and NEVER short-circuits.                    │
- * │  Both uploads always run to completion (success or failure)            │
- * │  regardless of what the other does.                                    │
+ * │  All three uploads always run to completion (success or failure)       │
+ * │  regardless of what the others do.                                     │
  * │                                                                        │
- * │  The only shared data is the gzip buffer (read-only, not mutated).     │
+ * │  The only shared data is the gzip buffer (read-only BSON stream, not mutated). │
  * │                                                                        │
  * │  Response matrix:                                                      │
- * │    both succeed              → HTTP 200 { success: true }              │
- * │    one succeeds, one fails   → HTTP 207 { success: true, ... }         │
- * │    both fail                 → HTTP 500 { success: false }             │
+ * │    all succeed               → HTTP 200 { success: true }              │
+ * │    ≥1 succeeds, ≥1 fails     → HTTP 207 { success: true, ... }         │
+ * │    all fail                  → HTTP 500 { success: false }             │
  * │    no providers configured   → HTTP 503 { success: false }             │
  * └──────────────────────────────────────────────────────────────────────┘
  */
@@ -423,34 +531,63 @@ export const backupDatabase = async (req, res) => {
       return res.status(503).json({ success: false, error: 'Database connection is not ready' });
     }
 
-    // ── 1. Serialise all collections ─────────────────────────────────────
+    // ── 1. Serialise all collections as a BSON stream ────────────────────
+    //
+    // Format (self-delimiting, sequentially readable):
+    //   [HEADER doc] [COLLECTION_MARKER doc] [doc] [doc] ... [COLLECTION_MARKER doc] [doc] ... [FOOTER doc]
+    //
+    // Each BSON document is length-prefixed (first 4 bytes = little-endian int32),
+    // so a restore script can walk the stream without a separate manifest.
+    //
+    // WHY BSON INSTEAD OF JSON:
+    //   JSON forces lossy type coercion (ObjectId → string, Date → ISO string,
+    //   Binary → custom object, Decimal128 → JS number with precision loss).
+    //   BSON preserves every MongoDB type exactly — zero transformation needed,
+    //   zero data loss, directly restorable via mongorestore-style tooling.
+    //   transformForBackup() has been deleted; there is nothing to transform.
+    //
     const rawCollections = await db.db.listCollections().toArray();
     const collectionNames = rawCollections
       .map(e => e.name)
       .filter(n => !n.startsWith('system.'))
       .sort();
 
-    const payload = {
-      meta: {
-        provider:         'SecureApp MongoDB Backup',
-        generated_at:     new Date().toISOString(),
-        database_name:    db.db.databaseName,
-        collection_count: collectionNames.length,
-        format:           'json.gz',
-      },
-      collections: {},
-    };
+    const generatedAt = new Date();
+    const chunks      = [];
+
+    // Header document — carries metadata, identifies the stream format
+    chunks.push(bsonSerialize({
+      type:             'header',
+      provider:         'SecureApp MongoDB Backup',
+      generated_at:     generatedAt,        // stored as BSON Date — exact millisecond
+      database_name:    db.db.databaseName,
+      collection_count: collectionNames.length,
+      format:           'bson.gz',
+      bson_stream_version: 1,
+    }));
 
     for (const name of collectionNames) {
       const docs = await db.collection(name).find({}).toArray();
-      payload.collections[name] = docs.map(transformForBackup);
+
+      // Collection marker — one per collection, announces name + doc count
+      chunks.push(bsonSerialize({ type: 'collection', name, count: docs.length }));
+
+      // Raw documents — bsonSerialize preserves ObjectId, Date, Binary,
+      // Decimal128, Long, Int32 — everything — with zero transformation
+      for (const doc of docs) {
+        chunks.push(bsonSerialize(doc));
+      }
     }
 
-    const timestamp  = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName   = `${db.db.databaseName || 'mongodb'}-backup-${timestamp}.json.gz`;
-    const gzipBuf    = gzipSync(Buffer.from(JSON.stringify(payload)));
+    // Footer document — confirms stream is complete, not truncated mid-write
+    chunks.push(bsonSerialize({ type: 'footer', generated_at: generatedAt }));
 
-    console.log(`[DATABASE] backup: "${fileName}" ${gzipBuf.length} bytes ${collectionNames.length} collections`);
+    const bsonBuf   = Buffer.concat(chunks);
+    const timestamp = generatedAt.toISOString().replace(/[:.]/g, '-');
+    const fileName  = `${db.db.databaseName || 'mongodb'}-backup-${timestamp}.bson.gz`;
+    const gzipBuf   = gzipSync(bsonBuf);
+
+    console.log(`[DATABASE] backup: "${fileName}" ${gzipBuf.length} bytes (bson: ${bsonBuf.length} bytes) ${collectionNames.length} collections`);
 
     // ── 2. Guard: at least one provider must be configured ───────────────
     const infiniEnabled = Boolean(
@@ -459,33 +596,40 @@ export const backupDatabase = async (req, res) => {
       process.env.INFINI_CLOUD_WEBDAV_PASSWORD
     );
     const vercelEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    const b2Enabled     = Boolean(
+      process.env.B2_APPLICATION_KEY_ID &&
+      process.env.B2_APPLICATION_KEY    &&
+      process.env.B2_BUCKET_ID
+    );
 
-    if (!infiniEnabled && !vercelEnabled) {
+    if (!infiniEnabled && !vercelEnabled && !b2Enabled) {
       return res.status(503).json({
         success: false,
         error:   'No backup providers are configured. '
-               + 'Set INFINI_CLOUD_WEBDAV_* and/or BLOB_READ_WRITE_TOKEN.',
+               + 'Set INFINI_CLOUD_WEBDAV_* and/or BLOB_READ_WRITE_TOKEN and/or B2_APPLICATION_KEY_ID + B2_APPLICATION_KEY + B2_BUCKET_ID.',
       });
     }
 
-    // ── 3. Run both uploads in parallel — fully isolated ─────────────────
+    // ── 3. Run all three uploads in parallel — fully isolated ────────────
     //
     // Each branch is self-contained:
-    //   • uploadToInfiniCloud throws  → captured as rejected in infiniResult
-    //                                    vercelResult is completely unaffected
-    //   • uploadToVercelBlob throws   → captured as rejected in vercelResult
-    //                                    infiniResult is completely unaffected
+    //   • uploadToInfiniCloud throws  → captured in infiniResult; vercel + B2 unaffected
+    //   • uploadToVercelBlob throws   → captured in vercelResult; infini + B2 unaffected
+    //   • uploadToBackblazeB2 throws  → captured in b2Result;     infini + vercel unaffected
     //
-    // gzipBuf is a read-only Buffer shared between both — neither upload
-    // modifies it, so there is no shared mutable state.
+    // gzipBuf is a read-only Buffer shared across all three — no shared mutable state.
     //
-    const [infiniResult, vercelResult] = await Promise.allSettled([
+    const [infiniResult, vercelResult, b2Result] = await Promise.allSettled([
       infiniEnabled
         ? uploadToInfiniCloud(gzipBuf, fileName)
         : Promise.reject(new Error('Not configured — skipped')),
 
       vercelEnabled
         ? uploadToVercelBlob(gzipBuf, fileName)
+        : Promise.reject(new Error('Not configured — skipped')),
+
+      b2Enabled
+        ? uploadToBackblazeB2(gzipBuf, fileName)
         : Promise.reject(new Error('Not configured — skipped')),
     ]);
 
@@ -501,11 +645,19 @@ export const backupDatabase = async (req, res) => {
       !process.env.BLOB_READ_WRITE_TOKEN && 'BLOB_READ_WRITE_TOKEN',
     ].filter(Boolean);
 
+    const b2Missing = [
+      !process.env.B2_APPLICATION_KEY_ID && 'B2_APPLICATION_KEY_ID',
+      !process.env.B2_APPLICATION_KEY    && 'B2_APPLICATION_KEY',
+      !process.env.B2_BUCKET_ID          && 'B2_BUCKET_ID',
+    ].filter(Boolean);
+
     const infiniOutcome = resolveOutcome('Infini-Cloud WebDAV', infiniEnabled, infiniResult, infiniMissing);
     const vercelOutcome = resolveOutcome('Vercel Blob',          vercelEnabled, vercelResult, vercelMissing);
+    const b2Outcome     = resolveOutcome('Backblaze B2',         b2Enabled,     b2Result,     b2Missing);
 
-    const successCount = [infiniOutcome, vercelOutcome].filter(o => o.status === 'success').length;
-    const failedCount  = [infiniOutcome, vercelOutcome].filter(o => o.status === 'failed').length;
+    const allOutcomes  = [infiniOutcome, vercelOutcome, b2Outcome];
+    const successCount = allOutcomes.filter(o => o.status === 'success').length;
+    const failedCount  = allOutcomes.filter(o => o.status === 'failed').length;
     const allFailed    = failedCount > 0 && successCount === 0;
 
     // Log each provider with full detail so the console is self-explanatory
@@ -513,17 +665,21 @@ export const backupDatabase = async (req, res) => {
       o.status === 'skipped' ? `skipped (${o.reason})`
       : o.status === 'failed'  ? `failed (${o.error})`
       : 'success';
-    console.log(`[DATABASE] backup results — infini:${outcomeLabel(infiniOutcome)} vercel:${outcomeLabel(vercelOutcome)}`);
+    console.log(
+      `[DATABASE] backup results — infini:${outcomeLabel(infiniOutcome)} ` +
+      `vercel:${outcomeLabel(vercelOutcome)} b2:${outcomeLabel(b2Outcome)}`
+    );
 
     // ── 5. Respond ────────────────────────────────────────────────────────
     const base = {
       fileName,
       sizeBytes:   gzipBuf.length,
       collections: collectionNames.length,
-      generatedAt: payload.meta.generated_at,
+      generatedAt: generatedAt.toISOString(),
       destinations: {
         infiniCloud: infiniOutcome,
         vercelBlob:  vercelOutcome,
+        backblazeB2: b2Outcome,
       },
     };
 
@@ -536,7 +692,7 @@ export const backupDatabase = async (req, res) => {
       });
     }
 
-    const successNames = [infiniOutcome, vercelOutcome]
+    const successNames = allOutcomes
       .filter(o => o.status === 'success')
       .map(o => o.provider)
       .join(' and ');

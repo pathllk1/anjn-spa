@@ -62,11 +62,11 @@ export function initStocksSystem() {
             if (contentContainer) {
                 contentContainer.innerHTML = `
                     <div class="text-center py-12 bg-white rounded-lg border border-red-200">
-                        <i class="fas fa-exclamation-triangle text-6xl text-red-300 mb-4"></i>
+                        <svg class="w-16 h-16 text-red-300 mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
                         <h3 class="text-xl font-semibold text-red-700 mb-2">Failed to Load Stocks</h3>
                         <p class="text-red-600 mb-4">${error.message}</p>
                         <button id="stocks-retry-button" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                            <i class="fas fa-redo mr-2"></i>Try Again
+                            <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>Try Again
                         </button>
                     </div>
                 `;
@@ -93,13 +93,13 @@ export function initStocksSystem() {
                     </div>
                     <div class="flex gap-3">
                         <button id="toggle-view-btn" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                            <i class="fas fa-th-large mr-2"></i>Toggle View
+                            <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>Toggle View
                         </button>
                         <button id="add-stock-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                            <i class="fas fa-plus mr-2"></i>Add Stock
+                            <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>Add Stock
                         </button>
                         <button id="export-excel-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                            <i class="fas fa-file-excel mr-2"></i>Export to Excel
+                            <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>Export to Excel
                         </button>
                     </div>
                 </div>
@@ -115,7 +115,7 @@ export function initStocksSystem() {
                         <div class="relative">
                             <input type="text" id="search-input" placeholder="Search stocks..." 
                                 class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                            <svg class="w-4 h-4 absolute left-3 top-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z" /></svg>
                         </div>
                     </div>
                     
@@ -148,7 +148,7 @@ export function initStocksSystem() {
                     </select>
                     
                     <button id="refresh-btn" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                        <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>Refresh
                     </button>
                 </div>
 
@@ -170,10 +170,10 @@ export function initStocksSystem() {
                     </div>
                     <div class="flex gap-2">
                         <button id="prev-page" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50">
-                            <i class="fas fa-chevron-left"></i> Previous
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg> Previous
                         </button>
                         <button id="next-page" class="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50">
-                            Next <i class="fas fa-chevron-right"></i>
+                            Next <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
                         </button>
                     </div>
                 </div>
@@ -382,7 +382,7 @@ export function initStocksSystem() {
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-3 bg-blue-100 rounded-lg">
-                        <i class="fas fa-boxes text-blue-600"></i>
+                        <svg class="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                     </div>
                     <div class="ml-4">
                         <p class="text-sm text-gray-600">Total Items</p>
@@ -393,7 +393,7 @@ export function initStocksSystem() {
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-3 bg-green-100 rounded-lg">
-                        <i class="fas fa-rupee-sign text-green-600"></i>
+                        <svg class="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 8.25H9m6 3H9m3 6l-3-3h1.5a3 3 0 100-6M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </div>
                     <div class="ml-4">
                         <p class="text-sm text-gray-600">Total Value</p>
@@ -404,7 +404,7 @@ export function initStocksSystem() {
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-3 bg-yellow-100 rounded-lg">
-                        <i class="fas fa-exclamation-triangle text-yellow-600"></i>
+                        <svg class="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
                     </div>
                     <div class="ml-4">
                         <p class="text-sm text-gray-600">Low Stock</p>
@@ -415,7 +415,7 @@ export function initStocksSystem() {
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <div class="flex items-center">
                     <div class="p-3 bg-purple-100 rounded-lg">
-                        <i class="fas fa-weight text-purple-600"></i>
+                        <svg class="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 4.608c.003.021.005.042.005.064 0 1.036-1.007 1.875-2.25 1.875S8.875 11.668 8.875 10.632c0-.022.002-.043.005-.064L11.5 4.97m5.25 0L18.75 4.97M5.25 4.97L3 9.978c-.003.021-.005.042-.005.064 0 1.036 1.007 1.875 2.25 1.875s2.25-.84 2.25-1.875c0-.022-.002-.043-.005-.064L5.25 4.97z" /></svg>
                     </div>
                     <div class="ml-4">
                         <p class="text-sm text-gray-600">Total Quantity</p>
