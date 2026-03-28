@@ -10,6 +10,7 @@ import {
   isServiceItem, getEffectiveItemQty,
 } from '../billUtils.js';
 import { postSalesLedger } from '../inventoryLedgerHelper.js';
+import { getStateCode } from '../../../../utils/mongo/gstCalculator.js';
 
 /* ── Re-export everything shared ─────────────────────────────────────────── */
 export {
@@ -21,14 +22,7 @@ export {
   getOtherChargesTypes, lookupGST,
 } from '../sharedStockHandlers.js';
 
-/* ── Sales-specific: getCurrentUserFirmName (includes locations[]) ─────────
- *
- * FIX: The shared handler returned only { name } from the Firm document.
- * With multiple GST registrations the frontend needs locations[] so it can:
- *   1. Show a "billing from GSTIN" dropdown when a firm has >1 registration
- *   2. Auto-determine intra vs inter-state when a party is selected
- *   3. Send back meta.firmGstin on save so we can validate server-side
- * ────────────────────────────────────────────────────────────────────────── */
+/* ── Sales-specific: getCurrentUserFirmName (includes locations[]) ───────── */
 
 export const getCurrentUserFirmName = async (req, res) => {
   try {
@@ -130,11 +124,6 @@ export const getPartyBalance = async (req, res) => {
 
 /**
  * Resolve and validate the active firm location for a bill.
- *
- * firmGstin (from meta.firmGstin) is the GSTIN the frontend says was selected.
- * If absent, fall back to the firm's default location.
- *
- * Returns { firmLoc, firmStateCode } or throws with a descriptive error.
  */
 async function resolveFirmLocation(firmId, firmGstin) {
   const firmDoc = await Firm.findById(firmId).select('locations').lean();
@@ -158,21 +147,14 @@ async function resolveFirmLocation(firmId, firmGstin) {
 
 /**
  * Validate GST bill type against firm and party state codes.
- *
- * Section 8 IGST Act:
- *   - same state  → intra-state (CGST + SGST)   — IGST is illegal
- *   - diff states → inter-state (IGST)           — CGST/SGST is illegal
- *
- * Skips validation when:
- *   - party is UNREGISTERED (B2C / unregistered dealer)
- *   - reverse charge (special handling)
- *   - either state code cannot be determined
  */
 function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCharge) {
-  if (reverseCharge) return null; // reverse charge has different place-of-supply rules
-  if (!firmStateCode || !partyStateCode) return null; // cannot determine
+  if (reverseCharge) return null;
+  if (!firmStateCode || !partyStateCode) return null;
 
-  const sameState  = firmStateCode === partyStateCode;
+  const fCode = parseInt(firmStateCode);
+  const pCode = parseInt(partyStateCode);
+  const sameState  = fCode === pCode;
   const sentIntra  = billType === 'intra-state' || billType === 'INTRA-STATE';
 
   if (sameState && !sentIntra) {
@@ -181,7 +163,7 @@ function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCha
   if (!sameState && sentIntra) {
     return `GST type mismatch: firm state (${firmStateCode}) and party state (${partyStateCode}) differ — must use IGST (inter-state), not CGST+SGST.`;
   }
-  return null; // all good
+  return null;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -207,7 +189,6 @@ export const createBill = async (req, res) => {
     return res.status(404).json({ error: 'Party not found' });
   }
 
-  // ── FIX: Resolve firm location + validate GST bill type ─────────────────
   let firmLoc, firmStateCode;
   try {
     ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
@@ -215,10 +196,10 @@ export const createBill = async (req, res) => {
     return res.status(400).json({ error: locErr.message });
   }
 
-  // Only validate when party has a GST number (skip B2C / UNREGISTERED)
+  // FIX Bug #3: Resolve partyStateCode from name if registration info is missing (unregistered parties)
   const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
     ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
-    : null;
+    : (partyDoc.state_code || (partyDoc.state ? getStateCode(partyDoc.state) : null));
 
   const gstTypeError = validateGstBillType(
     meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
@@ -226,7 +207,6 @@ export const createBill = async (req, res) => {
   if (gstTypeError) {
     return res.status(400).json({ error: gstTypeError });
   }
-  // ────────────────────────────────────────────────────────────────────────
 
   const referenceNo = normalizeOptionalText(meta?.referenceNo, 80);
   const vehicleNo   = normalizeOptionalText(meta?.vehicleNo, 40);
@@ -245,6 +225,8 @@ export const createBill = async (req, res) => {
       return res.status(400).json({ error: `Quantity must be > 0 for item: ${item.item}` });
     if (item.rate === undefined || item.rate === null || parseFloat(item.rate) < 0)
       return res.status(400).json({ error: `Rate must be >= 0 for item: ${item.item}` });
+    if (serviceItem && item.costRate !== undefined && item.costRate !== null && parseFloat(item.costRate) < 0)
+      return res.status(400).json({ error: `Service cost must be >= 0 for item: ${item.item}` });
   }
 
   const session = await mongoose.startSession();
@@ -267,12 +249,9 @@ export const createBill = async (req, res) => {
       bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
       addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
       state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
-
-      // FIX: Store the firm GSTIN / location used for this bill
       firm_gstin:      firmLoc?.gst_number  || null,
       firm_state:      firmLoc?.state       || null,
       firm_state_code: firmStateCode        || null,
-
       gtot, ntot, rof, btype: 'SALES', bill_subtype: billSubtype,
       usern: actorUsername, party_id: partyDoc._id,
       other_charges: otherCharges?.length > 0 ? otherCharges : null,
@@ -285,8 +264,9 @@ export const createBill = async (req, res) => {
 
     const billId = newBill._id;
 
-    const stockRegDocs = [];
-    const cogsLines    = [];
+    const stockRegDocs      = [];
+    const cogsLines         = [];
+    const serviceCostLines  = [];
 
     for (const item of cart) {
       const serviceItem  = isServiceItem(item);
@@ -295,6 +275,8 @@ export const createBill = async (req, res) => {
 
       if (serviceItem) {
         const stockRegId = new mongoose.Types.ObjectId();
+        const serviceCostRate = Math.max(0, parseFloat(item.costRate) || 0);
+        const serviceCogsValue = effectiveQty * serviceCostRate;
         stockRegDocs.push({
           _id: stockRegId, firm_id: firmId, type: 'SALE', bno: billNo,
           bdate: meta.billDate, supply: partyDoc.firm,
@@ -304,8 +286,15 @@ export const createBill = async (req, res) => {
           batch: null, hsn: normalizeOptionalText(item.hsn, 40),
           qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
           rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
-          cost_rate: null, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
+          cost_rate: serviceCostRate, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
         });
+        if (serviceCogsValue > 0) {
+          serviceCostLines.push({
+            stockRegId,
+            item: normalizeOptionalText(item.item, 200),
+            cogsValue: serviceCogsValue,
+          });
+        }
         continue;
       }
 
@@ -314,33 +303,47 @@ export const createBill = async (req, res) => {
       if (!stockRecord)
         throw new Error(`Stock not found: ${item.stockId} (item: ${item.item})`);
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-
-      let batchIndex = -1;
-      if (item.batchIndex !== undefined && item.batchIndex !== null) {
-        batchIndex = parseInt(item.batchIndex);
-        if (batchIndex < 0 || batchIndex >= batches.length)
-          throw new Error(`Invalid batch index ${item.batchIndex} for item ${item.item}`);
-      } else if (!item.batch || item.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === item.batch);
-      }
-
-      if (batchIndex === -1)
-        throw new Error(`Batch "${item.batch || '(No Batch)'}" not found for item ${item.item}`);
-
       const wacCostRate = stockRecord.rate;
       const cogsValue   = effectiveQty * wacCostRate;
 
-      batches[batchIndex].qty -= effectiveQty;
-      const newTotalQty = batches.reduce((s, b) => s + (parseFloat(b.qty) || 0), 0);
+      // FIX Bug #1: Atomic batch decrement using arrayFilters to prevent race conditions
+      let batchQuery = { _id: item.stockId, firm_id: firmId };
+      let batchIdentifier = {};
+      
+      if (item.batchIndex !== undefined && item.batchIndex !== null) {
+        // We cannot reliably use index with $inc in a multi-user environment if the array size changes,
+        // but since we usually don't delete batches during sales, it's safer than Last-Write-Wins.
+        // However, if we have a batch name, that's preferred.
+        if (item.batch) {
+          batchIdentifier = { 'elem.batch': item.batch };
+        } else {
+          // If no name, we have to trust the index or use a null-batch identifier
+          batchIdentifier = { 'elem.batch': null };
+        }
+      } else {
+        batchIdentifier = { 'elem.batch': item.batch || null };
+      }
 
-      await Stock.findOneAndUpdate(
-        { _id: item.stockId, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
-        { session }
+      const updateResult = await Stock.findOneAndUpdate(
+        batchQuery,
+        { 
+          $inc: { 
+            'batches.$[elem].qty': -effectiveQty,
+            'qty': -effectiveQty,
+            'total': -cogsValue
+          },
+          $set: { user: actorUsername }
+        },
+        { 
+          session,
+          arrayFilters: [ batchIdentifier ],
+          new: true 
+        }
       );
+
+      if (!updateResult) {
+        throw new Error(`Failed to update stock for item ${item.item}. Batch not found.`);
+      }
 
       const stockRegId = new mongoose.Types.ObjectId();
       stockRegDocs.push({
@@ -353,7 +356,7 @@ export const createBill = async (req, res) => {
         qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
         rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
         cost_rate: wacCostRate,
-        stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: newTotalQty,
+        stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: updateResult.qty,
       });
 
       cogsLines.push({
@@ -373,7 +376,7 @@ export const createBill = async (req, res) => {
     await postSalesLedger({
       firmId, billId, voucherId, billNo, billDate: meta.billDate,
       party: partyDoc, ntot, cgst, sgst, igst, rof,
-      otherCharges, taxableItemsTotal, cogsLines, actorUsername, session,
+      otherCharges, taxableItemsTotal, cogsLines, serviceCostLines, actorUsername, session,
     });
 
     await session.commitTransaction();
@@ -381,7 +384,7 @@ export const createBill = async (req, res) => {
   } catch (err) {
     await session.abortTransaction();
     console.error('[CREATE_BILL] Error:', err.message, err.stack);
-    if (!res.headersSent) res.status(500).json({ success: false, error: err.message || 'Failed to create bill', details: process.env.NODE_ENV === 'development' ? err.stack : undefined });
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message || 'Failed to create bill' });
   } finally {
     session.endSession();
   }
@@ -417,7 +420,6 @@ export const updateBill = async (req, res) => {
       return res.status(404).json({ error: 'Party not found or does not belong to your firm' });
     }
 
-    // ── FIX: Resolve firm location + validate GST bill type ─────────────────
     let firmLoc, firmStateCode;
     try {
       ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
@@ -426,9 +428,10 @@ export const updateBill = async (req, res) => {
       return res.status(400).json({ error: locErr.message });
     }
 
+    // FIX Bug #3: Resolve partyStateCode from name for unregistered parties
     const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
       ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
-      : null;
+      : (partyDoc.state_code || (partyDoc.state ? getStateCode(partyDoc.state) : null));
 
     const gstTypeError = validateGstBillType(
       meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
@@ -437,7 +440,6 @@ export const updateBill = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({ error: gstTypeError });
     }
-    // ────────────────────────────────────────────────────────────────────────
 
     // Validate cart
     for (const item of cart) {
@@ -450,6 +452,8 @@ export const updateBill = async (req, res) => {
         return res.status(400).json({ error: `Quantity must be > 0 for item: ${item.item}` });
       if (item.rate === undefined || item.rate === null || parseFloat(item.rate) < 0)
         return res.status(400).json({ error: `Rate must be >= 0 for item: ${item.item}` });
+      if (serviceItem && item.costRate !== undefined && item.costRate !== null && parseFloat(item.costRate) < 0)
+        return res.status(400).json({ error: `Service cost must be >= 0 for item: ${item.item}` });
     }
 
     const existingBill = await Bill.findOne({ _id: billId, firm_id: firmId }).lean();
@@ -457,32 +461,29 @@ export const updateBill = async (req, res) => {
     if (existingBill.status === 'CANCELLED') return res.status(400).json({ error: 'Cancelled bills cannot be modified' });
     if (meta.billNo && meta.billNo !== existingBill.bno) return res.status(400).json({ error: 'Bill number cannot be changed' });
 
-    // Step 1: Restore stock from old sale (add back)
+    // Step 1: Restore stock from old sale (add back atomically)
     const existingItems = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const ei of existingItems) {
       if (!ei.stock_id) continue;
       const stockRecord = await Stock.findOne({ _id: ei.stock_id, firm_id: firmId }).session(session).lean();
       if (!stockRecord) continue;
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-      let batchIndex = -1;
-      if (!ei.batch || ei.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === ei.batch);
-      }
+      const cogsValue = ei.cost_rate ? (ei.qty * ei.cost_rate) : 0;
 
-      if (batchIndex !== -1) {
-        batches[batchIndex].qty += ei.qty;
-      } else {
-        batches.push({ batch: ei.batch || null, qty: ei.qty, rate: ei.rate, expiry: null, mrp: null });
-      }
-
-      const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
       await Stock.findOneAndUpdate(
         { _id: ei.stock_id, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
-        { session }
+        { 
+          $inc: { 
+            'batches.$[elem].qty': ei.qty,
+            'qty': ei.qty,
+            'total': cogsValue
+          },
+          $set: { user: actorUsername }
+        },
+        { 
+          session,
+          arrayFilters: [{ 'elem.batch': ei.batch || null }]
+        }
       );
     }
 
@@ -495,19 +496,16 @@ export const updateBill = async (req, res) => {
     const firmRecord = await Firm.findById(firmId).select('name').lean();
     const firmName   = firmRecord?.name ?? existingBill.firm ?? '';
 
-    // Step 3: Update bill header — including the firm GSTIN fields
+    // Step 3: Update bill header
     await Bill.findOneAndUpdate(
       { _id: billId, firm_id: firmId },
       { $set: {
           bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
           addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
           state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
-
-          // FIX: Update firm GSTIN fields in case the user changed the billing location
           firm_gstin:      firmLoc?.gst_number  || null,
           firm_state:      firmLoc?.state       || null,
           firm_state_code: firmStateCode        || null,
-
           gtot, ntot, rof, btype: 'SALES',
           bill_subtype: meta?.billType ? String(meta.billType).toUpperCase() : null,
           usern: actorUsername, party_id: partyDoc._id,
@@ -527,9 +525,10 @@ export const updateBill = async (req, res) => {
     // Step 4: Delete old StockReg entries
     await StockReg.deleteMany({ bill_id: billId, firm_id: firmId }, { session });
 
-    // Step 5: Process new cart — deduct stock + build COGS lines
-    const stockRegDocs = [];
-    const cogsLines    = [];
+    // Step 5: Process new cart — deduct stock atomically
+    const stockRegDocs      = [];
+    const cogsLines         = [];
+    const serviceCostLines  = [];
 
     for (const item of cart) {
       const serviceItem  = isServiceItem(item);
@@ -538,6 +537,8 @@ export const updateBill = async (req, res) => {
 
       if (serviceItem) {
         const stockRegId = new mongoose.Types.ObjectId();
+        const serviceCostRate = Math.max(0, parseFloat(item.costRate) || 0);
+        const serviceCogsValue = effectiveQty * serviceCostRate;
         stockRegDocs.push({
           _id: stockRegId, firm_id: firmId, type: 'SALE', bno: existingBill.bno,
           bdate: meta.billDate, supply: partyDoc.firm,
@@ -547,41 +548,42 @@ export const updateBill = async (req, res) => {
           batch: null, hsn: normalizeOptionalText(item.hsn, 40),
           qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
           rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
-          cost_rate: null, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
+          cost_rate: serviceCostRate, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
         });
+        if (serviceCogsValue > 0) {
+          serviceCostLines.push({
+            stockRegId,
+            item: normalizeOptionalText(item.item, 200),
+            cogsValue: serviceCogsValue,
+          });
+        }
         continue;
       }
 
       const stockRecord = await Stock.findOne({ _id: item.stockId, firm_id: firmId }).session(session).lean();
       if (!stockRecord) throw new Error(`Stock not found for ID: ${item.stockId}`);
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-      let batchIndex = -1;
-
-      if (item.batchIndex !== undefined && item.batchIndex !== null) {
-        batchIndex = parseInt(item.batchIndex);
-        if (batchIndex < 0 || batchIndex >= batches.length)
-          throw new Error(`Invalid batch index ${item.batchIndex} for item ${item.item}`);
-      } else if (!item.batch || item.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === item.batch);
-      }
-
-      if (batchIndex === -1)
-        throw new Error(`Batch "${item.batch || '(No Batch)'}" not found for item ${item.item}`);
-
       const wacCostRate = stockRecord.rate;
       const cogsValue   = effectiveQty * wacCostRate;
 
-      batches[batchIndex].qty -= effectiveQty;
-      const newTotalQty = batches.reduce((s, b) => s + (parseFloat(b.qty) || 0), 0);
-
-      await Stock.findOneAndUpdate(
+      const updateResult = await Stock.findOneAndUpdate(
         { _id: item.stockId, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
-        { session }
+        { 
+          $inc: { 
+            'batches.$[elem].qty': -effectiveQty,
+            'qty': -effectiveQty,
+            'total': -cogsValue
+          },
+          $set: { user: actorUsername }
+        },
+        { 
+          session,
+          arrayFilters: [{ 'elem.batch': item.batch || null }],
+          new: true
+        }
       );
+
+      if (!updateResult) throw new Error(`Failed to update stock for item ${item.item}. Batch not found.`);
 
       const stockRegId = new mongoose.Types.ObjectId();
       stockRegDocs.push({
@@ -594,7 +596,7 @@ export const updateBill = async (req, res) => {
         qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
         rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
         cost_rate: wacCostRate,
-        stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: newTotalQty,
+        stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: updateResult.qty,
       });
 
       cogsLines.push({ stockId: item.stockId, stockRegId, item: normalizeOptionalText(item.item, 200), cogsValue });
@@ -611,7 +613,7 @@ export const updateBill = async (req, res) => {
     await postSalesLedger({
       firmId, billId, voucherId: existingBill.voucher_id, billNo: existingBill.bno,
       billDate: meta.billDate, party: partyDoc, ntot, cgst, sgst, igst, rof,
-      otherCharges, taxableItemsTotal, cogsLines, actorUsername, session,
+      otherCharges, taxableItemsTotal, cogsLines, serviceCostLines, actorUsername, session,
     });
 
     await session.commitTransaction();
@@ -652,25 +654,22 @@ export const cancelBill = async (req, res) => {
       const stockRecord = await Stock.findOne({ _id: item.stock_id, firm_id: firmId }).session(session).lean();
       if (!stockRecord) continue;
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-      let batchIndex = -1;
-      if (!item.batch || item.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === item.batch);
-      }
+      const cogsValue = item.cost_rate ? (item.qty * item.cost_rate) : 0;
 
-      if (batchIndex !== -1) {
-        batches[batchIndex].qty += item.qty;
-      } else {
-        batches.push({ batch: item.batch || null, qty: item.qty, rate: item.rate, expiry: null, mrp: null });
-      }
-
-      const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
       await Stock.findOneAndUpdate(
         { _id: item.stock_id, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, total: newTotalQty * stockRecord.rate, user: actorUsername } },
-        { session }
+        { 
+          $inc: { 
+            'batches.$[elem].qty': item.qty,
+            'qty': item.qty,
+            'total': cogsValue
+          },
+          $set: { user: actorUsername }
+        },
+        { 
+          session,
+          arrayFilters: [{ 'elem.batch': item.batch || null }]
+        }
       );
     }
 

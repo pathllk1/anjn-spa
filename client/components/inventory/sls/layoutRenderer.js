@@ -5,7 +5,7 @@
 
 // FIX: Removed unused import `getHistoryCacheKey`
 // FIX: Static import instead of dynamic `await import('./utils.js')` inside renderPartyCard
-import { formatCurrency, getPartyId, escHtml, populateConsigneeFromBillTo, getItemEffectiveQty, getItemDisplayQty, getItemLineTotal, isServiceItem, shouldShowItemQty } from './utils.js';
+import { formatCurrency, getPartyId, escHtml, populateConsigneeFromBillTo, getItemEffectiveQty, getItemDisplayQty, getItemLineTotal, isServiceItem, shouldShowItemQty, calculateBillTotals } from './utils.js';
 import { renderOtherChargesList } from './otherChargesManager.js';
 
 export function renderItemsList(state) {
@@ -99,47 +99,32 @@ export function renderItemsList(state) {
                        placeholder="Add narration for this item">${escHtml(item.narration || '')}</textarea>
             </div>
         </div>`;
+    }).map((rowHtml, index) => {
+        const item = state.cart[index];
+        if (!isServiceItem(item)) return rowHtml;
+        return `${rowHtml}
+        <div class="flex items-center border-b border-gray-100 text-xs text-gray-700 group bg-white pl-20 pr-2 py-1">
+            <div class="flex-1 text-[10px] text-gray-500 uppercase tracking-wide">Service Cost</div>
+            <div class="w-36 p-1 border-l border-transparent group-hover:border-blue-100">
+                <input type="number" min="0" step="0.01" data-idx="${index}" data-field="costRate"
+                       value="${Number(item.costRate || 0)}"
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-amber-700 font-semibold"
+                       placeholder="0.00">
+            </div>
+            <div class="flex-1 text-[10px] text-gray-400 pl-3">Optional per-unit cost for service COGS posting</div>
+        </div>`;
     }).join('');
 }
 
 export function renderTotals(state) {
     const gstEnabled = state.gstEnabled !== undefined ? state.gstEnabled : true;
-
-        let totalTaxable   = 0;
-    let totalTaxAmount = 0;
-
-    state.cart.forEach(item => {
-        const lineValue = getItemLineTotal(item);
-        if (gstEnabled) totalTaxAmount += lineValue * (item.grate / 100);
-        totalTaxable += lineValue;
+    const totals = calculateBillTotals({
+        cart: state.cart,
+        otherCharges: state.otherCharges,
+        gstEnabled,
+        billType: state.meta.billType,
+        reverseCharge: state.meta.reverseCharge,
     });
-
-    let cgstAmount = 0, sgstAmount = 0, igstAmount = 0;
-    if (gstEnabled && state.meta.billType === 'intra-state') {
-        cgstAmount = totalTaxAmount / 2;
-        sgstAmount = totalTaxAmount / 2;
-    } else if (gstEnabled) {
-        igstAmount = totalTaxAmount;
-    }
-
-    let otherChargesGstTotal  = 0;
-    let otherChargesSubtotal  = 0;
-    state.otherCharges.forEach(charge => {
-        const amt = parseFloat(charge.amount) || 0;
-        otherChargesSubtotal += amt;
-        if (gstEnabled) otherChargesGstTotal += (amt * (parseFloat(charge.gstRate) || 0)) / 100;
-    });
-
-    let finalCgst = gstEnabled && state.meta.billType === 'intra-state' ? cgstAmount + (otherChargesGstTotal / 2) : 0;
-    let finalSgst = gstEnabled && state.meta.billType === 'intra-state' ? sgstAmount + (otherChargesGstTotal / 2) : 0;
-    let finalIgst = gstEnabled && state.meta.billType !== 'intra-state' ? igstAmount + otherChargesGstTotal : 0;
-
-    if (state.meta.reverseCharge && gstEnabled) { finalCgst = 0; finalSgst = 0; finalIgst = 0; }
-
-    const grandTotal = totalTaxable
-        + (gstEnabled && !state.meta.reverseCharge ? totalTaxAmount    : 0)
-        + otherChargesSubtotal
-        + (gstEnabled && !state.meta.reverseCharge ? otherChargesGstTotal : 0);
 
     const totalQty = state.cart.reduce((sum, item) => {
         if (!shouldShowItemQty(item)) return sum;
@@ -164,17 +149,19 @@ export function renderTotals(state) {
                     ? `<div>CGST Output</div><div>SGST Output</div>`
                     : `<div>IGST Output</div>`}
                 ${state.otherCharges.length > 0 ? `<div>Other Charges</div>` : ''}
+                <div>Round Off</div>
                 <div class="pt-2 mt-2 border-t border-gray-200 font-bold text-gray-700">Grand Total</div>
             </div>
             <div class="text-right space-y-1.5 font-mono font-bold text-gray-800">
-                <div class="tabular-nums">${formatCurrency(totalTaxable)}</div>
+                <div class="tabular-nums">${formatCurrency(totals.itemTaxableTotal)}</div>
                 ${state.meta.billType === 'intra-state'
-                    ? `<div class="text-gray-600 tabular-nums">${formatCurrency(finalCgst)}</div><div class="text-gray-600 tabular-nums">${formatCurrency(finalSgst)}</div>`
-                    : `<div class="text-gray-600 tabular-nums">${formatCurrency(finalIgst)}</div>`}
+                    ? `<div class="text-gray-600 tabular-nums">${formatCurrency(totals.cgst)}</div><div class="text-gray-600 tabular-nums">${formatCurrency(totals.sgst)}</div>`
+                    : `<div class="text-gray-600 tabular-nums">${formatCurrency(totals.igst)}</div>`}
                 ${state.otherCharges.length > 0
-                    ? `<div class="text-gray-600 tabular-nums">${formatCurrency(otherChargesSubtotal)}</div>` : ''}
+                    ? `<div class="text-gray-600 tabular-nums">${formatCurrency(totals.otherChargesTotal)}</div>` : ''}
+                <div class="text-gray-600 tabular-nums">${formatCurrency(totals.rof)}</div>
                 <div class="pt-2 mt-2 border-t border-gray-200 font-bold text-lg text-blue-700 leading-none tabular-nums">
-                    ${formatCurrency(grandTotal)}
+                    ${formatCurrency(totals.ntot)}
                 </div>
             </div>
         </div>

@@ -90,6 +90,11 @@ export function getEffectiveItemQty(item) {
 
 /* ── WAC (Weighted Average Cost) ──────────────────────────────────────────── */
 
+function roundInventoryRate(value, precision = 6) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(precision));
+}
+
 /**
  * Compute WAC after ADDING stock (purchase).
  *
@@ -104,7 +109,7 @@ export function computeWAC(existingTotal, existingQty, purchasedQty, lineValue) 
   const newQty   = existingQty + purchasedQty;
   const newTotal = safeExistingTotal + lineValue;
   const blendedRate = newQty > 0 ? newTotal / newQty : (purchasedQty > 0 ? lineValue / purchasedQty : 0);
-  return { blendedRate, newTotal, newQty };
+  return { blendedRate: roundInventoryRate(blendedRate), newTotal, newQty };
 }
 
 /**
@@ -124,7 +129,7 @@ export function reverseWAC(existingTotal, existingQty, removedQty, costValue) {
   const newRate  = newQty > 0
     ? newTotal / newQty
     : (existingQty > 0 ? (existingTotal ?? 0) / existingQty : 0);
-  return { newRate, newTotal, newQty };
+  return { newRate: roundInventoryRate(newRate), newTotal, newQty };
 }
 
 /* ── Bill / voucher number generation ─────────────────────────────────────── */

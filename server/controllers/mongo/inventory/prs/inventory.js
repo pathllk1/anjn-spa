@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { createHash } from 'crypto';
 import path from 'path';
 import axios from 'axios';
-import { put as blobPut } from '@vercel/blob';
+import { put as blobPut, del as blobDel } from '@vercel/blob';
 import {
   Stock, Party, Bill, StockReg, Ledger, Firm,
 } from '../../../../models/index.js';
@@ -11,9 +11,9 @@ import {
   normalizeOptionalText, normalizeOptionalMultilineText, escapeRegex,
   getNextBillNumber, previewNextBillNumber, getNextVoucherNumber,
   isGstEnabled, ensureUniqueSupplierBillNo, calcBillTotals,
-  computeWAC, reverseWAC,
 } from '../billUtils.js';
 import { postPurchaseLedger } from '../inventoryLedgerHelper.js';
+import { getStateCode } from '../../../../utils/mongo/gstCalculator.js';
 
 /* ── Re-export everything shared ─────────────────────────────────────────── */
 export {
@@ -155,7 +155,9 @@ function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCha
   if (reverseCharge) return null;
   if (!firmStateCode || !partyStateCode) return null;
 
-  const sameState = firmStateCode === partyStateCode;
+  const fCode = parseInt(firmStateCode, 10);
+  const pCode = parseInt(partyStateCode, 10);
+  const sameState = fCode === pCode;
   const sentIntra = billType === 'intra-state' || billType === 'INTRA-STATE';
 
   if (sameState && !sentIntra) {
@@ -165,6 +167,288 @@ function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCha
     return `GST type mismatch: firm state (${firmStateCode}) and supplier state (${partyStateCode}) differ — must use IGST (inter-state), not CGST+SGST.`;
   }
   return null;
+}
+
+function normalizeBatchValue(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return String(value);
+}
+
+function toNullableNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildBatchDocument(item, qty) {
+  return {
+    batch:  normalizeBatchValue(item.batch),
+    qty,
+    uom:    normalizeOptionalText(item.uom, 20) || 'PCS',
+    rate:   parseFloat(item.rate) || 0,
+    grate:  parseFloat(item.grate) || 0,
+    expiry: item.expiry || null,
+    mrp:    toNullableNumber(item.mrp),
+  };
+}
+
+function buildAtomicPurchaseAddPipeline({ item, requestedQty, lineValue, actorUsername }) {
+  const normalizedBatch = normalizeBatchValue(item.batch);
+  const newBatchDoc = buildBatchDocument(item, requestedQty);
+  const lineRate = parseFloat(item.rate) || 0;
+
+  return [
+    {
+      $set: {
+        batches: {
+          $let: {
+            vars: { existingBatches: { $ifNull: ['$batches', []] } },
+            in: {
+              $cond: [
+                {
+                  $in: [
+                    normalizedBatch,
+                    {
+                      $map: {
+                        input: '$$existingBatches',
+                        as: 'b',
+                        in: { $ifNull: ['$$b.batch', null] },
+                      },
+                    },
+                  ],
+                },
+                {
+                  $map: {
+                    input: '$$existingBatches',
+                    as: 'b',
+                    in: {
+                      $cond: [
+                        { $eq: [{ $ifNull: ['$$b.batch', null] }, normalizedBatch] },
+                        {
+                          $mergeObjects: [
+                            '$$b',
+                            {
+                              qty: { $add: [{ $ifNull: ['$$b.qty', 0] }, requestedQty] },
+                              uom: newBatchDoc.uom,
+                              rate: newBatchDoc.rate,
+                              grate: newBatchDoc.grate,
+                              expiry: newBatchDoc.expiry,
+                              mrp: newBatchDoc.mrp,
+                            },
+                          ],
+                        },
+                        '$$b',
+                      ],
+                    },
+                  },
+                },
+                { $concatArrays: ['$$existingBatches', [newBatchDoc]] },
+              ],
+            },
+          },
+        },
+        qty: { $add: [{ $ifNull: ['$qty', 0] }, requestedQty] },
+        total: {
+          $add: [
+            { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+            lineValue,
+          ],
+        },
+        rate: {
+          $let: {
+            vars: {
+              nextQty: { $add: [{ $ifNull: ['$qty', 0] }, requestedQty] },
+              nextTotal: {
+                $add: [
+                  { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+                  lineValue,
+                ],
+              },
+            },
+            in: {
+              $cond: [
+                { $gt: ['$$nextQty', 0] },
+                { $round: [{ $divide: ['$$nextTotal', '$$nextQty'] }, 6] },
+                lineRate,
+              ],
+            },
+          },
+        },
+        user: actorUsername,
+      },
+    },
+  ];
+}
+
+function buildAtomicPurchaseReversePipeline({ batch, removedQty, costValue, actorUsername }) {
+  const normalizedBatch = normalizeBatchValue(batch);
+
+  return [
+    {
+      $set: {
+        batches: {
+          $map: {
+            input: { $ifNull: ['$batches', []] },
+            as: 'b',
+            in: {
+              $cond: [
+                { $eq: [{ $ifNull: ['$$b.batch', null] }, normalizedBatch] },
+                {
+                  $mergeObjects: [
+                    '$$b',
+                    { qty: { $max: [0, { $subtract: [{ $ifNull: ['$$b.qty', 0] }, removedQty] }] } },
+                  ],
+                },
+                '$$b',
+              ],
+            },
+          },
+        },
+        qty: { $max: [0, { $subtract: [{ $ifNull: ['$qty', 0] }, removedQty] }] },
+        total: {
+          $max: [
+            0,
+            {
+              $subtract: [
+                { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+                costValue,
+              ],
+            },
+          ],
+        },
+        rate: {
+          $let: {
+            vars: {
+              nextQty: { $max: [0, { $subtract: [{ $ifNull: ['$qty', 0] }, removedQty] }] },
+              nextTotal: {
+                $max: [
+                  0,
+                  {
+                    $subtract: [
+                      { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+                      costValue,
+                    ],
+                  },
+                ],
+              },
+            },
+            in: {
+              $cond: [
+                { $gt: ['$$nextQty', 0] },
+                { $round: [{ $divide: ['$$nextTotal', '$$nextQty'] }, 6] },
+                { $ifNull: ['$rate', 0] },
+              ],
+            },
+          },
+        },
+        user: actorUsername,
+      },
+    },
+  ];
+}
+
+function resolveConsigneeStateCode(consignee = {}) {
+  const explicit = normalizeOptionalText(consignee.stateCode, 2);
+  const gstin = normalizeOptionalText(consignee.gstin, 15);
+  const stateName = normalizeOptionalText(consignee.state, 80);
+
+  const derivedFromGstin = gstin && gstin !== 'UNREGISTERED' && /^\d{2}/.test(gstin)
+    ? gstin.substring(0, 2)
+    : null;
+  const derivedFromState = stateName ? getStateCode(stateName) : null;
+  const normalizedExplicit = explicit && /^\d{2}$/.test(explicit) ? explicit : null;
+
+  const resolved = derivedFromGstin || derivedFromState || normalizedExplicit || null;
+
+  if (normalizedExplicit && resolved && normalizedExplicit !== resolved) {
+    throw new Error(
+      `Consignee state code mismatch: provided ${normalizedExplicit} does not match consignee GST/state (${resolved}).`
+    );
+  }
+
+  return resolved;
+}
+
+function extractB2ObjectName(fileUrl) {
+  if (!fileUrl) return null;
+
+  try {
+    const url = new URL(fileUrl);
+    const segments = url.pathname.split('/').filter(Boolean);
+    const fileIndex = segments.indexOf('file');
+    if (fileIndex === -1 || segments.length <= fileIndex + 2) return null;
+
+    return decodeURIComponent(segments.slice(fileIndex + 2).join('/'));
+  } catch {
+    return null;
+  }
+}
+
+async function deleteFromBackblazeB2(fileUrl) {
+  const keyId = String(process.env.B2_APPLICATION_KEY_ID || '').trim();
+  const appKey = String(process.env.B2_APPLICATION_KEY || '').trim();
+  const bucketId = String(process.env.B2_BUCKET_ID || '').trim();
+  const targetName = extractB2ObjectName(fileUrl);
+
+  if (!keyId || !appKey || !bucketId || !targetName) return false;
+
+  const authResp = await axios.get('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+    headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${appKey}`).toString('base64')}` },
+  });
+  const auth = authResp.data;
+
+  const listResp = await axios.post(`${auth.apiUrl}/b2api/v2/b2_list_file_versions`, {
+    bucketId,
+    prefix: targetName,
+    maxFileCount: 25,
+  }, {
+    headers: { Authorization: auth.authorizationToken },
+  });
+
+  const matches = (listResp.data?.files || []).filter(file => file.fileName === targetName);
+  if (!matches.length) return false;
+
+  for (const match of matches) {
+    await axios.post(`${auth.apiUrl}/b2api/v2/b2_delete_file_version`, {
+      fileName: match.fileName,
+      fileId: match.fileId,
+    }, {
+      headers: { Authorization: auth.authorizationToken },
+    });
+  }
+
+  return true;
+}
+
+async function deleteFromVercelBlob(fileUrl) {
+  const token = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
+  if (!token || !fileUrl) return false;
+
+  await blobDel(fileUrl, { token });
+  return true;
+}
+
+async function deleteCloudBillFile(fileUrl) {
+  if (!fileUrl) return false;
+
+  const errors = [];
+
+  if (fileUrl.includes('/file/')) {
+    try {
+      return await deleteFromBackblazeB2(fileUrl);
+    } catch (err) {
+      errors.push(err);
+    }
+  }
+
+  try {
+    return await deleteFromVercelBlob(fileUrl);
+  } catch (err) {
+    errors.push(err);
+  }
+
+  if (errors.length) throw errors[0];
+  return false;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -192,9 +476,16 @@ export const createBill = async (req, res) => {
     return res.status(400).json({ error: locErr.message });
   }
 
+  let consigneeStateCode = null;
+  try {
+    consigneeStateCode = resolveConsigneeStateCode(consignee || {});
+  } catch (consigneeErr) {
+    return res.status(400).json({ error: consigneeErr.message });
+  }
+
   const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
     ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
-    : null;
+    : (partyDoc.state_code || (partyDoc.state ? getStateCode(partyDoc.state) : null));
 
   const gstTypeError = validateGstBillType(
     meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
@@ -252,7 +543,7 @@ export const createBill = async (req, res) => {
       cgst, sgst, igst,
       consignee_name: consignee?.name || null, consignee_gstin: consignee?.gstin || null,
       consignee_address: consignee?.address || null, consignee_state: consignee?.state || null,
-      consignee_pin: consignee?.pin || null, consignee_state_code: consignee?.stateCode || null,
+      consignee_pin: consignee?.pin || null, consignee_state_code: consigneeStateCode,
     }], { session });
 
     const billId = newBill._id;
@@ -268,43 +559,12 @@ export const createBill = async (req, res) => {
         .session(session).lean();
       if (!stockRecord) throw new Error(`Stock not found: ${item.stockId} (item: ${item.item})`);
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-
-      let batchIndex = -1;
-      if (item.batchIndex !== undefined && item.batchIndex !== null) {
-        const bi = parseInt(item.batchIndex);
-        if (bi >= 0 && bi < batches.length) batchIndex = bi;
-      } else if (!item.batch || item.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === item.batch);
-      }
-
-      if (batchIndex !== -1) {
-        batches[batchIndex].qty += requestedQty;
-        if (item.rate   !== undefined) batches[batchIndex].rate   = parseFloat(item.rate);
-        if (item.mrp    != null)       batches[batchIndex].mrp    = parseFloat(item.mrp);
-        if (item.expiry !== undefined) batches[batchIndex].expiry = item.expiry;
-      } else {
-        batches.push({
-          batch: item.batch || null, qty: requestedQty,
-          rate: parseFloat(item.rate) || 0, expiry: item.expiry || null,
-          mrp: item.mrp != null ? parseFloat(item.mrp) : null,
-        });
-      }
-
-      const newTotalQty = batches.reduce((s, b) => s + (parseFloat(b.qty) || 0), 0);
-
-      const effectiveExistingTotal = stockRecord.total ?? (stockRecord.qty * stockRecord.rate);
-      const { blendedRate, newTotal } = computeWAC(
-        effectiveExistingTotal, stockRecord.qty, requestedQty, lineValue
-      );
-
-      await Stock.findOneAndUpdate(
+      const updatedStock = await Stock.findOneAndUpdate(
         { _id: item.stockId, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, rate: blendedRate, total: newTotal, user: actorUsername } },
-        { session }
+        buildAtomicPurchaseAddPipeline({ item, requestedQty, lineValue, actorUsername }),
+        { session, new: true }
       );
+      if (!updatedStock) throw new Error(`Failed to update stock for item ${item.item}`);
 
       const stockRegId = new mongoose.Types.ObjectId();
       stockRegDocs.push({
@@ -318,7 +578,7 @@ export const createBill = async (req, res) => {
         total:          lineValue,
         cost_rate:      parseFloat(item.rate),
         stock_id:       item.stockId, bill_id: billId,
-        user:           actorUsername, qtyh: newTotalQty,
+        user:           actorUsername, qtyh: updatedStock.qty,
       });
 
       purchasedItems.push({ stockId: item.stockId, stockRegId, item: item.item, lineValue });
@@ -381,9 +641,17 @@ export const updateBill = async (req, res) => {
       return res.status(400).json({ error: locErr.message });
     }
 
+    let consigneeStateCode = null;
+    try {
+      consigneeStateCode = resolveConsigneeStateCode(consignee || {});
+    } catch (consigneeErr) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: consigneeErr.message });
+    }
+
     const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
       ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
-      : null;
+      : (partyDoc.state_code || (partyDoc.state ? getStateCode(partyDoc.state) : null));
 
     const gstTypeError = validateGstBillType(
       meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
@@ -415,26 +683,10 @@ export const updateBill = async (req, res) => {
       const stockRecord = await Stock.findOne({ _id: ei.stock_id, firm_id: firmId }).session(session).lean();
       if (!stockRecord) continue;
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-      let batchIndex = -1;
-      if (!ei.batch || ei.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === ei.batch);
-      }
-      if (batchIndex !== -1) {
-        batches[batchIndex].qty = Math.max(0, batches[batchIndex].qty - ei.qty);
-      }
-
-      const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
       const costValue = ei.total || (ei.qty * (ei.cost_rate ?? ei.rate));
-      const { newRate, newTotal } = reverseWAC(
-        stockRecord.total ?? (stockRecord.qty * stockRecord.rate),
-        stockRecord.qty, ei.qty, costValue
-      );
       await Stock.findOneAndUpdate(
         { _id: ei.stock_id, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, rate: newRate, total: newTotal, user: actorUsername } },
+        buildAtomicPurchaseReversePipeline({ batch: ei.batch, removedQty: ei.qty, costValue, actorUsername }),
         { session }
       );
     }
@@ -466,7 +718,7 @@ export const updateBill = async (req, res) => {
           reverse_charge: Boolean(meta.reverseCharge), cgst, sgst, igst,
           consignee_name: consignee?.name || null, consignee_gstin: consignee?.gstin || null,
           consignee_address: consignee?.address || null, consignee_state: consignee?.state || null,
-          consignee_pin: consignee?.pin || null, consignee_state_code: consignee?.stateCode || null,
+          consignee_pin: consignee?.pin || null, consignee_state_code: consigneeStateCode,
       }},
       { session }
     );
@@ -483,36 +735,12 @@ export const updateBill = async (req, res) => {
       const stockRecord = await Stock.findOne({ _id: item.stockId, firm_id: firmId }).session(session).lean();
       if (!stockRecord) throw new Error(`Stock not found for ID: ${item.stockId}`);
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-      let batchIndex = -1;
-
-      if (item.batchIndex !== undefined && item.batchIndex !== null) {
-        const bi = parseInt(item.batchIndex);
-        if (bi >= 0 && bi < batches.length) batchIndex = bi;
-      } else if (!item.batch || item.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === item.batch);
-      }
-
-      if (batchIndex !== -1) {
-        batches[batchIndex].qty += requestedQty;
-        if (item.rate   !== undefined) batches[batchIndex].rate   = parseFloat(item.rate);
-        if (item.mrp    != null)       batches[batchIndex].mrp    = parseFloat(item.mrp);
-        if (item.expiry !== undefined) batches[batchIndex].expiry = item.expiry;
-      } else {
-        batches.push({ batch: item.batch || null, qty: requestedQty, rate: parseFloat(item.rate) || 0, expiry: item.expiry || null, mrp: item.mrp != null ? parseFloat(item.mrp) : null });
-      }
-
-      const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
-      const effectiveExistingTotal = stockRecord.total ?? (stockRecord.qty * stockRecord.rate);
-      const { blendedRate, newTotal } = computeWAC(effectiveExistingTotal, stockRecord.qty, requestedQty, lineValue);
-
-      await Stock.findOneAndUpdate(
+      const updatedStock = await Stock.findOneAndUpdate(
         { _id: item.stockId, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, rate: blendedRate, total: newTotal, user: actorUsername } },
-        { session }
+        buildAtomicPurchaseAddPipeline({ item, requestedQty, lineValue, actorUsername }),
+        { session, new: true }
       );
+      if (!updatedStock) throw new Error(`Failed to update stock for item ${item.item}`);
 
       const stockRegId = new mongoose.Types.ObjectId();
       stockRegDocs.push({
@@ -522,7 +750,7 @@ export const updateBill = async (req, res) => {
         batch: item.batch || null, hsn: item.hsn, qty: item.qty, uom: item.uom,
         rate: item.rate, grate: item.grate, disc: item.disc || 0,
         total: lineValue, cost_rate: parseFloat(item.rate),
-        stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: newTotalQty,
+        stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: updatedStock.qty,
       });
       purchasedItems.push({ stockId: item.stockId, stockRegId, item: item.item, lineValue });
     }
@@ -623,6 +851,7 @@ export const uploadBillFile = async (req, res) => {
         if (bill.status === 'CANCELLED') {
             return res.status(400).json({ success: false, error: 'Cannot attach files to cancelled bills' });
         }
+        const previousFileUrl = bill.file_url || null;
 
         // ── Cloud storage only (Vercel has no persistent fs) ─────────────────
         const userId   = req.user?.id || req.user?._id || 'unknown';
@@ -660,6 +889,12 @@ export const uploadBillFile = async (req, res) => {
             { $set: { file_url: fileUrl, file_uploaded_by: actorUsername } },
         );
 
+        if (previousFileUrl && previousFileUrl !== fileUrl) {
+            deleteCloudBillFile(previousFileUrl).catch((cleanupErr) => {
+                console.warn('[UPLOAD_BILL_FILE] Previous file cleanup failed:', cleanupErr.message);
+            });
+        }
+
         res.json({ success: true, fileUrl, message: 'File uploaded successfully' });
     } catch (err) {
         console.error('[UPLOAD_BILL_FILE] Error:', err.message);
@@ -684,6 +919,7 @@ export const cancelBill = async (req, res) => {
     const bill = await Bill.findOne({ _id: billId, firm_id: firmId }).lean();
     if (!bill) { await session.abortTransaction(); return res.status(404).json({ error: 'Bill not found' }); }
     if (bill.status === 'CANCELLED') { await session.abortTransaction(); return res.status(400).json({ error: 'Bill is already cancelled' }); }
+    const attachedFileUrl = bill.file_url || null;
 
     const items = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const item of items) {
@@ -691,26 +927,10 @@ export const cancelBill = async (req, res) => {
       const stockRecord = await Stock.findOne({ _id: item.stock_id, firm_id: firmId }).session(session).lean();
       if (!stockRecord) continue;
 
-      let batches = Array.isArray(stockRecord.batches) ? [...stockRecord.batches] : [];
-      let batchIndex = -1;
-      if (!item.batch || item.batch === '') {
-        batchIndex = batches.findIndex(b => !b.batch || b.batch === '');
-      } else {
-        batchIndex = batches.findIndex(b => b.batch === item.batch);
-      }
-      if (batchIndex !== -1) {
-        batches[batchIndex].qty = Math.max(0, batches[batchIndex].qty - item.qty);
-      }
-
-      const newTotalQty = batches.reduce((s, b) => s + b.qty, 0);
       const costValue   = item.total || (item.qty * (item.cost_rate ?? item.rate));
-      const { newRate, newTotal } = reverseWAC(
-        stockRecord.total ?? (stockRecord.qty * stockRecord.rate),
-        stockRecord.qty, item.qty, costValue
-      );
       await Stock.findOneAndUpdate(
         { _id: item.stock_id, firm_id: firmId },
-        { $set: { qty: newTotalQty, batches, rate: newRate, total: newTotal, user: actorUsername } },
+        buildAtomicPurchaseReversePipeline({ batch: item.batch, removedQty: item.qty, costValue, actorUsername }),
         { session }
       );
     }
@@ -719,11 +939,25 @@ export const cancelBill = async (req, res) => {
 
     await Bill.findOneAndUpdate(
       { _id: billId, firm_id: firmId },
-      { $set: { status: 'CANCELLED', cancellation_reason: reason || null, cancelled_at: new Date(), cancelled_by: req.user.id } },
+      { $set: {
+          status: 'CANCELLED',
+          cancellation_reason: reason || null,
+          cancelled_at: new Date(),
+          cancelled_by: req.user.id,
+          file_url: null,
+          file_uploaded_by: null,
+      } },
       { session }
     );
 
     await session.commitTransaction();
+
+    if (attachedFileUrl) {
+      deleteCloudBillFile(attachedFileUrl).catch((cleanupErr) => {
+        console.warn('[CANCEL_BILL] Attached file cleanup failed:', cleanupErr.message);
+      });
+    }
+
     res.json({ success: true, message: 'Bill cancelled successfully' });
   } catch (err) {
     await session.abortTransaction();

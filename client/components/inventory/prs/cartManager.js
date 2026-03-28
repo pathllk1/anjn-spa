@@ -8,11 +8,15 @@
 import { formatCurrency } from './utils.js';
 
 export function addItemToCart(state, stockItem) {
+    const inheritedHsn = stockItem.hsn || stockItem.hsnSac || '';
+    const inheritedUom = stockItem.uom || stockItem.unit || 'PCS';
     const existing = state.cart.find(
         i => i.stockId === stockItem.id && i.batch === stockItem.batch
     );
     if (existing) {
         existing.qty += 1;
+        if (!existing.hsn && inheritedHsn) existing.hsn = inheritedHsn;
+        if (!existing.uom && inheritedUom) existing.uom = inheritedUom;
     } else {
         state.cart.push({
             stockId:   stockItem.id,
@@ -20,9 +24,9 @@ export function addItemToCart(state, stockItem) {
             narration: '',
             batch:     stockItem.batch  || null,
             oem:       stockItem.oem    || '',
-            hsn:       stockItem.hsn    || '',
+            hsn:       inheritedHsn,
             qty:       1,
-            uom:       stockItem.uom,
+            uom:       inheritedUom,
             rate:      parseFloat(stockItem.rate)  || 0,
             grate:     parseFloat(stockItem.grate) || 0,
             disc:      0,
@@ -31,6 +35,8 @@ export function addItemToCart(state, stockItem) {
 }
 
 export function addItemToCartWithOverrides(state, stockItem, overrides = {}) {
+    const inheritedHsn = overrides.hsn !== undefined ? overrides.hsn : (stockItem.hsn || stockItem.hsnSac || '');
+    const inheritedUom = overrides.uom !== undefined ? overrides.uom : (stockItem.uom || stockItem.unit || 'PCS');
     const existing     = state.cart.find(
         i => i.stockId === stockItem.id && i.batch === stockItem.batch
     );
@@ -41,6 +47,8 @@ export function addItemToCartWithOverrides(state, stockItem, overrides = {}) {
         existing.qty += 1;
         if (!isNaN(resolvedRate)) existing.rate = resolvedRate;
         if (!isNaN(resolvedDisc)) existing.disc = resolvedDisc;
+        if (!existing.hsn && inheritedHsn) existing.hsn = inheritedHsn;
+        if (!existing.uom && inheritedUom) existing.uom = inheritedUom;
     } else {
         state.cart.push({
             stockId:   stockItem.id,
@@ -48,9 +56,9 @@ export function addItemToCartWithOverrides(state, stockItem, overrides = {}) {
             narration: '',
             batch:     stockItem.batch  || null,
             oem:       stockItem.oem    || '',
-            hsn:       stockItem.hsn    || '',
+            hsn:       inheritedHsn,
             qty:       1,
-            uom:       stockItem.uom,
+            uom:       inheritedUom,
             rate:      isNaN(resolvedRate) ? (parseFloat(stockItem.rate) || 0) : resolvedRate,
             grate:     parseFloat(stockItem.grate) || 0,
             disc:      isNaN(resolvedDisc) ? 0 : resolvedDisc,

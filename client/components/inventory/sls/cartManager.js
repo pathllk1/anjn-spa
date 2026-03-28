@@ -74,6 +74,7 @@ export function addServiceToCart(state) {
         showQty:   false,
         uom:       '',
         rate:      0,
+        costRate:  0,
         grate:     18,
         disc:      0,
     });

@@ -32,6 +32,64 @@ export const getItemLineTotal = (item) => {
     return qty * rate * (1 - disc / 100);
 };
 
+export const calculateBillTotals = ({
+    cart = [],
+    otherCharges = [],
+    gstEnabled = true,
+    billType = 'intra-state',
+    reverseCharge = false,
+}) => {
+    let itemTaxableTotal   = 0;
+    let totalTaxAmount     = 0;
+    let otherChargesTotal  = 0;
+    let otherChargesGstTotal = 0;
+
+    cart.forEach(item => {
+        const lineValue = getItemLineTotal(item);
+        itemTaxableTotal += lineValue;
+        if (gstEnabled) totalTaxAmount += lineValue * ((Number(item?.grate) || 0) / 100);
+    });
+
+    otherCharges.forEach(charge => {
+        const amt = Number(charge?.amount) || 0;
+        otherChargesTotal += amt;
+        if (gstEnabled) {
+            otherChargesGstTotal += amt * ((Number(charge?.gstRate) || 0) / 100);
+        }
+    });
+
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+
+    if (gstEnabled && billType === 'intra-state') {
+        cgst = (totalTaxAmount / 2) + (otherChargesGstTotal / 2);
+        sgst = (totalTaxAmount / 2) + (otherChargesGstTotal / 2);
+    } else if (gstEnabled) {
+        igst = totalTaxAmount + otherChargesGstTotal;
+    }
+
+    const grossBeforeRound = itemTaxableTotal
+        + otherChargesTotal
+        + (gstEnabled && !reverseCharge ? totalTaxAmount + otherChargesGstTotal : 0);
+
+    const ntot = Math.round(grossBeforeRound);
+    const rof  = ntot - grossBeforeRound;
+
+    return {
+        itemTaxableTotal,
+        totalTaxAmount,
+        otherChargesTotal,
+        otherChargesGstTotal,
+        cgst: reverseCharge && gstEnabled ? 0 : cgst,
+        sgst: reverseCharge && gstEnabled ? 0 : sgst,
+        igst: reverseCharge && gstEnabled ? 0 : igst,
+        grossBeforeRound,
+        ntot,
+        rof,
+    };
+};
+
 export const getHistoryCacheKey = (partyId, stockId) => `${partyId}:${stockId}`;
 
 /**
