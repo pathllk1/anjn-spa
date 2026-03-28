@@ -1,4 +1,8 @@
 import mongoose from 'mongoose';
+import { createHash } from 'crypto';
+import path from 'path';
+import axios from 'axios';
+import { put as blobPut } from '@vercel/blob';
 import {
   Stock, Party, Bill, StockReg, Ledger, Firm,
 } from '../../../../models/index.js';
@@ -21,14 +25,7 @@ export {
   getOtherChargesTypes, lookupGST,
 } from '../sharedStockHandlers.js';
 
-/* ── Purchase-specific: getCurrentUserFirmName (includes locations[]) ──────
- *
- * FIX: Overrides the shared handler which only returned { name }.
- * With multiple GST registrations the frontend needs locations[] to:
- *   1. Show a "billing from GSTIN" dropdown when the firm has >1 registration
- *   2. Auto-determine intra vs inter-state when a supplier is selected
- *   3. Validate the bill type server-side and record which GSTIN was used
- * ────────────────────────────────────────────────────────────────────────── */
+/* ── Purchase-specific: getCurrentUserFirmName (includes locations[]) ────── */
 
 export const getCurrentUserFirmName = async (req, res) => {
   try {
@@ -130,11 +127,6 @@ export const getPartyBalance = async (req, res) => {
 
 /**
  * Resolve and validate the active firm location for a purchase bill.
- *
- * firmGstin (from meta.firmGstin) is the GSTIN the frontend says was selected.
- * If absent, fall back to the firm's default location.
- *
- * Returns { firmLoc, firmStateCode } or throws with a descriptive error.
  */
 async function resolveFirmLocation(firmId, firmGstin) {
   const firmDoc = await Firm.findById(firmId).select('locations').lean();
@@ -158,20 +150,9 @@ async function resolveFirmLocation(firmId, firmGstin) {
 
 /**
  * Validate GST bill type for a purchase.
- *
- * For purchases the place-of-supply rule (Section 8 IGST Act) is the same as
- * for sales — compare the recipient (our firm) state with the supplier (party)
- * state.  The only difference in purchase accounting is that we are the
- * recipient rather than the supplier, but the intra/inter-state rule is
- * identical.
- *
- *   - same state  → intra-state (CGST + SGST input)  — IGST input is illegal
- *   - diff states → inter-state (IGST input)          — CGST/SGST input illegal
- *
- * Returns an error string or null (null = all good / cannot determine).
  */
 function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCharge) {
-  if (reverseCharge) return null; // reverse charge has different place-of-supply rules
+  if (reverseCharge) return null;
   if (!firmStateCode || !partyStateCode) return null;
 
   const sameState = firmStateCode === partyStateCode;
@@ -204,7 +185,6 @@ export const createBill = async (req, res) => {
   const partyDoc = await Party.findOne({ _id: party, firm_id: firmId }).lean();
   if (!partyDoc) return res.status(404).json({ error: 'Party not found' });
 
-  // ── FIX: Resolve firm location + validate GST bill type ─────────────────
   let firmLoc, firmStateCode;
   try {
     ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
@@ -222,7 +202,6 @@ export const createBill = async (req, res) => {
   if (gstTypeError) {
     return res.status(400).json({ error: gstTypeError });
   }
-  // ────────────────────────────────────────────────────────────────────────
 
   const supplierBillNo = normalizeOptionalText(meta?.supplierBillNo, 80);
   const referenceNo    = normalizeOptionalText(meta?.referenceNo, 80);
@@ -262,16 +241,9 @@ export const createBill = async (req, res) => {
       addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
       state: partyDoc.state || '', pin: partyDoc.pin || null,
       state_code: partyDoc.state_code || null,
-
-      // FIX: Store which firm GSTIN / location was used for this purchase bill.
-      // This is the receiving GSTIN — needed for:
-      //   • GSTR-2A / GSTR-2B reconciliation (each GSTIN has its own input credit)
-      //   • ITC (Input Tax Credit) claims — credit belongs to the specific GSTIN
-      //   • Audit trail — which registration received these goods
       firm_gstin:      firmLoc?.gst_number  || null,
       firm_state:      firmLoc?.state       || null,
       firm_state_code: firmStateCode        || null,
-
       gtot, ntot, rof, btype: 'PURCHASE', bill_subtype: billSubtype,
       usern: actorUsername, party_id: partyDoc._id,
       other_charges: otherCharges?.length > 0 ? otherCharges : null,
@@ -285,7 +257,6 @@ export const createBill = async (req, res) => {
 
     const billId = newBill._id;
 
-    // B. Process cart — add stock with WAC blend, build purchasedItems for ledger
     const stockRegDocs  = [];
     const purchasedItems = [];
 
@@ -366,7 +337,7 @@ export const createBill = async (req, res) => {
   } catch (err) {
     await session.abortTransaction();
     console.error('[CREATE_BILL] Error:', err.message, err.stack);
-    if (!res.headersSent) res.status(500).json({ success: false, error: err.message || 'Failed to create purchase bill', details: process.env.NODE_ENV === 'development' ? err.stack : undefined });
+    if (!res.headersSent) res.status(500).json({ success: false, error: err.message || 'Failed to create purchase bill' });
   } finally {
     session.endSession();
   }
@@ -402,7 +373,6 @@ export const updateBill = async (req, res) => {
       return res.status(404).json({ error: 'Party not found' });
     }
 
-    // ── FIX: Resolve firm location + validate GST bill type ─────────────────
     let firmLoc, firmStateCode;
     try {
       ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
@@ -422,7 +392,6 @@ export const updateBill = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({ error: gstTypeError });
     }
-    // ────────────────────────────────────────────────────────────────────────
 
     for (const item of cart) {
       if (!item.stockId || !mongoose.Types.ObjectId.isValid(item.stockId))
@@ -441,7 +410,6 @@ export const updateBill = async (req, res) => {
     const supplierBillNo = normalizeOptionalText(meta?.supplierBillNo, 80);
     await ensureUniqueSupplierBillNo({ firmId, partyId: partyDoc._id, supplierBillNo, excludeBillId: billId });
 
-    // Step 1: Reverse old purchase — subtract old qty, update WAC
     const existingItems = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const ei of existingItems) {
       const stockRecord = await Stock.findOne({ _id: ei.stock_id, firm_id: firmId }).session(session).lean();
@@ -471,27 +439,21 @@ export const updateBill = async (req, res) => {
       );
     }
 
-    // Step 2: Recalculate totals
     const gstEnabled = await isGstEnabled(firmId);
     const { gtot, cgst, sgst, igst, ntot, rof } = calcBillTotals(cart, otherCharges, gstEnabled, meta.billType, meta.reverseCharge);
 
     const firmRecord = await Firm.findById(firmId).select('name').lean();
     const firmName   = firmRecord?.name ?? existingBill.firm ?? '';
 
-    // Step 3: Update bill header — including firm GSTIN fields
     await Bill.findOneAndUpdate(
       { _id: billId, firm_id: firmId },
       { $set: {
           bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
           addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
           state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
-
-          // FIX: Update firm GSTIN fields — user may have changed the billing
-          // location when editing, so always overwrite from the resolved location.
           firm_gstin:      firmLoc?.gst_number  || null,
           firm_state:      firmLoc?.state       || null,
           firm_state_code: firmStateCode        || null,
-
           gtot, ntot, rof, btype: 'PURCHASE',
           bill_subtype: meta?.billType ? String(meta.billType).toUpperCase() : null,
           usern: actorUsername, party_id: partyDoc._id,
@@ -509,10 +471,8 @@ export const updateBill = async (req, res) => {
       { session }
     );
 
-    // Step 4: Delete old StockReg rows
     await StockReg.deleteMany({ bill_id: billId, firm_id: firmId }, { session });
 
-    // Step 5: Add new cart items with WAC
     const stockRegDocs   = [];
     const purchasedItems = [];
 
@@ -569,7 +529,6 @@ export const updateBill = async (req, res) => {
 
     await StockReg.insertMany(stockRegDocs, { session });
 
-    // Step 6: Delete old ledger entries and re-post
     await Ledger.deleteMany({ voucher_id: existingBill.voucher_id, voucher_type: 'PURCHASE', firm_id: firmId }, { session });
     await postPurchaseLedger({
       firmId, billId, voucherId: existingBill.voucher_id, billNo: existingBill.bno,
@@ -589,8 +548,125 @@ export const updateBill = async (req, res) => {
 };
 
 /* ════════════════════════════════════════════════════════════════════════════
-   CANCEL BILL (PURCHASE)
+   BILL FILE UPLOAD (PURCHASE) — CLOUD-ONLY FOR VERCEL
 ════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Upload a buffer to Backblaze B2.
+ */
+async function uploadToBackblazeB2(buffer, fileName, contentType) {
+    const keyId    = String(process.env.B2_APPLICATION_KEY_ID || '').trim();
+    const appKey   = String(process.env.B2_APPLICATION_KEY    || '').trim();
+    const bucketId = String(process.env.B2_BUCKET_ID          || '').trim();
+    const prefix   = String(process.env.B2_BUCKET_PREFIX      || '').trim().replace(/^\/+|\/+$/g, '');
+
+    if (!keyId || !appKey || !bucketId) return null;
+
+    const authResp = await axios.get('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+        headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${appKey}`).toString('base64')}` },
+    });
+    const auth = authResp.data;
+
+    const urlResp = await axios.post(`${auth.apiUrl}/b2api/v2/b2_get_upload_url`, { bucketId }, {
+        headers: { Authorization: auth.authorizationToken },
+    });
+    const uploadInfo = urlResp.data;
+
+    const targetName = prefix ? `${prefix}/${fileName}` : fileName;
+    const sha1       = createHash('sha1').update(buffer).digest('hex');
+
+    const uploadResp = await axios.post(uploadInfo.uploadUrl, buffer, {
+        headers: {
+            Authorization:       uploadInfo.authorizationToken,
+            'X-Bz-File-Name':    encodeURIComponent(targetName),
+            'Content-Type':      contentType || 'application/octet-stream',
+            'Content-Length':    buffer.length,
+            'X-Bz-Content-Sha1': sha1,
+        },
+        maxBodyLength: Infinity,
+    });
+
+    return `${auth.downloadUrl}/file/${uploadResp.data.bucketName}/${encodeURIComponent(targetName)}`;
+}
+
+/**
+ * Upload a buffer to Vercel Blob storage.
+ */
+async function uploadToVercelBlob(buffer, fileName, contentType) {
+    const token = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
+    if (!token) return null;
+
+    const blob = await blobPut(fileName, buffer, {
+        access:      'public',
+        contentType: contentType || 'application/octet-stream',
+        token,
+    });
+
+    return blob.url;
+}
+
+export const uploadBillFile = async (req, res) => {
+    try {
+        const actorUsername = getActorUsername(req);
+        if (!actorUsername) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+        const firmId = getFirmId(req, res, 'UPLOAD_BILL_FILE');
+        if (!firmId) return;
+
+        const billId = validateObjectId(req.params.id, 'bill ID', res);
+        if (!billId) return;
+
+        if (!req.file) return res.status(400).json({ success: false, error: 'No file received' });
+
+        const bill = await Bill.findOne({ _id: billId, firm_id: firmId }).lean();
+        if (!bill) return res.status(404).json({ success: false, error: 'Bill not found' });
+        if (bill.status === 'CANCELLED') {
+            return res.status(400).json({ success: false, error: 'Cannot attach files to cancelled bills' });
+        }
+
+        // ── Cloud storage only (Vercel has no persistent fs) ─────────────────
+        const userId   = req.user?.id || req.user?._id || 'unknown';
+        const safeName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const cloudPath = `uploads/${firmId}/${userId}/${Date.now()}-${safeName}`;
+
+        let fileUrl = null;
+
+        // Try Backblaze B2 first
+        try {
+            fileUrl = await uploadToBackblazeB2(req.file.buffer, cloudPath, req.file.mimetype);
+        } catch (b2Err) {
+            console.warn('[UPLOAD_BILL_FILE] Backblaze upload failed:', b2Err.message);
+        }
+
+        // Fallback to Vercel Blob if B2 failed or was not configured
+        if (!fileUrl) {
+            try {
+                fileUrl = await uploadToVercelBlob(req.file.buffer, cloudPath, req.file.mimetype);
+            } catch (blobErr) {
+                console.error('[UPLOAD_BILL_FILE] Vercel Blob also failed:', blobErr.message);
+            }
+        }
+
+        if (!fileUrl) {
+            return res.status(500).json({
+                success: false,
+                error: 'Cloud storage upload failed. Verify B2_APPLICATION_KEY_* or BLOB_READ_WRITE_TOKEN are set.',
+            });
+        }
+
+        // ── Persist on Bill document ────────────────────────────────────────
+        await Bill.findOneAndUpdate(
+            { _id: billId, firm_id: firmId },
+            { $set: { file_url: fileUrl, file_uploaded_by: actorUsername } },
+        );
+
+        res.json({ success: true, fileUrl, message: 'File uploaded successfully' });
+    } catch (err) {
+        console.error('[UPLOAD_BILL_FILE] Error:', err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
 
 export const cancelBill = async (req, res) => {
   const session = await mongoose.startSession();

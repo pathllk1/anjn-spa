@@ -25,10 +25,15 @@ function getCSRFToken() {
  * @returns {Promise<Response>}
  */
 export async function fetchWithCSRF(url, options = {}) {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...options.headers
   };
+
+  if (isFormData) {
+    delete headers['Content-Type'];
+  }
   
   // Add CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
   const statefulMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
@@ -49,10 +54,15 @@ export async function fetchWithCSRF(url, options = {}) {
 export const api = {
   async request(url, options = {}) {
     try {
+      const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
       const headers = {
-        'Content-Type': 'application/json',
+        ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...options.headers
       };
+
+      if (isFormData) {
+        delete headers['Content-Type'];
+      }
       
       // Add CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
       const statefulMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];

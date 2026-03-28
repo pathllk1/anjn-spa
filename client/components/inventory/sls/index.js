@@ -86,16 +86,23 @@ export function initSalesSystem(router) {
                 <p class="mb-4">Unable to load bill ${escHtml(String(billId))} for editing:</p>
                 <p class="mb-6 font-mono text-sm">${escHtml(errorMessage)}</p>
                 <div class="flex gap-3 justify-center">
-                    <button onclick="window.location.href='/inventory/sls-rpt'"
+                    <button id="edit-error-back-to-reports"
                             class="px-4 py-2 bg-gray-600 text-white rounded shadow hover:bg-gray-700 transition">
                         Back to Sales Report
                     </button>
-                    <button onclick="window.location.href='/inventory/sls'"
+                    <button id="edit-error-create-new"
                             class="px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition">
                         Create New Bill
                     </button>
                 </div>
             </div>`;
+
+        container.querySelector('#edit-error-back-to-reports').addEventListener('click', () => {
+            window.location.href = '/inventory/reports';
+        });
+        container.querySelector('#edit-error-create-new').addEventListener('click', () => {
+            window.location.href = '/inventory/sls';
+        });
     }
 
     /* ── Auto-determine GST bill type from firm location vs party state ────
@@ -512,6 +519,7 @@ export function initSalesSystem(router) {
         const saveBtn = document.getElementById('btn-save');
         if (saveBtn) {
             saveBtn.onclick = async () => {
+                // VALIDATE FIRST - before showing spinner
                 if (state.cart.length === 0) {
                     showToast('Cannot save an empty invoice. Please add items.', 'error');
                     return;
@@ -533,6 +541,7 @@ export function initSalesSystem(router) {
                     if (!confirmed) return;
                 }
 
+                // THEN show spinner for actual save operation
                 showSaveSpinner();
 
                 try {

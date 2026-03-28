@@ -81,6 +81,12 @@ const billSchema = new Schema(
     consignee_state:      { type: String },
     consignee_pin:        { type: String },
     consignee_state_code: { type: String },
+
+    // ── File Upload fields ────────────────────────────────────────────────
+    // Used for attaching scanned copies of purchase bills or physical invoices.
+    file_url:         { type: String, default: null },
+    file_path:        { type: String, default: null }, // local relative path
+    file_uploaded_by: { type: String, default: null }, // username of uploader
   },
   { timestamps: true }
 );

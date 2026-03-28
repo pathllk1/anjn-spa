@@ -2,8 +2,29 @@ import { renderLayout } from '../../components/layout.js';
 import { requireAuth }   from '../../middleware/authMiddleware.js';
 import { api }           from '../../utils/api.js';
 
+/* ── Helpers ────────────────────────────────────────────────────────── */
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+const fmtINR = (n) =>
+  '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
+
+function showToast(message, type = 'success') {
+  const existing = document.getElementById('nje-toast');
+  if (existing) existing.remove();
+  const colors = { 
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800', 
+    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+  const el = document.createElement('div');
+  el.id = 'nje-toast';
+  el.className = `fixed bottom-6 right-6 z-50 flex items-center gap-3 border rounded-xl px-5 py-3 shadow-lg text-sm font-medium ${colors[type] || colors.success}`;
+  el.innerHTML = `<span>${esc(message)}</span><button onclick="this.parentElement.remove()" class="ml-2 opacity-60 hover:opacity-100">&times;</button>`;
+  document.body.appendChild(el);
+  setTimeout(() => el?.remove(), 4000);
+}
+
 /* ── Account type auto-detection from name keywords ─────────────── */
-// BUG 21 FIX: infer account type from the typed name
 function guessAccountType(name) {
   const n = (name || '').toLowerCase();
   if (/\bcash\b/.test(n))                                return 'CASH';
@@ -20,9 +41,6 @@ const ACCOUNT_TYPES = [
   { value: 'DEBTOR',   label: 'Debtor'   },
   { value: 'CREDITOR', label: 'Creditor' },
 ];
-
-const fmtINR = (n) =>
-  '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
 
 /* ── Main render ─────────────────────────────────────────────────── */
 
@@ -41,7 +59,7 @@ export async function renderNewJournalEntry(router) {
           <p class="mt-1 text-sm text-gray-500">Double-entry — total debits must equal total credits</p>
         </div>
         <a href="/ledger/journal-entries" data-navigo
-           class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition">
+           class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-slate-50 transition">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/>
           </svg>
@@ -114,7 +132,7 @@ export async function renderNewJournalEntry(router) {
           </a>
           <button type="button" id="je-save-btn"
                   class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                  disabled>
+                  disabled title="Ctrl+Enter to save">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
             </svg>
@@ -126,8 +144,6 @@ export async function renderNewJournalEntry(router) {
   `;
 
   renderLayout(content, router);
-
-  // BUG 16 FIX: renderLayout is synchronous DOM insertion — no setTimeout needed
   initForm(router);
 }
 
@@ -151,19 +167,10 @@ function initForm(router) {
     if (accountsCache !== null) return accountsCache;
     try {
       const res = await api.get('/api/ledger/accounts');
-      // Handle every shape the server might return:
-      // plain array, { accounts }, { data }, { result }, { ledgerAccounts }
       if (Array.isArray(res)) {
         accountsCache = res;
       } else if (res && typeof res === 'object') {
-        accountsCache =
-          res.accounts      ||
-          res.data          ||
-          res.result        ||
-          res.ledgerAccounts||
-          res.items         ||
-          [];
-        // Last resort: if still not an array, check every array-valued key
+        accountsCache = res.accounts || res.data || res.result || res.ledgerAccounts || res.items || [];
         if (!Array.isArray(accountsCache)) {
           const firstArray = Object.values(res).find(v => Array.isArray(v));
           accountsCache = firstArray || [];
@@ -179,21 +186,13 @@ function initForm(router) {
 
   async function getAccountTypes() {
     if (accountTypesCache !== null) return accountTypesCache;
-
     let fromSummary = [];
     try {
       const res = await api.get('/api/ledger/account-types');
       if (Array.isArray(res)) {
         fromSummary = res;
       } else if (res && typeof res === 'object') {
-        fromSummary =
-          res.accountTypes ||
-          res.account_types ||
-          res.data ||
-          res.result ||
-          res.items ||
-          [];
-
+        fromSummary = res.accountTypes || res.account_types || res.data || res.result || res.items || [];
         if (!Array.isArray(fromSummary)) {
           const firstArray = Object.values(res).find(v => Array.isArray(v));
           fromSummary = firstArray || [];
@@ -202,35 +201,27 @@ function initForm(router) {
     } catch {
       fromSummary = [];
     }
-
     const fromDB = fromSummary
       .map((entry) => String(entry?.account_type || '').trim().toUpperCase())
       .filter(Boolean);
-
     if (!fromDB.length) {
       const accounts = await getAccounts();
-      fromDB.push(...accounts
-        .map((account) => String(account?.account_type || '').trim().toUpperCase())
-        .filter(Boolean));
+      fromDB.push(...accounts.map((account) => String(account?.account_type || '').trim().toUpperCase()).filter(Boolean));
     }
-
     const hardcoded = ACCOUNT_TYPES.map((type) => type.value);
     accountTypesCache = [...new Set([...fromDB, ...hardcoded])];
     return accountTypesCache;
   }
 
-  // Start with 2 lines (minimum for double-entry)
+  // Start with 2 lines
   addLine();
   addLine();
 
   document.getElementById('add-line-btn').addEventListener('click', addLine);
 
-  // BUG D FIX: single delegation handler covers BOTH remove and DR/CR toggle.
-  // No direct per-button listeners anywhere — no stacking risk.
   linesEl.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('.remove-line-btn');
     if (removeBtn) { removeLine(removeBtn.dataset.id); return; }
-
     const typeBtn = e.target.closest('.type-btn');
     if (typeBtn) {
       const row = typeBtn.closest('.je-line');
@@ -239,40 +230,49 @@ function initForm(router) {
   });
 
   linesEl.addEventListener('input', (e) => {
-    // Auto-detect account type when user types in account head
     if (e.target.classList.contains('account-head-input')) {
+      e.target.classList.remove('border-red-400', 'ring-red-200');
       const row = e.target.closest('.je-line');
       if (!row) return;
       const typeInput = row.querySelector('.account-type-input');
       if (!typeInput) return;
-
       const typedHead = e.target.value.trim().toLowerCase();
       getAccounts().then((accounts) => {
-        const matched = accounts.find((account) =>
-          String(account?.account_head || '').trim().toLowerCase() === typedHead
-        );
+        const matched = accounts.find((account) => String(account?.account_head || '').trim().toLowerCase() === typedHead);
         const resolvedType = matched?.account_type || guessAccountType(e.target.value);
         setAccountTypeValue(typeInput, resolvedType);
       });
+    }
+    if (e.target.classList.contains('amount-input')) {
+      e.target.classList.remove('border-red-400', 'ring-red-200');
     }
     updateBalance();
   });
 
   linesEl.addEventListener('change', updateBalance);
-
   saveBtn.addEventListener('click', handleSubmit);
 
-  /* ── setToggle — the ONLY place that touches toggle button classes ── */
-  // Bugs A/B/C/F fix: never mutate className strings with regex.
-  // Define a fixed BASE set of classes + two known active/inactive states.
-  // The inactive button gets hover:bg-gray-50 back explicitly (Bug F fix).
+  // Keyboard navigation
+  const handleKeydown = (e) => {
+    if (e.key === 'Escape') router.navigate('/ledger/journal-entries');
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (!saveBtn.disabled) handleSubmit();
+    }
+  };
+  document.addEventListener('keydown', handleKeydown);
+  // Clean up listener when navigating away
+  const originalNavigate = router.navigate;
+  router.navigate = (...args) => {
+    document.removeEventListener('keydown', handleKeydown);
+    return originalNavigate.apply(router, args);
+  };
 
   function setToggle(row, activeType) {
     row.querySelector('.line-type').value = activeType;
     const isDR = activeType === 'DR';
     row.querySelectorAll('.type-btn').forEach(b => {
       const isActive = b.dataset.type === activeType;
-      // Reset to invariant base classes only — no regex, no leftover cruft
       b.className = 'type-btn px-3 py-2 transition text-xs font-bold';
       if (isActive) {
         b.classList.add(isDR ? 'bg-emerald-500' : 'bg-red-500', 'text-white');
@@ -282,21 +282,13 @@ function initForm(router) {
     });
   }
 
-  /* ── addLine ──────────────────────────────────────────────────── */
-
   async function addLine() {
     lineCounter++;
     const id = `ln-${lineCounter}`;
-
     const html = `
       <div class="je-line py-4" data-line-id="${id}">
         <div class="flex items-start gap-3">
-
-          <!-- Line number -->
           <div class="mt-2.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-500 line-num"></div>
-
-          <!-- DR / CR toggle -->
-          <!-- BUG 18 FIX: single amount + type toggle instead of two separate fields -->
           <div class="flex flex-col gap-1 flex-shrink-0">
             <label class="text-[10px] font-bold uppercase tracking-wide text-gray-400 text-center">DR / CR</label>
             <div class="flex overflow-hidden rounded-xl border border-gray-200 text-xs font-bold">
@@ -305,8 +297,6 @@ function initForm(router) {
             </div>
             <input type="hidden" class="line-type" value="DR">
           </div>
-
-          <!-- Account head -->
           <div class="flex-1 min-w-0">
             <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Account Head *</label>
             <div class="relative">
@@ -315,30 +305,22 @@ function initForm(router) {
               <datalist id="${id}-datalist"></datalist>
             </div>
           </div>
-
-          <!-- Account type -->
           <div class="w-32 flex-shrink-0">
             <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Acct Type</label>
             <select class="account-type-input w-full rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition">
               <option value="GENERAL">GENERAL</option>
             </select>
           </div>
-
-          <!-- Amount -->
           <div class="w-36 flex-shrink-0">
             <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Amount *</label>
             <input type="number" class="amount-input w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-right font-semibold focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
                    step="0.01" min="0.01" placeholder="0.00">
           </div>
-
-          <!-- Narration -->
           <div class="flex-1 min-w-0">
             <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Line Narration</label>
             <input type="text" class="line-narration w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition"
                    placeholder="Optional description…">
           </div>
-
-          <!-- Remove -->
           <div class="mt-6 flex-shrink-0">
             <button type="button" class="remove-line-btn flex h-8 w-8 items-center justify-center rounded-xl text-gray-300 hover:bg-red-50 hover:text-red-500 transition" data-id="${id}" title="Remove line">
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
@@ -349,44 +331,27 @@ function initForm(router) {
         </div>
       </div>
     `;
-
     linesEl.insertAdjacentHTML('beforeend', html);
-
-    // Apply initial toggle state through setToggle so the first render
-    // uses the same class path as every subsequent click (no divergence)
     const newRow = linesEl.querySelector(`[data-line-id="${id}"]`);
     setToggle(newRow, 'DR');
-
     renumberLines();
     updateBalance();
-
-    // Populate both datalists from a single cached fetch
     Promise.all([getAccounts(), getAccountTypes()]).then(([accounts, types]) => {
       const headDl = document.getElementById(`${id}-datalist`);
       if (headDl) {
-        headDl.innerHTML = accounts
-          .map(a => `<option value="${String(a.account_head || '').replace(/"/g, '&quot;')}">`)
-          .join('');
+        headDl.innerHTML = accounts.map(a => `<option value="${esc(a.account_head)}">`).join('');
       }
       const typeSelect = newRow?.querySelector('.account-type-input');
       if (typeSelect) {
-        typeSelect.innerHTML = types
-          .map((type) => {
-            const safeType = escapeHtmlAttr(String(type).trim().toUpperCase());
-            return `<option value="${safeType}">${safeType}</option>`;
-          })
-          .join('');
+        typeSelect.innerHTML = types.map((type) => `<option value="${esc(type)}">${esc(type)}</option>`).join('');
         setAccountTypeValue(typeSelect, 'GENERAL');
       }
     });
   }
 
-  /* ── removeLine ───────────────────────────────────────────────── */
-
   function removeLine(id) {
-    const lineCount = linesEl.querySelectorAll('.je-line').length;
-    if (lineCount <= 2) {
-      showInlineError('At least 2 lines are required for a journal entry.');
+    if (linesEl.querySelectorAll('.je-line').length <= 2) {
+      showToast('Minimum 2 lines required', 'info');
       return;
     }
     const row = linesEl.querySelector(`[data-line-id="${id}"]`);
@@ -395,16 +360,12 @@ function initForm(router) {
     updateBalance();
   }
 
-  /* ── BUG 19 FIX: renumber labels sequentially after any add/remove ── */
-
   function renumberLines() {
     linesEl.querySelectorAll('.je-line').forEach((row, i) => {
       const numEl = row.querySelector('.line-num');
       if (numEl) numEl.textContent = i + 1;
     });
   }
-
-  /* ── updateBalance ────────────────────────────────────────────── */
 
   function updateBalance() {
     let dr = 0, cr = 0;
@@ -414,14 +375,11 @@ function initForm(router) {
       if (type === 'DR') dr += amt;
       else               cr += amt;
     });
-
     const diff = Math.abs(dr - cr);
     const balanced = diff < 0.01 && dr > 0;
-
     document.getElementById('tot-dr').textContent   = fmtINR(dr);
     document.getElementById('tot-cr').textContent   = fmtINR(cr);
     document.getElementById('tot-diff').textContent = fmtINR(diff);
-
     const statusEl = document.getElementById('tot-status');
     if (balanced) {
       statusEl.textContent  = 'Balanced ✓';
@@ -437,15 +395,11 @@ function initForm(router) {
       statusEl.className    = 'text-[10px] font-bold mt-0.5 text-red-500';
       document.getElementById('tot-diff').className = 'mt-1 text-xl font-black text-red-600';
     }
-
     saveBtn.disabled = !balanced;
     clearInlineError();
   }
 
-  /* ── Error helpers ────────────────────────────────────────────── */
-
   function showInlineError(msg) {
-    // BUG 20 FIX: inline errors instead of alert()
     errorEl.textContent = msg;
     errorEl.classList.remove('hidden');
     errorEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -456,58 +410,53 @@ function initForm(router) {
     errorEl.textContent = '';
   }
 
-  /* ── handleSubmit ─────────────────────────────────────────────── */
-
   async function handleSubmit() {
     clearInlineError();
-
     const transactionDate = dateEl.value;
     const narration       = narrationEl.value.trim();
-
     if (!transactionDate) {
+      dateEl.classList.add('border-red-400', 'ring-red-200');
       showInlineError('Please select a transaction date.');
       return;
     }
+    dateEl.classList.remove('border-red-400', 'ring-red-200');
 
-    // BUG 14 FIX: named 'submitLines' to avoid shadowing outer scope
     const submitLines = [];
     let hasAccountError = false;
+    let hasAmountError = false;
 
-    linesEl.querySelectorAll('.je-line').forEach((row, i) => {
-      const accountHead = row.querySelector('.account-head-input')?.value?.trim();
+    linesEl.querySelectorAll('.je-line').forEach((row) => {
+      const headInp = row.querySelector('.account-head-input');
+      const amtInp = row.querySelector('.amount-input');
+      const accountHead = headInp?.value?.trim();
       const accountType = (row.querySelector('.account-type-input')?.value?.trim().toUpperCase()) || 'GENERAL';
       const type        = row.querySelector('.line-type')?.value;
-      const amount      = parseFloat(row.querySelector('.amount-input')?.value) || 0;
+      const amount      = parseFloat(amtInp?.value) || 0;
       const lineNarr    = row.querySelector('.line-narration')?.value?.trim();
 
-      if (!accountHead) {
-        row.querySelector('.account-head-input').classList.add('border-red-400', 'ring-red-200');
-        hasAccountError = true;
-        return;
-      }
-      row.querySelector('.account-head-input').classList.remove('border-red-400', 'ring-red-200');
-
       if (amount > 0) {
-        submitLines.push({
-          account_head:  accountHead,
-          account_type:  accountType,
-          debit_amount:  type === 'DR' ? amount : 0,
-          credit_amount: type === 'CR' ? amount : 0,
-          narration:     lineNarr || narration || undefined,
-        });
+        if (!accountHead) {
+          headInp.classList.add('border-red-400', 'ring-red-200');
+          hasAccountError = true;
+        } else {
+          headInp.classList.remove('border-red-400', 'ring-red-200');
+          submitLines.push({
+            account_head:  accountHead,
+            account_type:  accountType,
+            debit_amount:  type === 'DR' ? amount : 0,
+            credit_amount: type === 'CR' ? amount : 0,
+            narration:     lineNarr || narration || undefined,
+          });
+        }
+      } else if (accountHead) {
+        amtInp.classList.add('border-red-400', 'ring-red-200');
+        hasAmountError = true;
       }
     });
 
-    if (hasAccountError) {
-      showInlineError('Please fill in the account head for all lines.');
-      return;
-    }
-
-    // BUG 17 FIX: enforce minimum 2 lines with amounts
-    if (submitLines.length < 2) {
-      showInlineError('At least 2 lines with amounts are required.');
-      return;
-    }
+    if (hasAccountError) { showInlineError('Please specify account head for all lines with amounts.'); return; }
+    if (hasAmountError) { showInlineError('Please specify amount for all accounts.'); return; }
+    if (submitLines.length < 2) { showInlineError('At least 2 lines with amounts are required.'); return; }
 
     const totDR = submitLines.reduce((s, l) => s + l.debit_amount,  0);
     const totCR = submitLines.reduce((s, l) => s + l.credit_amount, 0);
@@ -516,30 +465,23 @@ function initForm(router) {
       return;
     }
 
-    saveBtn.disabled = true;
-    const originalLabel = saveBtn.innerHTML;
-    saveBtn.innerHTML = `
-      <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-      </svg>
-      Saving…`;
-
     try {
-      const response = await api.post('/api/ledger/journal-entries', {
+      saveBtn.disabled = true;
+      const originalLabel = saveBtn.innerHTML;
+      saveBtn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg> Saving…';
+
+      await api.post('/api/ledger/journal-entries', {
         entries:          submitLines,
         narration:        narration || undefined,
         transaction_date: transactionDate,
       });
 
-      if (response.message || response.journalEntryNo) {
-        router.navigate('/ledger/journal-entries');
-      }
+      showToast('Journal entry created successfully');
+      setTimeout(() => router.navigate('/ledger/journal-entries'), 1000);
     } catch (err) {
-      // BUG 20 FIX: inline error, not alert()
       showInlineError('Error saving entry: ' + (err.message || 'Unknown error'));
       saveBtn.disabled = false;
-      saveBtn.innerHTML = originalLabel;
+      saveBtn.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg> Save Journal Entry';
     }
   }
 }
@@ -548,21 +490,11 @@ function setAccountTypeValue(selectEl, value) {
   if (!selectEl) return;
   const normalizedValue = String(value || 'GENERAL').trim().toUpperCase() || 'GENERAL';
   const hasOption = Array.from(selectEl.options || []).some((option) => option.value === normalizedValue);
-
   if (!hasOption) {
     const option = document.createElement('option');
     option.value = normalizedValue;
     option.textContent = normalizedValue;
     selectEl.appendChild(option);
   }
-
   selectEl.value = normalizedValue;
-}
-
-function escapeHtmlAttr(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }

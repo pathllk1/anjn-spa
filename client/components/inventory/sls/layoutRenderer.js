@@ -217,6 +217,19 @@ export async function renderPartyCard(state) {
         }
 
         // FIX: escHtml applied to all party fields used in template
+        const billTypeBadge = (() => {
+            const bt = state.meta?.billType;
+            if (bt === 'intra-state') {
+                return `<span class="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200"
+                              title="Same state — CGST + SGST applies">Local</span>`;
+            }
+            if (bt === 'inter-state') {
+                return `<span class="bg-orange-100 text-orange-800 text-[10px] font-bold px-2 py-0.5 rounded border border-orange-200"
+                              title="Different state — IGST applies">Out of State</span>`;
+            }
+            return ''; // bill type not yet resolved
+        })();
+
         return `
             <div class="group bg-blue-50 p-3 rounded border border-blue-200 shadow-sm">
                 <div class="flex justify-between items-start">
@@ -236,6 +249,7 @@ export async function renderPartyCard(state) {
                     <span class="bg-blue-100 text-blue-800 text-[10px] font-mono px-2 py-0.5 rounded border border-blue-200">
                         GST: ${escHtml(state.selectedParty.gstin || '')}
                     </span>
+                    ${billTypeBadge}
                 </div>
                 <div class="flex items-center gap-2 mt-2">
                     <span class="${balanceInfo.balance >= 0 ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'} text-[10px] font-mono px-2 py-0.5 rounded border">

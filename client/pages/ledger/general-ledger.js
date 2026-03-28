@@ -2,6 +2,28 @@ import { renderLayout } from '../../components/layout.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { api } from '../../utils/api.js';
 
+/* ── Helpers ────────────────────────────────────────────────────────── */
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+const fmtINR = (n) =>
+  '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
+
+function showToast(message, type = 'success') {
+  const existing = document.getElementById('gl-toast');
+  if (existing) existing.remove();
+  const colors = { 
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800', 
+    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+  const el = document.createElement('div');
+  el.id = 'gl-toast';
+  el.className = `fixed bottom-6 right-6 z-50 flex items-center gap-3 border rounded-xl px-5 py-3 shadow-lg text-sm font-medium ${colors[type] || colors.success}`;
+  el.innerHTML = `<span>${esc(message)}</span><button onclick="this.parentElement.remove()" class="ml-2 opacity-60 hover:opacity-100">&times;</button>`;
+  document.body.appendChild(el);
+  setTimeout(() => el?.remove(), 4000);
+}
+
 export async function renderGeneralLedger(router) {
   const canAccess = await requireAuth(router);
   if (!canAccess) return;
@@ -17,32 +39,46 @@ export async function renderGeneralLedger(router) {
           <p class="text-xs text-gray-500 mt-0.5">Complete ledger of all accounts and transactions</p>
         </div>
         <button id="export-pdf-btn"
-                class="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 transition">
-          📥 Export PDF
+                class="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 shadow-lg shadow-purple-200 transition">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Export PDF
         </button>
       </div>
 
       <!-- Filter bar -->
-      <div class="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
-        <span class="text-xs font-semibold uppercase tracking-wide text-gray-400">Period:</span>
-        <input id="start-date" type="date"
-               class="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition">
-        <span class="text-xs text-gray-400">to</span>
-        <input id="end-date" type="date"
-               class="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition">
-        <button id="apply-filter"
-                class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition">
-          Apply
-        </button>
-        <button id="clear-filter"
-                class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition">
-          Clear
-        </button>
-        <span id="account-count" class="ml-auto text-xs text-gray-400"></span>
+      <div class="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <div class="relative flex-1 min-w-[240px]">
+          <span class="absolute inset-y-0 left-3 flex items-center text-gray-400">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </span>
+          <input id="search-input" type="text" placeholder="Search account heads..."
+                 class="w-full rounded-xl border border-gray-100 bg-gray-50 pl-10 pr-4 py-2 text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold uppercase tracking-wide text-gray-400">Period:</span>
+          <input id="start-date" type="date"
+                 class="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition">
+          <span class="text-xs text-gray-400 font-bold">to</span>
+          <input id="end-date" type="date"
+                 class="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition">
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="apply-filter"
+                  class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition">
+            Apply
+          </button>
+          <button id="clear-filter"
+                  class="rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 transition">
+            Reset
+          </button>
+        </div>
+        <span id="account-count" class="ml-auto text-xs font-bold text-slate-400 uppercase tracking-wider"></span>
       </div>
 
       <!-- Table -->
-      <div id="table-wrap" class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div id="table-wrap" class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         ${skeletonTable()}
       </div>
 
@@ -53,6 +89,8 @@ export async function renderGeneralLedger(router) {
 
   const startEl = document.getElementById('start-date');
   const endEl   = document.getElementById('end-date');
+  const searchEl = document.getElementById('search-input');
+  let allAccounts = [];
 
   async function loadData() {
     const startDate = startEl.value;
@@ -64,72 +102,86 @@ export async function renderGeneralLedger(router) {
     const url = `/api/ledger/accounts${qs.toString() ? '?' + qs : ''}`;
 
     try {
-      const accounts = (await api.get(url)) || [];
-      document.getElementById('account-count').textContent = `${accounts.length} account${accounts.length !== 1 ? 's' : ''}`;
-
-      if (!accounts.length) {
-        document.getElementById('table-wrap').innerHTML =
-          `<div class="px-6 py-12 text-center text-sm text-gray-500">No accounts found for the selected period.</div>`;
-        return;
-      }
-
-      document.getElementById('table-wrap').innerHTML = `
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-gray-200 bg-gray-50 text-left">
-                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Account Head</th>
-                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Type</th>
-                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 text-right">Debits</th>
-                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 text-right">Credits</th>
-                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 text-right">Balance</th>
-                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 text-center">Detail</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              ${accounts.map(a => `
-                <tr class="hover:bg-gray-50 transition">
-                  <td class="px-4 py-2.5 font-medium text-gray-900">${escHtml(a.account_head)}</td>
-                  <td class="px-4 py-2.5">
-                    <span class="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                      ${escHtml(a.account_type)}
-                    </span>
-                  </td>
-                  <td class="px-4 py-2.5 text-right font-semibold text-emerald-600">₹${fmt(a.total_debit || 0)}</td>
-                  <td class="px-4 py-2.5 text-right font-semibold text-red-600">₹${fmt(a.total_credit || 0)}</td>
-                  <td class="px-4 py-2.5 text-right font-bold whitespace-nowrap ${(a.balance || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}">
-                    ₹${fmt(Math.abs(a.balance || 0))} ${(a.balance || 0) >= 0 ? 'DR' : 'CR'}
-                  </td>
-                  <td class="px-4 py-2.5 text-center">
-                    <a href="/ledger/account/${encodeURIComponent(a.account_head)}" data-navigo
-                       class="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition">
-                      View
-                    </a>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `;
-
-      router.updatePageLinks?.();
+      allAccounts = (await api.get(url)) || [];
+      renderTable(allAccounts);
     } catch (err) {
       document.getElementById('table-wrap').innerHTML =
-        `<div class="px-6 py-10 text-center text-sm font-semibold text-red-600">Failed to load: ${escHtml(err.message)}</div>`;
+        `<div class="px-6 py-10 text-center text-sm font-bold text-rose-600">Failed to load: ${esc(err.message)}</div>`;
     }
   }
 
+  function renderTable(accounts) {
+    const searchTerm = searchEl.value.toLowerCase();
+    const filteredAccounts = accounts.filter(a => 
+      a.account_head.toLowerCase().includes(searchTerm) || 
+      a.account_type.toLowerCase().includes(searchTerm)
+    );
+
+    document.getElementById('account-count').textContent = `${filteredAccounts.length} account${filteredAccounts.length !== 1 ? 's' : ''}`;
+
+    if (!filteredAccounts.length) {
+      document.getElementById('table-wrap').innerHTML =
+        `<div class="px-6 py-12 text-center text-sm font-bold text-gray-500">No matching accounts found.</div>`;
+      return;
+    }
+
+    document.getElementById('table-wrap').innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 bg-slate-50 text-left">
+              <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Account Head</th>
+              <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Type</th>
+              <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Debits</th>
+              <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Credits</th>
+              <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Balance</th>
+              <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Detail</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            ${filteredAccounts.map(a => `
+              <tr class="hover:bg-slate-50/50 transition duration-200">
+                <td class="px-5 py-4 font-bold text-slate-900">${esc(a.account_head)}</td>
+                <td class="px-5 py-4">
+                  <span class="rounded-lg bg-blue-50 border border-blue-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-blue-700">
+                    ${esc(a.account_type)}
+                  </span>
+                </td>
+                <td class="px-5 py-4 text-right font-black text-emerald-600">${fmtINR(a.total_debit || 0)}</td>
+                <td class="px-5 py-4 text-right font-black text-rose-600">${fmtINR(a.total_credit || 0)}</td>
+                <td class="px-5 py-4 text-right font-black whitespace-nowrap ${(a.balance || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}">
+                  ${fmtINR(Math.abs(a.balance || 0))} <span class="text-[10px] opacity-60 ml-0.5">${(a.balance || 0) >= 0 ? 'DR' : 'CR'}</span>
+                </td>
+                <td class="px-5 py-4 text-center">
+                  <a href="/ledger/account/${encodeURIComponent(a.account_head)}" data-navigo
+                     class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition">
+                    View
+                  </a>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    router.updatePageLinks?.();
+  }
+
   document.getElementById('apply-filter').addEventListener('click', loadData);
+  searchEl.addEventListener('input', () => renderTable(allAccounts));
 
   document.getElementById('clear-filter').addEventListener('click', () => {
     startEl.value = '';
     endEl.value   = '';
+    searchEl.value = '';
     loadData();
+    showToast('Filters reset', 'info');
   });
 
   document.getElementById('export-pdf-btn').addEventListener('click', async () => {
     try {
+      showToast('Generating PDF...', 'info');
       const qs = new URLSearchParams();
       if (startEl.value) qs.set('start_date', startEl.value);
       if (endEl.value)   qs.set('end_date',   endEl.value);
@@ -145,33 +197,26 @@ export async function renderGeneralLedger(router) {
       link.click();
       link.remove();
       URL.revokeObjectURL(link.href);
+      showToast('PDF exported successfully!', 'success');
     } catch (err) {
-      alert('Error exporting PDF: ' + err.message);
+      showToast('Error exporting PDF: ' + err.message, 'error');
     }
   });
 
   loadData();
 }
 
-/* ── helpers ── */
-
-function escHtml(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function fmt(n) {
-  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
-}
+/* ── UI Helpers ── */
 
 function skeletonTable() {
   return `
-    <div class="divide-y divide-gray-100">
-      <div class="grid grid-cols-6 gap-4 px-4 py-3 bg-gray-50">
-        ${Array.from({ length: 6 }, () => '<div class="h-2.5 w-16 animate-pulse rounded-full bg-gray-200"></div>').join('')}
+    <div class="divide-y divide-gray-50">
+      <div class="grid grid-cols-6 gap-4 px-5 py-4 bg-slate-50">
+        ${Array.from({ length: 6 }, () => '<div class="h-2 w-12 animate-pulse rounded-full bg-gray-200"></div>').join('')}
       </div>
       ${Array.from({ length: 6 }, () => `
-        <div class="grid grid-cols-6 gap-4 px-4 py-3">
-          ${Array.from({ length: 6 }, () => '<div class="h-2.5 w-20 animate-pulse rounded-full bg-gray-100"></div>').join('')}
+        <div class="grid grid-cols-6 gap-4 px-5 py-5">
+          ${Array.from({ length: 6 }, () => '<div class="h-2 w-20 animate-pulse rounded-full bg-gray-100"></div>').join('')}
         </div>
       `).join('')}
     </div>`;

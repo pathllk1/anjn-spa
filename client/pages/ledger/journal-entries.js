@@ -3,7 +3,6 @@ import { requireAuth }   from '../../middleware/authMiddleware.js';
 import { api }           from '../../utils/api.js';
 
 /* ── XSS helper ─────────────────────────────────────────────────────── */
-// BUG 9 FIX: all user data must go through this before entering innerHTML
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 const fmtINR = (n) =>
@@ -16,7 +15,6 @@ const fmtDate = (d) => {
 };
 
 /* ── Toast notification (no alert()) ──────────────────────────────── */
-// BUG 12 FIX: replace browser alert/confirm with inline toast + modal
 function showToast(message, type = 'success') {
   const existing = document.getElementById('je-toast');
   if (existing) existing.remove();
@@ -40,9 +38,6 @@ function showToast(message, type = 'success') {
 
 /* ── Delete confirmation modal ──────────────────────────────────── */
 function showDeleteModal(entryNo, onConfirm) {
-  const existing = document.getElementById('je-delete-modal');
-  if (existing) existing.remove();
-
   const overlay = document.createElement('div');
   overlay.id = 'je-delete-modal';
   overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
@@ -78,7 +73,6 @@ export async function renderJournalEntries(router) {
   const canAccess = await requireAuth(router);
   if (!canAccess) return;
 
-  // BUG 11 FIX: render shell immediately with loading skeleton; fill data async
   const shell = `
     <div class="max-w-7xl mx-auto px-4 py-10 space-y-6">
 
@@ -100,13 +94,7 @@ export async function renderJournalEntries(router) {
 
       <!-- Summary cards -->
       <div id="summary-cards" class="grid gap-4 sm:grid-cols-3">
-        ${[1,2,3].map(() => `
-          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div class="h-3 w-24 animate-pulse rounded-full bg-gray-200"></div>
-            <div class="mt-3 h-7 w-32 animate-pulse rounded-lg bg-gray-200"></div>
-            <div class="mt-2 h-2.5 w-20 animate-pulse rounded-full bg-gray-100"></div>
-          </div>
-        `).join('')}
+        ${summaryCardsSkeleton()}
       </div>
 
       <!-- Filters -->
@@ -136,17 +124,15 @@ export async function renderJournalEntries(router) {
       </div>
 
       <!-- Pagination -->
-      <div id="je-pagination" class="flex items-center justify-between text-sm text-gray-500"></div>
+      <div id="je-pagination" class="flex items-center justify-between text-sm text-gray-500 px-1"></div>
     </div>
   `;
 
   renderLayout(shell, router);
 
-  // Wire static events immediately (BUG 16 FIX: no setTimeout, DOM is ready)
   document.getElementById('create-journal-btn')
     .addEventListener('click', () => router.navigate('/ledger/journal-entries/new'));
 
-  // State
   let currentPage = 1;
   const filters = () => ({
     search:     document.getElementById('je-search').value.trim(),
@@ -156,11 +142,9 @@ export async function renderJournalEntries(router) {
     limit:      20,
   });
 
-  // Load summary and first page in parallel
   loadSummary();
   loadEntries();
 
-  // Debounced search
   let searchTimer;
   document.getElementById('je-search').addEventListener('input', () => {
     clearTimeout(searchTimer);
@@ -176,12 +160,11 @@ export async function renderJournalEntries(router) {
     document.getElementById('je-end-date').value   = '';
     currentPage = 1;
     loadEntries();
+    showToast('Filters reset', 'info');
   });
 
-  /* ── loadSummary ─────────────────────────────────────────────── */
   async function loadSummary() {
     try {
-      // BUG 10 FIX: actually call the summary endpoint
       const s = await api.get('/api/ledger/journal-entries/summary');
       document.getElementById('summary-cards').innerHTML = `
         ${summaryCard('Total Entries', s.total_journal_entries, 'All time', 'blue')}
@@ -193,7 +176,6 @@ export async function renderJournalEntries(router) {
     }
   }
 
-  /* ── loadEntries ─────────────────────────────────────────────── */
   async function loadEntries() {
     const wrap = document.getElementById('je-table-wrap');
     wrap.innerHTML = renderTableSkeleton();
@@ -205,18 +187,18 @@ export async function renderJournalEntries(router) {
       ).toString();
 
       const data = await api.get(`/api/ledger/journal-entries?${qs}`);
-      const { journalEntries: entries = [], total = 0, totalPages = 0 } = data;
+      const entries = data.journalEntries || [];
+      const total = data.total || 0;
+      const totalPages = data.totalPages || 0;
 
       wrap.innerHTML = renderTable(entries);
 
-      // re-bind delete buttons after each render
       wrap.querySelectorAll('.delete-entry').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = btn.dataset.id;
           const no = btn.dataset.no;
           showDeleteModal(no, async () => {
             try {
-              // BUG 6 FIX: was using entry.id (undefined) — now uses voucher_id via data-id
               await api.delete(`/api/ledger/journal-entries/${id}`);
               showToast('Journal entry deleted', 'success');
               loadSummary();
@@ -229,15 +211,13 @@ export async function renderJournalEntries(router) {
       });
 
       router.updatePageLinks?.();
-
-      // BUG 7 FIX: render pagination controls
       renderPagination(currentPage, totalPages, total);
     } catch (err) {
       wrap.innerHTML = `
         <div class="px-6 py-14 text-center">
-          <p class="text-sm font-semibold text-red-600">Failed to load entries</p>
-          <p class="text-xs text-gray-400 mt-1">${esc(err.message)}</p>
-          <button id="je-retry" class="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 transition">
+          <p class="text-sm font-black text-rose-600">Failed to load entries</p>
+          <p class="text-xs text-gray-400 mt-1 font-medium">${esc(err.message)}</p>
+          <button id="je-retry" class="mt-4 rounded-xl bg-slate-900 px-6 py-2.5 text-xs font-bold text-white hover:bg-slate-800 transition">
             Retry
           </button>
         </div>`;
@@ -245,18 +225,20 @@ export async function renderJournalEntries(router) {
     }
   }
 
-  /* ── Pagination ───────────────────────────────────────────────── */
   function renderPagination(page, totalPages, total) {
     const el = document.getElementById('je-pagination');
-    if (!totalPages || totalPages <= 1) { el.innerHTML = `<span>${total} entr${total === 1 ? 'y' : 'ies'}</span>`; return; }
+    if (!totalPages || totalPages <= 1) { 
+      el.innerHTML = `<span class="text-xs font-bold text-slate-400 uppercase tracking-wider">${total} entries found</span>`; 
+      return; 
+    }
 
     const btn = (label, p, disabled = false) =>
-      `<button class="px-3 py-1.5 rounded-lg border text-sm font-medium transition
-        ${disabled ? 'border-gray-100 text-gray-300 cursor-not-allowed' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}"
+      `<button class="px-3 py-1.5 rounded-lg border text-xs font-bold transition
+        ${disabled ? 'border-gray-50 text-gray-200 cursor-not-allowed bg-gray-50/50' : 'border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'}"
         data-page="${p}" ${disabled ? 'disabled' : ''}>${label}</button>`;
 
     el.innerHTML = `
-      <span>${total} entries &bull; Page ${page} of ${totalPages}</span>
+      <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">${total} entries &bull; Page ${page} of ${totalPages}</span>
       <div class="flex gap-1.5">
         ${btn('&laquo;', 1,        page === 1)}
         ${btn('&lsaquo;', page - 1, page === 1)}
@@ -265,7 +247,11 @@ export async function renderJournalEntries(router) {
       </div>
     `;
     el.querySelectorAll('button[data-page]').forEach(b => {
-      b.addEventListener('click', () => { currentPage = parseInt(b.dataset.page); loadEntries(); });
+      b.addEventListener('click', () => { 
+        currentPage = parseInt(b.dataset.page); 
+        loadEntries(); 
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
     });
   }
 }
@@ -281,6 +267,16 @@ function summaryCard(label, value, sub, color) {
       <p class="mt-2 text-2xl font-black tracking-tight text-gray-900">${esc(String(value))}</p>
       <p class="mt-1 text-xs text-gray-500">${esc(sub)}</p>
     </div>`;
+}
+
+function summaryCardsSkeleton() {
+  return [1,2,3].map(() => `
+    <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="h-3 w-24 animate-pulse rounded-full bg-gray-200"></div>
+      <div class="mt-3 h-7 w-32 animate-pulse rounded-lg bg-gray-200"></div>
+      <div class="mt-2 h-2.5 w-20 animate-pulse rounded-full bg-gray-100"></div>
+    </div>
+  `).join('');
 }
 
 function renderTableSkeleton() {
@@ -318,11 +314,10 @@ function renderTable(entries) {
   }
 
   const rows = entries.map(entry => {
-    // BUG 6 FIX: entry.id now exists (server project adds it); voucher_id as fallback
     const id = entry.id ?? entry.voucher_id;
     const balanced = Math.abs((entry.total_debit || 0) - (entry.total_credit || 0)) < 0.01;
     return `
-      <tr class="hover:bg-gray-50 transition">
+      <tr class="hover:bg-slate-50/50 transition duration-200">
         <td class="px-5 py-4">
           <span class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
             ${esc(entry.voucher_no || '—')}
@@ -330,21 +325,21 @@ function renderTable(entries) {
         </td>
         <td class="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">${esc(fmtDate(entry.transaction_date))}</td>
         <td class="px-5 py-4 text-sm text-gray-700 max-w-[220px]">
-          <span class="block truncate" title="${esc(entry.narration || '')}">${esc(entry.narration || '—')}</span>
-          <span class="text-xs text-gray-400">${entry.line_count || 0} lines</span>
+          <span class="block truncate font-medium" title="${esc(entry.narration || '')}">${esc(entry.narration || '—')}</span>
+          <span class="text-[10px] font-bold text-gray-400 uppercase">${entry.line_count || 0} lines</span>
         </td>
-        <td class="px-5 py-4 text-sm text-right font-semibold text-emerald-700 whitespace-nowrap">${fmtINR(entry.total_debit)}</td>
-        <td class="px-5 py-4 text-sm text-right font-semibold text-red-600 whitespace-nowrap">${fmtINR(entry.total_credit)}</td>
+        <td class="px-5 py-4 text-sm text-right font-black text-emerald-600 whitespace-nowrap">${fmtINR(entry.total_debit)}</td>
+        <td class="px-5 py-4 text-sm text-right font-black text-rose-600 whitespace-nowrap">${fmtINR(entry.total_credit)}</td>
         <td class="px-5 py-4 text-center">
-          <span class="inline-block w-2 h-2 rounded-full ${balanced ? 'bg-emerald-400' : 'bg-red-400'}" title="${balanced ? 'Balanced' : 'Imbalanced'}"></span>
+          <span class="inline-block w-2 h-2 rounded-full ${balanced ? 'bg-emerald-400' : 'bg-rose-400'}" title="${balanced ? 'Balanced' : 'Imbalanced'}"></span>
         </td>
         <td class="px-5 py-4 text-center">
-          <div class="flex items-center justify-center gap-1">
+          <div class="flex items-center justify-center gap-2">
             <a href="/ledger/journal-entries/${id}" data-navigo
-               class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition">
+               class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition">
               View
             </a>
-            <button class="delete-entry inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+            <button class="delete-entry inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition"
                     data-id="${id}" data-no="${esc(entry.voucher_no || String(id))}">
               Delete
             </button>
@@ -355,19 +350,19 @@ function renderTable(entries) {
 
   return `
     <div class="overflow-x-auto">
-      <table class="w-full">
+      <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-gray-200 bg-gray-50 text-left">
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500">Voucher No</th>
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500">Date</th>
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500">Narration</th>
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500 text-right">Debits</th>
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500 text-right">Credits</th>
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500 text-center">Bal</th>
-            <th class="px-5 py-3.5 text-xs font-bold uppercase tracking-wide text-gray-500 text-center">Actions</th>
+          <tr class="border-b border-gray-100 bg-slate-50 text-left">
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Voucher No</th>
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Date</th>
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Narration</th>
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Debits</th>
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Credits</th>
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Bal</th>
+            <th class="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">${rows}</tbody>
+        <tbody class="divide-y divide-gray-50">${rows}</tbody>
       </table>
     </div>`;
 }

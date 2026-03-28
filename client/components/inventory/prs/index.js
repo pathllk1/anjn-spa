@@ -358,6 +358,33 @@ export function initPurchaseSystem(router) {
                             class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow transition-colors flex items-center justify-center gap-2">
                         Download Excel
                     </button>
+
+                    <!-- Upload scanned bill section -->
+                    <div class="border-t border-gray-100 pt-3 mt-1">
+                        <p class="text-[11px] text-gray-500 font-bold uppercase tracking-wide mb-2">Attach Scanned Bill <span class="font-normal text-gray-400">(Optional)</span></p>
+                        <input type="file" id="bill-file-input" accept=".pdf,.jpg,.jpeg"
+                               class="w-full text-xs text-gray-600 border border-gray-200 rounded-lg px-2 py-1.5
+                                      file:mr-2 file:py-1 file:px-2 file:rounded file:border-0
+                                      file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200
+                                      cursor-pointer">
+                        <p class="text-[10px] text-gray-400 mt-1">PDF or JPEG · Max 200 KB</p>
+                        <div id="upload-success" class="hidden items-center gap-2 mt-2 text-green-700 text-xs font-bold">
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Bill attached successfully
+                        </div>
+                        <p id="upload-error" class="hidden text-[10px] text-red-600 mt-1 font-medium"></p>
+                        <button id="upload-bill-btn" disabled
+                                class="w-full mt-2 py-2 bg-slate-600 hover:bg-slate-700
+                                       disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed
+                                       text-white text-sm font-bold rounded-lg shadow transition-colors
+                                       flex items-center justify-center gap-2">
+                            <div id="upload-spinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span id="upload-text">Upload Scanned Bill</span>
+                        </button>
+                    </div>
+
                     <button id="close-modal-btn"
                             class="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors">
                         Close
@@ -513,6 +540,7 @@ export function initPurchaseSystem(router) {
         const saveBtn = document.getElementById('btn-save');
         if (saveBtn) {
             saveBtn.onclick = async () => {
+                // VALIDATE FIRST - before showing spinner
                 if (state.cart.length === 0) {
                     showToast('Cannot save an empty invoice. Please add items.', 'error');
                     return;
@@ -534,6 +562,7 @@ export function initPurchaseSystem(router) {
                     if (!confirmed) return;
                 }
 
+                // THEN show spinner for actual save operation
                 showSaveSpinner();
 
                 try {
@@ -699,6 +728,26 @@ export function initPurchaseSystem(router) {
         if (billNoEl) billNoEl.textContent = billNo;
         modal.classList.remove('hidden');
 
+        // Reset upload section state on every open
+        const fileInput     = document.getElementById('bill-file-input');
+        const uploadBtn     = document.getElementById('upload-bill-btn');
+        const uploadSuccess = document.getElementById('upload-success');
+        const uploadError   = document.getElementById('upload-error');
+        if (fileInput)     { fileInput.value = ''; fileInput.classList.remove('hidden'); }
+        if (uploadBtn)     { uploadBtn.disabled = true; uploadBtn.classList.remove('hidden'); }
+        if (uploadSuccess) uploadSuccess.classList.replace('flex', 'hidden');
+        if (uploadError)   { uploadError.textContent = ''; uploadError.classList.add('hidden'); }
+
+        // Enable upload button only once a file is chosen
+        if (fileInput) {
+            fileInput.onchange = () => {
+                if (uploadBtn) uploadBtn.disabled = !(fileInput.files?.length > 0);
+            };
+        }
+        if (uploadBtn) {
+            uploadBtn.onclick = () => handleFileUpload(billId);
+        }
+
         const handleAfterModal = () => {
             if (isEditMode) {
                 setTimeout(() => router.navigate('/inventory/reports'), 500);
@@ -718,6 +767,74 @@ export function initPurchaseSystem(router) {
             closeConfirmModal();
             handleAfterModal();
         };
+    }
+
+    /**
+     * Upload a scanned bill file (PDF or JPEG, ≤200 KB) for the saved bill.
+     *
+     * Uses fetchWithCSRF to ensure proper security while allowing the browser
+     * to set the correct multipart/form-data boundary for FormData uploads.
+     */
+    async function handleFileUpload(billId) {
+        const fileInput     = document.getElementById('bill-file-input');
+        const uploadBtn     = document.getElementById('upload-bill-btn');
+        const uploadSpinner = document.getElementById('upload-spinner');
+        const uploadText    = document.getElementById('upload-text');
+        const uploadSuccess = document.getElementById('upload-success');
+        const uploadError   = document.getElementById('upload-error');
+
+        const file = fileInput?.files?.[0];
+        if (!file) return;
+
+        // Client-side guard
+        const allowedTypes = ['application/pdf', 'image/jpeg'];
+        if (!allowedTypes.includes(file.type)) {
+            uploadError.textContent = 'Only PDF and JPEG/JPG files are allowed.';
+            uploadError.classList.remove('hidden');
+            return;
+        }
+        if (file.size > 200 * 1024) {
+            uploadError.textContent = `File too large (${(file.size / 1024).toFixed(0)} KB). Maximum is 200 KB.`;
+            uploadError.classList.remove('hidden');
+            return;
+        }
+
+        // Show spinner, clear previous error
+        uploadBtn.disabled = true;
+        if (uploadSpinner) uploadSpinner.classList.remove('hidden');
+        if (uploadText)    uploadText.classList.add('hidden');
+        if (uploadError)   uploadError.classList.add('hidden');
+
+        try {
+            const formData = new FormData();
+            formData.append('billFile', file);
+
+            const response = await fetchWithCSRF(`/api/inventory/purchase/bills/${billId}/upload`, {
+                method:  'POST',
+                body:    formData,
+            });
+
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || `Upload failed (${response.status})`);
+            }
+
+            // Success — hide file input + button, show checkmark
+            if (fileInput) fileInput.classList.add('hidden');
+            if (uploadBtn) uploadBtn.classList.add('hidden');
+            if (uploadSuccess) uploadSuccess.classList.replace('hidden', 'flex');
+            showToast('Scanned bill attached successfully!', 'success');
+
+        } catch (err) {
+            if (uploadError) {
+                uploadError.textContent = err.message;
+                uploadError.classList.remove('hidden');
+            }
+            if (uploadBtn) uploadBtn.disabled = false;
+        } finally {
+            if (uploadSpinner) uploadSpinner.classList.add('hidden');
+            if (uploadText)    uploadText.classList.remove('hidden');
+        }
     }
 
     function closeConfirmModal() {

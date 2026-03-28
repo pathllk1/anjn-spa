@@ -2,6 +2,25 @@ import { renderLayout } from '../../components/layout.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { api, fetchWithCSRF } from '../../utils/api.js';
 
+/* ── Helpers ────────────────────────────────────────────────────────── */
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function showToast(message, type = 'success') {
+  const existing = document.getElementById('ba-toast');
+  if (existing) existing.remove();
+  const colors = { 
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800', 
+    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+  const el = document.createElement('div');
+  el.id = 'ba-toast';
+  el.className = `fixed bottom-6 right-6 z-50 flex items-center gap-3 border rounded-xl px-5 py-3 shadow-lg text-sm font-medium ${colors[type] || colors.success}`;
+  el.innerHTML = `<span>${esc(message)}</span><button onclick="this.parentElement.remove()" class="ml-2 opacity-60 hover:opacity-100">&times;</button>`;
+  document.body.appendChild(el);
+  setTimeout(() => el?.remove(), 4000);
+}
+
 const EMPTY_FORM = {
   account_name: '',
   account_holder_name: '',
@@ -60,19 +79,19 @@ async function renderPage(router) {
                 <article class="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
                   <div class="space-y-2">
                     <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="text-base font-bold text-slate-900">${escapeHtml(account.account_name || '-')}</h3>
+                      <h3 class="text-base font-bold text-slate-900">${esc(account.account_name || '-')}</h3>
                       ${account.is_default ? '<span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Default</span>' : ''}
-                      <span class="rounded-full ${account.status === 'ACTIVE' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'} px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]">${escapeHtml(account.status)}</span>
+                      <span class="rounded-full ${account.status === 'ACTIVE' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500'} px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.18em]">${esc(account.status)}</span>
                     </div>
-                    <p class="text-sm text-slate-500">${escapeHtml(account.bank_name || '-')} ${account.branch_name ? `• ${escapeHtml(account.branch_name)}` : ''}</p>
+                    <p class="text-sm text-slate-500">${esc(account.bank_name || '-')} ${account.branch_name ? `• ${esc(account.branch_name)}` : ''}</p>
                     <div class="grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
-                      <div>A/C No: <span class="font-semibold text-slate-900">${escapeHtml(account.account_number || '-')}</span></div>
-                      <div>IFSC: <span class="font-semibold text-slate-900">${escapeHtml(account.ifsc_code || '-')}</span></div>
-                      <div>Holder: <span class="font-semibold text-slate-900">${escapeHtml(account.account_holder_name || '-')}</span></div>
-                      <div>Type: <span class="font-semibold text-slate-900">${escapeHtml(account.account_type || '-')}</span></div>
+                      <div>A/C No: <span class="font-semibold text-slate-900">${esc(account.account_number || '-')}</span></div>
+                      <div>IFSC: <span class="font-semibold text-slate-900">${esc(account.ifsc_code || '-')}</span></div>
+                      <div>Holder: <span class="font-semibold text-slate-900">${esc(account.account_holder_name || '-')}</span></div>
+                      <div>Type: <span class="font-semibold text-slate-900">${esc(account.account_type || '-')}</span></div>
                     </div>
-                    ${account.upi_id ? `<p class="text-sm text-slate-600">UPI: <span class="font-semibold text-slate-900">${escapeHtml(account.upi_id)}</span></p>` : ''}
-                    ${account.notes ? `<p class="text-sm text-slate-500">${escapeHtml(account.notes)}</p>` : ''}
+                    ${account.upi_id ? `<p class="text-sm text-slate-600">UPI: <span class="font-semibold text-slate-900">${esc(account.upi_id)}</span></p>` : ''}
+                    ${account.notes ? `<p class="text-sm text-slate-500">${esc(account.notes)}</p>` : ''}
                   </div>
                   <div class="flex flex-wrap gap-2 lg:justify-end">
                     ${!account.is_default ? `<button class="set-default-btn rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition" data-id="${account._id}">Set Default</button>` : ''}
@@ -177,7 +196,7 @@ async function renderPage(router) {
       <div class="max-w-4xl mx-auto px-4 py-16 space-y-4">
         <h1 class="text-3xl font-black text-slate-900">Bank Accounts</h1>
         <div class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700">
-          Failed to load bank accounts. ${escapeHtml(error.message || 'Unknown error')}
+          Failed to load bank accounts. ${esc(error.message || 'Unknown error')}
         </div>
       </div>
     `, router);
@@ -210,9 +229,10 @@ function bindPageEvents(router, accounts) {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to set default bank account');
+        showToast('Default bank account updated');
         await renderPage(router);
       } catch (error) {
-        showError(error.message);
+        showToast(error.message, 'error');
       }
     });
   });
@@ -230,9 +250,10 @@ function bindPageEvents(router, accounts) {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to delete bank account');
+        showToast('Bank account deleted');
         await renderPage(router);
       } catch (error) {
-        showError(error.message);
+        showToast(error.message, 'error');
       }
     });
   });
@@ -267,9 +288,10 @@ function bindPageEvents(router, accounts) {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to save bank account');
+      showToast(id ? 'Bank account updated' : 'Bank account created');
       await renderPage(router);
     } catch (error) {
-      showError(error.message);
+      showToast(error.message, 'error');
     } finally {
       saveBtn.disabled = false;
       saveBtn.textContent = 'Save Bank Account';
@@ -322,13 +344,4 @@ function bindPageEvents(router, accounts) {
     errorEl.textContent = '';
     errorEl.classList.add('hidden');
   }
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

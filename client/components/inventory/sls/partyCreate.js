@@ -7,6 +7,7 @@ import { fetchPartyByGST } from './partyManager.js';
 import { showToast }       from './toast.js';
 import { fetchWithCSRF }   from '../../../utils/api.js';
 import { escHtml }         from './utils.js';
+import { INDIA_STATE_CODES } from './stateManager.js';
 
 export function openCreatePartyModal(state, onPartySaved) {
     const subModal   = document.getElementById('sub-modal-backdrop');
@@ -61,7 +62,7 @@ export function openCreatePartyModal(state, onPartySaved) {
 
             <div>
                 <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wide">State Code</label>
-                <input type="number" name="state_code" id="new-party-state-code"
+                <input type="text" name="state_code" id="new-party-state-code" inputmode="numeric" maxlength="2"
                        class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-gray-50 outline-none text-gray-400 cursor-not-allowed" readonly>
             </div>
 
@@ -105,12 +106,27 @@ export function openCreatePartyModal(state, onPartySaved) {
     document.getElementById('new-party-gstin').addEventListener('input', e => {
         const val = e.target.value.toUpperCase();
         e.target.value = val;
-        if (val.length >= 2 && !isNaN(val.substring(0, 2))) {
+        // BUG FIX: was !isNaN(val.substring(0,2)) which passes for '', ' ', etc.
+        // Use regex to confirm first two chars are digits before writing state_code.
+        if (val.length >= 2 && /^\d{2}/.test(val)) {
             document.getElementById('new-party-state-code').value = val.substring(0, 2);
+        } else if (val.length < 2) {
+            // BUG FIX: clear stale state_code when GSTIN is erased
+            document.getElementById('new-party-state-code').value = '';
         }
         if (val.length >= 12) {
             document.getElementById('new-party-pan').value = val.substring(2, 12);
         }
+    });
+
+    // Auto-detect State Code from State name for unregistered parties
+    // (GSTIN is absent so the GSTIN listener above never fires; use the name→code map)
+    document.getElementById('new-party-state').addEventListener('input', e => {
+        const gstinVal = document.getElementById('new-party-gstin').value.trim();
+        // Only update from state name when GSTIN is not already providing the code
+        if (gstinVal.length >= 2) return;
+        const code = INDIA_STATE_CODES[e.target.value.trim().toLowerCase()];
+        document.getElementById('new-party-state-code').value = code ?? '';
     });
 
     document.getElementById('btn-fetch-gst').addEventListener('click', function () {
@@ -124,7 +140,11 @@ export function openCreatePartyModal(state, onPartySaved) {
 
         data.supply     = data.state;
         data.gstin      = data.gstin   || 'UNREGISTERED';
-        data.state_code = data.state_code || null;
+        // BUG FIX: state_code is now type="text" to preserve leading zeros (e.g. "07").
+        // Zero-pad as a safety net in case the value arrived as a bare digit (e.g. "7").
+        data.state_code = data.state_code
+            ? data.state_code.toString().padStart(2, '0')
+            : null;
         data.contact    = data.contact || null;
         data.addr       = data.addr    || null;
         data.pin        = data.pin     || null;

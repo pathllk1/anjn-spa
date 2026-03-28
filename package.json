@@ -57,6 +57,7 @@
     "libsql": "^0.5.22",
     "mongoose": "^8.0.0",
     "morgan": "^1.10.1",
+    "multer": "^2.1.1",
     "pdfmake": "^0.3.3",
     "tailwindcss": "^4.1.18",
     "uuid": "^9.0.0",

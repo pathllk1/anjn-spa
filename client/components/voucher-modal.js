@@ -6,16 +6,35 @@
 import { api, fetchWithCSRF } from '../utils/api.js';
 import { fetchBankAccounts, populateBankAccountSelect } from '../utils/bankAccounts.js';
 
+/* ── Helpers ────────────────────────────────────────────────────────── */
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function showToast(message, type = 'success') {
+  const existing = document.getElementById('vm-toast');
+  if (existing) existing.remove();
+  const colors = { 
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800', 
+    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+  const el = document.createElement('div');
+  el.id = 'vm-toast';
+  el.className = `fixed bottom-6 right-6 z-[60] flex items-center gap-3 border rounded-xl px-5 py-3 shadow-lg text-sm font-medium ${colors[type] || colors.success}`;
+  el.innerHTML = `<span>${esc(message)}</span><button onclick="this.parentElement.remove()" class="ml-2 opacity-60 hover:opacity-100">&times;</button>`;
+  document.body.appendChild(el);
+  setTimeout(() => el?.remove(), 4000);
+}
+
 export function openVoucherModal(voucher, callbacks) {
   const { onUpdate } = callbacks;
 
   // Create modal HTML
   const modalHTML = `
-    <div id="voucher-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div id="voucher-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-4 flex justify-between items-center">
+        <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-4 flex justify-between items-center sticky top-0 z-10">
           <h2 class="text-xl font-bold">Edit Voucher</h2>
-          <button id="close-voucher-modal" class="text-white hover:text-gray-200 text-2xl leading-none">&times;</button>
+          <button id="close-voucher-modal" class="text-white hover:text-gray-200 text-2xl leading-none focus:outline-none">&times;</button>
         </div>
 
         <form id="voucher-edit-form" class="p-6 space-y-6">
@@ -23,12 +42,12 @@ export function openVoucherModal(voucher, callbacks) {
           <div>
             <label class="block text-sm font-semibold text-gray-700 mb-4">Voucher Type *</label>
             <div class="flex gap-6">
-              <label class="flex items-center">
+              <label class="flex items-center cursor-pointer">
                 <input type="radio" name="voucher_type" value="RECEIPT" ${voucher.voucher_type === 'RECEIPT' ? 'checked' : ''}
                        class="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 focus:ring-green-500" required>
                 <span class="ml-2 text-sm font-medium text-gray-900">Receipt Voucher</span>
               </label>
-              <label class="flex items-center">
+              <label class="flex items-center cursor-pointer">
                 <input type="radio" name="voucher_type" value="PAYMENT" ${voucher.voucher_type === 'PAYMENT' ? 'checked' : ''}
                        class="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 focus:ring-red-500" required>
                 <span class="ml-2 text-sm font-medium text-gray-900">Payment Voucher</span>
@@ -46,10 +65,18 @@ export function openVoucherModal(voucher, callbacks) {
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Party *</label>
-              <select id="party-select" name="party_id" required
-                      class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition">
-                <option value="">Loading parties...</option>
-              </select>
+              <div class="relative">
+                <select id="party-select" name="party_id" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition appearance-none">
+                  <option value="">Loading parties...</option>
+                </select>
+                <div id="party-loading-spinner" class="absolute right-8 top-1/2 -translate-y-1/2">
+                   <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                   </svg>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -57,9 +84,12 @@ export function openVoucherModal(voucher, callbacks) {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Amount *</label>
-              <input type="number" id="amount" name="amount" step="0.01" min="0.01"
-                     value="${voucher.amount || ''}" required
-                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition" placeholder="0.00">
+              <div class="relative">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
+                <input type="number" id="amount" name="amount" step="0.01" min="0.01"
+                       value="${voucher.amount || ''}" required
+                       class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition" placeholder="0.00">
+              </div>
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-2">Payment Mode *</label>
@@ -90,38 +120,38 @@ export function openVoucherModal(voucher, callbacks) {
             <label class="block text-sm font-semibold text-gray-700 mb-2">Narration</label>
             <textarea id="narration" name="narration" rows="3"
                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition resize-none"
-                      placeholder="Enter voucher description">${voucher.narration || ''}</textarea>
+                      placeholder="Enter voucher description">${esc(voucher.narration || '')}</textarea>
           </div>
 
           <!-- Transaction Summary -->
-          <div class="bg-gray-50 rounded-lg p-4">
+          <div class="bg-gray-50 rounded-lg p-4 border border-gray-100">
             <h4 class="text-sm font-semibold text-gray-700 mb-3">Transaction Summary</h4>
             <div class="space-y-2">
-              <div class="flex justify-between">
-                <span class="text-sm text-gray-600">Type:</span>
-                <span id="summary-type" class="text-sm font-medium text-gray-900">${voucher.voucher_type || '-'}</span>
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-500 uppercase font-bold tracking-wider">Type:</span>
+                <span id="summary-type" class="text-sm font-medium text-gray-900">${esc(voucher.voucher_type || '-')}</span>
               </div>
-              <div class="flex justify-between">
-                <span class="text-sm text-gray-600">Party:</span>
-                <span id="summary-party" class="text-sm font-medium text-gray-900">${voucher.party_name || '-'}</span>
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-500 uppercase font-bold tracking-wider">Party:</span>
+                <span id="summary-party" class="text-sm font-medium text-gray-900">${esc(voucher.party_name || '-')}</span>
               </div>
-              <div class="flex justify-between">
-                <span class="text-sm text-gray-600">Amount:</span>
-                <span id="summary-amount" class="text-sm font-medium text-gray-900">${voucher.amount ? `₹${parseFloat(voucher.amount).toFixed(2)}` : '-'}</span>
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-500 uppercase font-bold tracking-wider">Amount:</span>
+                <span id="summary-amount" class="text-sm font-medium text-gray-900">${voucher.amount ? `₹${parseFloat(voucher.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '-'}</span>
               </div>
-              <div class="flex justify-between">
-                <span class="text-sm text-gray-600">Payment Mode:</span>
-                <span id="summary-mode" class="text-sm font-medium text-gray-900">${voucher.payment_mode || '-'}</span>
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-500 uppercase font-bold tracking-wider">Payment Mode:</span>
+                <span id="summary-mode" class="text-sm font-medium text-gray-900">${esc(voucher.payment_mode || '-')}</span>
               </div>
             </div>
           </div>
 
           <!-- Submit Buttons -->
           <div class="flex justify-end gap-4 pt-6 border-t border-gray-200">
-            <button type="button" id="cancel-edit-btn" class="px-6 py-3 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition">
+            <button type="button" id="cancel-edit-btn" class="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 font-bold hover:bg-gray-200 transition">
               Cancel
             </button>
-            <button type="submit" id="save-btn" class="px-6 py-3 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" id="save-btn" class="px-6 py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition disabled:opacity-50 disabled:cursor-not-allowed">
               Update Voucher
             </button>
           </div>
@@ -149,6 +179,7 @@ export function openVoucherModal(voucher, callbacks) {
   // Form elements
   const transactionDateInput = document.getElementById('transaction-date');
   const partySelect = document.getElementById('party-select');
+  const partySpinner = document.getElementById('party-loading-spinner');
   const amountInput = document.getElementById('amount');
   const paymentModeSelect = document.getElementById('payment-mode');
   const bankAccountSection = document.getElementById('bank-account-section');
@@ -175,6 +206,7 @@ export function openVoucherModal(voucher, callbacks) {
 
     } catch (error) {
       console.error('Error initializing modal:', error);
+      showToast('Error loading modal data', 'error');
     }
   }
 
@@ -183,11 +215,13 @@ export function openVoucherModal(voucher, callbacks) {
       const data = await api.get('/api/inventory/sales/parties');
       const parties = data.data || [];
 
+      partySpinner?.classList.add('hidden');
       partySelect.innerHTML = '<option value="">Select Party</option>' +
-        parties.map(party => `<option value="${party._id || party.id}" ${(party._id || party.id) == selectedPartyId ? 'selected' : ''}>${party.firm} (${party.contact_person || 'N/A'})</option>`).join('');
+        parties.map(party => `<option value="${party._id || party.id}" ${(party._id || party.id) == selectedPartyId ? 'selected' : ''}>${esc(party.firm)} (${esc(party.contact_person || 'N/A')})</option>`).join('');
 
     } catch (error) {
       console.error('Failed to load parties:', error);
+      partySpinner?.classList.add('hidden');
       partySelect.innerHTML = '<option value="">Failed to load parties</option>';
     }
   }
@@ -215,14 +249,37 @@ export function openVoucherModal(voucher, callbacks) {
       }
     });
 
+    // Keyboard support
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleSubmit(new Event('submit'));
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+    modal._keydownHandler = handleKeydown;
+
     // Form interactions
     document.querySelectorAll('input[name="voucher_type"]').forEach(radio => {
       radio.addEventListener('change', updateSummary);
     });
 
-    partySelect.addEventListener('change', updateSummary);
-    amountInput.addEventListener('input', updateSummary);
-    paymentModeSelect.addEventListener('change', handlePaymentModeChange);
+    partySelect.addEventListener('change', () => {
+      partySelect.classList.remove('border-red-500', 'ring-red-200');
+      updateSummary();
+    });
+    
+    amountInput.addEventListener('input', () => {
+      amountInput.classList.remove('border-red-500', 'ring-red-200');
+      updateSummary();
+    });
+
+    paymentModeSelect.addEventListener('change', () => {
+      paymentModeSelect.classList.remove('border-red-500', 'ring-red-200');
+      handlePaymentModeChange();
+    });
+
     form.addEventListener('submit', handleSubmit);
   }
 
@@ -251,41 +308,43 @@ export function openVoucherModal(voucher, callbacks) {
 
     document.getElementById('summary-type').textContent = voucherType ? voucherType.charAt(0).toUpperCase() + voucherType.slice(1).toLowerCase() : '-';
     document.getElementById('summary-party').textContent = partyText || '-';
-    document.getElementById('summary-amount').textContent = amount > 0 ? `₹${amount.toFixed(2)}` : '-';
+    document.getElementById('summary-amount').textContent = amount > 0 ? `₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '-';
     document.getElementById('summary-mode').textContent = paymentMode || '-';
   }
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
 
     const formData = new FormData(form);
     const voucherData = Object.fromEntries(formData);
 
     // Validate required fields
-    if (!voucherData.voucher_type) {
-      alert('Please select voucher type');
-      return;
-    }
+    let hasError = false;
 
     if (!voucherData.party_id) {
-      alert('Please select a party');
-      return;
+      partySelect.classList.add('border-red-500', 'ring-red-200');
+      hasError = true;
     }
 
     if (!voucherData.amount || parseFloat(voucherData.amount) <= 0) {
-      alert('Please enter a valid amount');
-      return;
+      amountInput.classList.add('border-red-500', 'ring-red-200');
+      hasError = true;
     }
 
     if (!voucherData.payment_mode) {
-      alert('Please select payment mode');
-      return;
+      paymentModeSelect.classList.add('border-red-500', 'ring-red-200');
+      hasError = true;
     }
 
     // Check if bank account is required
     const isBankMode = voucherData.payment_mode && !voucherData.payment_mode.toLowerCase().includes('cash');
     if (isBankMode && !voucherData.bank_account_id) {
-      alert('Please select a bank account for bank transactions');
+      bankAccountSelect.classList.add('border-red-500', 'ring-red-200');
+      hasError = true;
+    }
+
+    if (hasError) {
+      showToast('Please correct the highlighted fields', 'error');
       return;
     }
 
@@ -304,25 +363,25 @@ export function openVoucherModal(voucher, callbacks) {
         throw new Error(errorData.error || 'Failed to update voucher');
       }
 
-      const result = await response.json();
-
       // Call the update callback if provided
       if (onUpdate) {
         await onUpdate(voucher.voucher_id, voucherData);
       }
 
-      alert('Voucher updated successfully!');
-      closeModal();
+      showToast('Voucher updated successfully!');
+      setTimeout(() => closeModal(), 1000);
 
     } catch (error) {
-      alert('Error updating voucher: ' + error.message);
-    } finally {
+      showToast('Error updating voucher: ' + error.message, 'error');
       saveBtn.disabled = false;
       saveBtn.textContent = 'Update Voucher';
     }
   }
 
   function closeModal() {
+    if (modal._keydownHandler) {
+      document.removeEventListener('keydown', modal._keydownHandler);
+    }
     modal.remove();
   }
 

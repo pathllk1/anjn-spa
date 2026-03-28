@@ -115,7 +115,7 @@ function renderStockRows(data, state, callbacks) {
         return `
             <tr class="hover:bg-blue-50/40 transition-colors group" data-stock-id="${escHtml(stockId)}">
                 <td class="p-2.5 font-semibold text-blue-900 max-w-[200px]">
-                    <div class="truncate" title="${escHtml(stock.item)}">${escHtml(stock.item)}</div>
+                    <div class="truncate stock-item-name" data-item-name="${escHtml(stock.item)}">${escHtml(stock.item)}</div>
                     ${stock.pno ? `<div class="text-[10px] text-gray-400 font-normal font-mono">${escHtml(stock.pno)}</div>` : ''}
                 </td>
                 <td class="p-2.5">${batchLabel}</td>
@@ -140,6 +140,10 @@ function renderStockRows(data, state, callbacks) {
                 </td>
             </tr>`;
     }).join('');
+
+    tbody.querySelectorAll('.stock-item-name').forEach(el => {
+        el.title = el.dataset.itemName;
+    });
 
     // Helper: look up full stock object from state by the ID stored in the row
     const lookupStock = (el) => {

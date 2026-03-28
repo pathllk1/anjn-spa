@@ -1,4 +1,5 @@
 import express from 'express';
+import multer  from 'multer';
 import * as inventoryController from '../../../controllers/mongo/inventory/prs/inventory.js';
 import { generateInvoicePDF } from '../../../controllers/mongo/inventory/pdfMakeController.js';
 import { generateInvoiceExcel } from '../../../controllers/mongo/inventory/exportUtils.js';
@@ -9,6 +10,43 @@ const router = express.Router();
 
 // All routes require authentication
 router.use(authMiddleware);
+
+/* ── Multer: bill file upload ──────────────────────────────────────────────
+ * Memory storage so the buffer is available for both local write and
+ * optional Backblaze upload without touching the filesystem twice.
+ * 200 KB hard limit; only PDF and JPEG accepted.
+ * ────────────────────────────────────────────────────────────────────────── */
+const _multerUpload = multer({
+    storage: multer.memoryStorage(),
+    limits:  { fileSize: 200 * 1024 },          // 200 KB
+    fileFilter: (_req, file, cb) => {
+        const allowed = ['application/pdf', 'image/jpeg'];
+        if (allowed.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PDF and JPEG/JPG files are allowed'), false);
+        }
+    },
+});
+
+/**
+ * Inline error handler for multer failures (wrong type, file too large).
+ * Converts multer errors into JSON 400 responses before they reach the
+ * global error handler, which may format them differently.
+ */
+function handleBillFileUpload(req, res, next) {
+    _multerUpload.single('billFile')(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            const msg = err.code === 'LIMIT_FILE_SIZE'
+                ? 'File too large. Maximum size is 200 KB.'
+                : err.message;
+            return res.status(400).json({ success: false, error: msg });
+        }
+        if (err) return res.status(400).json({ success: false, error: err.message });
+        next();
+    });
+}
+
 
 // --- STOCKS API ---
 router.get('/stocks', inventoryController.getAllStocks);
@@ -23,6 +61,7 @@ router.post('/parties', inventoryController.createParty);
 
 // --- BILLS API ---
 router.post('/bills', inventoryController.createBill);
+router.post('/bills/:id/upload', handleBillFileUpload, inventoryController.uploadBillFile);
 router.get('/bills/export', inventoryController.exportBillsExcel);
 router.get('/bills/export/pdf', inventoryController.exportBillsToPdf);
 router.get('/bills/:id/pdf', generateInvoicePDF);

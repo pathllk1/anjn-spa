@@ -3,6 +3,54 @@
  * Handles global state initialization, data fetching, and state updates
  */
 
+/**
+ * GST-registered state codes for all Indian states and UTs (zero-padded strings).
+ * Keys are lower-cased state name variants; value is the 2-digit code from GSTIN[0:2].
+ * Used as a fallback to resolve state_code from a state name string,
+ * particularly for unregistered suppliers where GSTIN is absent.
+ */
+export const INDIA_STATE_CODES = {
+    'jammu and kashmir':           '01', 'j&k':                       '01', 'jk':             '01',
+    'himachal pradesh':            '02', 'hp':                        '02',
+    'punjab':                      '03',
+    'chandigarh':                  '04',
+    'uttarakhand':                 '05', 'uttaranchal':               '05',
+    'haryana':                     '06',
+    'delhi':                       '07', 'new delhi':                 '07',
+    'rajasthan':                   '08',
+    'uttar pradesh':               '09', 'up':                        '09',
+    'bihar':                       '10',
+    'sikkim':                      '11',
+    'arunachal pradesh':           '12',
+    'nagaland':                    '13',
+    'manipur':                     '14',
+    'mizoram':                     '15',
+    'tripura':                     '16',
+    'meghalaya':                   '17',
+    'assam':                       '18',
+    'west bengal':                 '19', 'wb':                        '19',
+    'jharkhand':                   '20',
+    'odisha':                      '21', 'orissa':                    '21',
+    'chhattisgarh':                '22',
+    'madhya pradesh':              '23', 'mp':                        '23',
+    'gujarat':                     '24',
+    'daman and diu':               '25', 'daman & diu':               '25',
+    'dadra and nagar haveli':      '26', 'dadra & nagar haveli':      '26',
+    'maharashtra':                 '27',
+    'andhra pradesh':              '28', 'ap':                        '28',
+    'karnataka':                   '29',
+    'goa':                         '30',
+    'lakshadweep':                 '31',
+    'kerala':                      '32',
+    'tamil nadu':                  '33', 'tn':                        '33',
+    'puducherry':                  '34', 'pondicherry':               '34',
+    'andaman and nicobar islands': '35', 'andaman & nicobar islands': '35',
+    'telangana':                   '36', 'ts':                        '36',
+    'andhra pradesh (new)':        '37',
+    'ladakh':                      '38',
+    'other territory':             '97',
+};
+
 export function createInitialState() {
     return {
         stocks:                [],
@@ -303,9 +351,16 @@ export async function fetchData(state) {
 export function determineGstBillType(activeFirmLocation, selectedParty) {
     const firmCode  = activeFirmLocation?.state_code ||
                       activeFirmLocation?.gst_number?.substring(0, 2);
+
+    // Priority 1: explicit state_code stored on supplier document
+    // Priority 2: first 2 digits of GSTIN (registered suppliers)
+    // Priority 3: state name → code lookup (unregistered suppliers whose state was entered)
     const partyCode = selectedParty?.state_code ||
                       (selectedParty?.gstin && selectedParty.gstin !== 'UNREGISTERED'
                           ? selectedParty.gstin.substring(0, 2)
+                          : null) ||
+                      (selectedParty?.state
+                          ? INDIA_STATE_CODES[selectedParty.state.trim().toLowerCase()] ?? null
                           : null);
 
     if (!firmCode || !partyCode) return null;

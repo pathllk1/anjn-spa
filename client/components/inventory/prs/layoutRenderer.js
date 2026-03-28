@@ -188,6 +188,19 @@ export async function renderPartyCard(state) {
         }
 
         // FIX: escHtml applied to all party fields used in template
+        const billTypeBadge = (() => {
+            const bt = state.meta?.billType;
+            if (bt === 'intra-state') {
+                return `<span class="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded border border-green-200"
+                              title="Same state — CGST + SGST applies">Local</span>`;
+            }
+            if (bt === 'inter-state') {
+                return `<span class="bg-orange-100 text-orange-800 text-[10px] font-bold px-2 py-0.5 rounded border border-orange-200"
+                              title="Different state — IGST applies">Out of State</span>`;
+            }
+            return ''; // bill type not yet resolved
+        })();
+
         return `
             <div class="group bg-blue-50 p-3 rounded border border-blue-200 shadow-sm">
                 <div class="flex justify-between items-start">
@@ -207,6 +220,7 @@ export async function renderPartyCard(state) {
                     <span class="bg-blue-100 text-blue-800 text-[10px] font-mono px-2 py-0.5 rounded border border-blue-200">
                         GST: ${escHtml(state.selectedParty.gstin || '')}
                     </span>
+                    ${billTypeBadge}
                 </div>
                 <div class="flex items-center gap-2 mt-2">
                     <span class="${balanceInfo.balance >= 0 ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'} text-[10px] font-mono px-2 py-0.5 rounded border">
@@ -224,4 +238,31 @@ export async function renderPartyCard(state) {
             <span class="text-2xl group-hover:scale-110 transition-transform font-light">+</span>
             <span class="text-xs font-semibold uppercase tracking-wide">Select Party</span>
         </button>`;
+}
+
+/**
+ * Render a small "Attachment" badge for bill list / reports views.
+ *
+ * Usage (e.g. in the bills DataTable column renderer):
+ *   import { renderAttachmentBadge } from './layoutRenderer.js';
+ *   ...
+ *   cellRenderer: ({ data }) => renderAttachmentBadge(data.file_url)
+ *
+ * @param {string|null|undefined} fileUrl - The bill's file_url field from MongoDB.
+ * @returns {string} HTML string — a clickable badge if attached, empty string if not.
+ */
+export function renderAttachmentBadge(fileUrl) {
+    if (!fileUrl) return '';
+    const safeUrl = escHtml(fileUrl);
+    return `
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200
+                  text-[10px] font-bold px-1.5 py-0.5 rounded hover:bg-indigo-100 transition-colors"
+           title="View attached scanned bill">
+            <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+            Attachment
+        </a>`;
 }

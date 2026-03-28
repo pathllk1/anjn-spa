@@ -213,6 +213,7 @@ export function initStocksSystem() {
         document.getElementById('category-filter')?.addEventListener('change', (e) => {
             state.filters.category = e.target.value;
             state.currentPage = 1; // Reset to first page
+            state.searchQuery = ''; // Clear search query
             updateDisplay();
         });
 
@@ -287,11 +288,12 @@ export function initStocksSystem() {
         return state.stocks.filter(stock => {
             // Search filter
             if (state.searchQuery) {
+                const query = state.searchQuery.toLowerCase();
                 const searchMatch = 
-                    stock.item.toLowerCase().includes(state.searchQuery) ||
-                    (stock.batch && stock.batch.toLowerCase().includes(state.searchQuery)) ||
-                    (stock.hsn && stock.hsn.toLowerCase().includes(state.searchQuery)) ||
-                    (stock.oem && stock.oem.toLowerCase().includes(state.searchQuery));
+                    stock.item.toLowerCase().includes(query) ||
+                    (stock.batch && stock.batch.toLowerCase().includes(query)) ||
+                    (stock.hsn && stock.hsn.toLowerCase().includes(query)) ||
+                    (stock.oem && stock.oem.toLowerCase().includes(query));
                 if (!searchMatch) return false;
             }
 

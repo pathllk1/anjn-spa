@@ -1,32 +1,36 @@
-/**
- * profit-loss.js — Financial Statements (2 tabs)
- *
- * Tab 1: Trading & P&L Account (existing, unchanged logic)
- * Tab 2: Balance Sheet (new)
- *
- * Both derived from /api/ledger/accounts with optional date filters.
- *
- * ── Account type routing ────────────────────────────────────────────────────
- *
- *  P&L  (Tab 1): INCOME · EXPENSE · GENERAL
- *  BS   (Tab 2): ASSET · LIABILITY · DEBTOR · CREDITOR · CASH · BANK
- *
- * ── Balance Sheet structure ─────────────────────────────────────────────────
- *
- *  Liabilities (left/Cr)         Assets (right/Dr)
- *  ─────────────────────         ─────────────────
- *  Capital (balancing)           Fixed & Other Assets  (ASSET)
- *  Net Profit / (Loss)           Stock / Inventory     (ASSET w/ stock keywords)
- *  Loans & Liabilities (LIAB)    Tax Receivables       (ASSET w/ gst keywords)
- *  Creditors (CREDITOR)          Sundry Debtors        (DEBTOR)
- *                                Cash & Bank            (CASH · BANK)
- *
- *  Capital = Total Assets − Total External Liabilities − Net Profit
- */
-
 import { renderLayout } from '../../components/layout.js';
 import { requireAuth }   from '../../middleware/authMiddleware.js';
 import { api }           from '../../utils/api.js';
+
+/* ── Helpers ────────────────────────────────────────────────────────── */
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+const fmtINR = (n) =>
+  '₹\u202f' + new Intl.NumberFormat('en-IN', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: Math.abs(Number(n || 0)) >= 100000 ? 0 : 2 
+  }).format(Number(n || 0));
+
+const fmtDate = (s) => {
+  try { return new Date(s + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+  catch { return s || ''; }
+};
+
+function showToast(message, type = 'success') {
+  const existing = document.getElementById('pl-toast');
+  if (existing) existing.remove();
+  const colors = { 
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800', 
+    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+  const el = document.createElement('div');
+  el.id = 'pl-toast';
+  el.className = `fixed bottom-6 right-6 z-50 flex items-center gap-3 border rounded-xl px-5 py-3 shadow-lg text-sm font-medium ${colors[type] || colors.success}`;
+  el.innerHTML = `<span>${esc(message)}</span><button onclick="this.parentElement.remove()" class="ml-2 opacity-60 hover:opacity-100">&times;</button>`;
+  document.body.appendChild(el);
+  setTimeout(() => el?.remove(), 4000);
+}
 
 const PL_TYPES = new Set(['INCOME', 'EXPENSE', 'GENERAL']);
 const BS_TYPES = new Set(['ASSET', 'LIABILITY', 'DEBTOR', 'CREDITOR', 'CASH', 'BANK']);
@@ -89,8 +93,8 @@ function buildQS(s, e) {
 // ─── Normalise ────────────────────────────────────────────────────────────────
 
 function normalise(a) {
-  const dr   = toN(a.total_debit);
-  const cr   = toN(a.total_credit);
+  const dr   = Number(a.total_debit || 0);
+  const cr   = Number(a.total_credit || 0);
   const netCr = cr - dr;  // +ve = net credit, -ve = net debit
   const netDr = dr - cr;  // +ve = net debit
   return {
@@ -172,7 +176,6 @@ function buildBSModel(allAccounts, netProfit, startDate, endDate) {
   const liabilitiesRaw = bs.filter(a => a.type === 'LIABILITY');
   const creditorsRaw = bs.filter(a => a.type === 'CREDITOR');
 
-  // Debit balances belong on the asset side. Credit balances belong on the liability side.
   const stockAssets = assetAccounts.filter(a => isStock(a) && a.netDr > 0);
   const gstAssets = assetAccounts.filter(a => !isStock(a) && isGSTRec(a) && a.netDr > 0);
   const otherAssets = assetAccounts.filter(a => !isStock(a) && !isGSTRec(a) && a.netDr > 0);
@@ -208,9 +211,8 @@ function buildBSModel(allAccounts, netProfit, startDate, endDate) {
   const totalExtLib = totalLiab + totalCred + totalAssetCreditBalances
                     + totalDebtorCreditBalances + totalCashBankCreditBalances;
 
-  // Capital = Assets-side items − External liability-side items − current P&L result.
   const capital = totalAssets - totalExtLib - netProfit;
-  const totalLiabSide = totalExtLib + capital + netProfit; // = totalAssets
+  const totalLiabSide = totalExtLib + capital + netProfit;
 
   const balanced     = Math.abs(totalAssets - totalLiabSide) < 0.02;
   const periodLabel  = periodStr(startDate, endDate);
@@ -221,15 +223,12 @@ function buildBSModel(allAccounts, netProfit, startDate, endDate) {
 
   return {
     startDate, endDate, periodLabel,
-    // Asset groups
     stockAssets, gstAssets, otherAssets, debtors, cashBank,
     liabilityDebitBalances, creditorDebitBalances,
     totalStock, totalGST, totalOtherA, totalDebtors, totalCashBank,
     totalLiabilityDebitBalances, totalCreditorDebitBalances, totalAssets,
-    // Liability groups
     liabilities, creditors, assetCreditBalances, debtorCreditBalances, cashBankCreditBalances,
     totalLiab, totalCred, totalAssetCreditBalances, totalDebtorCreditBalances, totalCashBankCreditBalances, totalExtLib,
-    // Capital
     capital, netProfit,
     assetSideCount, liabilitySideCount,
     totalLiabSide, balanced,
@@ -258,7 +257,7 @@ function renderPage(pl, bs) {
           </div>
           <div class="min-w-0">
             <h1 class="text-sm font-black text-slate-900">Financial Statements</h1>
-            <p class="text-[10px] text-slate-400">${escH(pl.periodLabel)}</p>
+            <p class="text-[10px] text-slate-400">${esc(pl.periodLabel)}</p>
           </div>
 
           <!-- Tabs -->
@@ -275,10 +274,10 @@ function renderPage(pl, bs) {
         <!-- Right: filters + actions -->
         <div class="flex flex-wrap items-center gap-2">
           <div class="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-            <input id="pl-start-date" type="date" value="${escH(pl.startDate || '')}"
+            <input id="pl-start-date" type="date" value="${esc(pl.startDate || '')}"
                    class="w-28 bg-transparent text-xs text-slate-700 outline-none focus:ring-0"/>
             <span class="text-[10px] text-slate-400">–</span>
-            <input id="pl-end-date" type="date" value="${escH(pl.endDate || '')}"
+            <input id="pl-end-date" type="date" value="${esc(pl.endDate || '')}"
                    class="w-28 bg-transparent text-xs text-slate-700 outline-none focus:ring-0"/>
           </div>
           <button id="pl-apply"
@@ -286,7 +285,7 @@ function renderPage(pl, bs) {
                          transition hover:bg-violet-700">Apply</button>
           <button id="pl-clear"
                   class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold
-                         text-slate-600 transition hover:bg-slate-50">Clear</button>
+                         text-slate-600 transition hover:bg-slate-50">Reset</button>
           <button id="pl-refresh" title="Refresh"
                   class="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-slate-600
                          transition hover:bg-slate-50">
@@ -295,7 +294,6 @@ function renderPage(pl, bs) {
                     d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"/>
             </svg>
           </button>
-          <!-- PDF export: context-aware — exports whichever tab is active -->
           <button id="pl-export-pdf" title="Export PDF"
                   class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50
                          px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
@@ -332,10 +330,10 @@ function renderPL(m) {
 
       <!-- KPI strip -->
       <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        ${kpi('Revenue',      fmtC(m.totalRevenueCr),        `${m.crIncome.length} income account${m.crIncome.length !== 1 ? 's' : ''}`,       'from-emerald-500 to-green-600')}
-        ${kpi('Gross Profit', fmtC(Math.abs(m.grossProfit)), `${fmtP(m.gpMargin)} margin · ${isGP ? 'profit' : 'loss'}`,                       isGP  ? 'from-sky-500 to-blue-600'    : 'from-rose-500 to-pink-700')}
-        ${kpi('Total OpEx',   fmtC(m.totalOpex),             `${m.drOpex.length} expense account${m.drOpex.length !== 1 ? 's' : ''}`,           'from-amber-500 to-orange-600')}
-        ${kpi('Net Profit',   fmtC(Math.abs(m.netProfit)),   `${fmtP(m.npMargin)} net margin · ${isProfit ? 'profit' : 'loss'}`,                isProfit ? 'from-violet-600 to-indigo-600' : 'from-rose-500 to-pink-700')}
+        ${kpi('Revenue',      fmtINR(m.totalRevenueCr),        `${m.crIncome.length} income account${m.crIncome.length !== 1 ? 's' : ''}`,       'from-emerald-500 to-green-600')}
+        ${kpi('Gross Profit', fmtINR(Math.abs(m.grossProfit)), `${fmtP(m.gpMargin)} margin · ${isGP ? 'profit' : 'loss'}`,                       isGP  ? 'from-sky-500 to-blue-600'    : 'from-rose-500 to-pink-700')}
+        ${kpi('Total OpEx',   fmtINR(m.totalOpex),             `${m.drOpex.length} expense account${m.drOpex.length !== 1 ? 's' : ''}`,           'from-amber-500 to-orange-600')}
+        ${kpi('Net Profit',   fmtINR(Math.abs(m.netProfit)),   `${fmtP(m.npMargin)} net margin · ${isProfit ? 'profit' : 'loss'}`,                isProfit ? 'from-violet-600 to-indigo-600' : 'from-rose-500 to-pink-700')}
       </div>
 
       <!-- 2-column statement -->
@@ -348,17 +346,17 @@ function renderPL(m) {
             <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
               Trading &amp; Profit &amp; Loss Account
             </p>
-            <p class="mt-0.5 text-xs font-semibold text-white">${escH(m.periodLabel)}</p>
+            <p class="mt-0.5 text-xs font-semibold text-white">${esc(m.periodLabel)}</p>
           </div>
           <div class="flex items-center gap-5">
             <div class="text-right">
               <p class="text-[10px] uppercase tracking-wide text-slate-500">Dr</p>
-              <p class="text-sm font-black text-rose-300">${fmtC(m.drGrand)}</p>
+              <p class="text-sm font-black text-rose-300">${fmtINR(m.drGrand)}</p>
             </div>
             <div class="h-8 w-px bg-white/10"></div>
             <div class="text-right">
               <p class="text-[10px] uppercase tracking-wide text-slate-500">Cr</p>
-              <p class="text-sm font-black text-emerald-300">${fmtC(m.crGrand)}</p>
+              <p class="text-sm font-black text-emerald-300">${fmtINR(m.crGrand)}</p>
             </div>
           </div>
         </div>
@@ -456,11 +454,11 @@ function renderPL(m) {
                                : 'bg-gradient-to-br from-rose-600 to-pink-800'}">
           <div class="flex items-center justify-between gap-2 px-5 py-3">
             <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Dr Total</span>
-            <span class="text-base font-black text-white tabular-nums">${fmtC(m.drGrand)}</span>
+            <span class="text-base font-black text-white tabular-nums">${fmtINR(m.drGrand)}</span>
           </div>
           <div class="flex items-center justify-between gap-2 px-5 py-3">
             <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Cr Total</span>
-            <span class="text-base font-black text-white tabular-nums">${fmtC(m.crGrand)}</span>
+            <span class="text-base font-black text-white tabular-nums">${fmtINR(m.crGrand)}</span>
           </div>
         </div>
       </div>
@@ -476,12 +474,12 @@ function renderPL(m) {
             </p>
             <p class="mt-0.5 text-xs text-slate-500">
               Net margin ${fmtP(m.npMargin)} · Gross margin ${fmtP(m.gpMargin)}
-              ${m.totalContraInc > 0 ? ` · ${fmtC(m.totalContraInc)} contra income` : ''}
-              ${m.totalGeneralNet !== 0 ? ` · ${m.totalGeneralNet > 0 ? '+' : ''}${fmtC(m.totalGeneralNet)} misc` : ''}
+              ${m.totalContraInc > 0 ? ` · ${fmtINR(m.totalContraInc)} contra income` : ''}
+              ${m.totalGeneralNet !== 0 ? ` · ${m.totalGeneralNet > 0 ? '+' : ''}${fmtINR(m.totalGeneralNet)} misc` : ''}
             </p>
           </div>
           <p class="text-2xl font-black ${isProfit ? 'text-violet-700' : 'text-rose-700'}">
-            ${fmtC(Math.abs(m.netProfit))}
+            ${fmtINR(Math.abs(m.netProfit))}
           </p>
         </div>
       </div>
@@ -502,10 +500,10 @@ function renderBS(m) {
 
       <!-- BS KPI strip -->
       <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        ${kpi('Total Assets',       fmtC(m.totalAssets),   `${m.assetSideCount} accounts`,       'from-sky-500 to-blue-600')}
-        ${kpi('Total Liabilities',  fmtC(m.totalExtLib),   `${m.liabilitySideCount} accounts`,   'from-rose-500 to-pink-600')}
-        ${kpi('Capital',            fmtC(Math.abs(m.capital)), isCapPos ? 'Owner equity' : 'Capital deficit',                                                                       isCapPos ? 'from-emerald-500 to-green-600' : 'from-amber-500 to-orange-600')}
-        ${kpi('Net Profit / (Loss)',fmtC(Math.abs(m.netProfit)), `${fmtP(isProfit ? 1 : -1)} · ${isProfit ? 'Profit' : 'Loss'}`,                                                   isProfit ? 'from-violet-600 to-indigo-600' : 'from-rose-500 to-pink-700')}
+        ${kpi('Total Assets',       fmtINR(m.totalAssets),   `${m.assetSideCount} accounts`,       'from-sky-500 to-blue-600')}
+        ${kpi('Total Liabilities',  fmtINR(m.totalExtLib),   `${m.liabilitySideCount} accounts`,   'from-rose-500 to-pink-600')}
+        ${kpi('Capital',            fmtINR(Math.abs(m.capital)), isCapPos ? 'Owner equity' : 'Capital deficit',                                                                       isCapPos ? 'from-emerald-500 to-green-600' : 'from-amber-500 to-orange-600')}
+        ${kpi('Net Profit / (Loss)',fmtINR(Math.abs(m.netProfit)), `${fmtP(isProfit ? 1 : -1)} · ${isProfit ? 'Profit' : 'Loss'}`,                                                   isProfit ? 'from-violet-600 to-indigo-600' : 'from-rose-500 to-pink-700')}
       </div>
 
       <!-- Balance check badge -->
@@ -516,7 +514,7 @@ function renderBS(m) {
                        : 'border border-rose-200 bg-rose-50 text-rose-700'}">
           ${m.balanced
             ? `<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg> Balanced`
-            : `<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg> Imbalanced — ${fmtC(Math.abs(m.totalAssets - m.totalLiabSide))} difference`}
+            : `<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg> Imbalanced — ${fmtINR(Math.abs(m.totalAssets - m.totalLiabSide))} difference`}
         </span>
         <span class="text-[10px] text-slate-400">Capital is computed as: Total Assets − External Liabilities − Net Profit</span>
       </div>
@@ -529,17 +527,17 @@ function renderBS(m) {
         <div class="flex items-center justify-between gap-4 border-b border-white/10 bg-slate-900 px-5 py-3">
           <div>
             <p class="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">Balance Sheet</p>
-            <p class="mt-0.5 text-xs font-semibold text-white">${escH(m.periodLabel)}</p>
+            <p class="mt-0.5 text-xs font-semibold text-white">${esc(m.periodLabel)}</p>
           </div>
           <div class="flex items-center gap-5">
             <div class="text-right">
               <p class="text-[10px] uppercase tracking-wide text-slate-500">Liabilities</p>
-              <p class="text-sm font-black text-rose-300">${fmtC(m.totalLiabSide)}</p>
+              <p class="text-sm font-black text-rose-300">${fmtINR(m.totalLiabSide)}</p>
             </div>
             <div class="h-8 w-px bg-white/10"></div>
             <div class="text-right">
               <p class="text-[10px] uppercase tracking-wide text-slate-500">Assets</p>
-              <p class="text-sm font-black text-emerald-300">${fmtC(m.totalAssets)}</p>
+              <p class="text-sm font-black text-emerald-300">${fmtINR(m.totalAssets)}</p>
             </div>
           </div>
         </div>
@@ -578,7 +576,7 @@ function renderBS(m) {
                   <p class="text-[10px] text-slate-400">Assets − Liabilities − Net Profit</p>
                 </div>
                 <span class="w-24 text-right text-xs font-bold tabular-nums
-                             ${isCapPos ? 'text-emerald-700' : 'text-rose-600'}">${fmtC(Math.abs(m.capital))}</span>
+                             ${isCapPos ? 'text-emerald-700' : 'text-rose-600'}">${fmtINR(Math.abs(m.capital))}</span>
               </div>
               <div class="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-slate-50/60">
                 <div>
@@ -588,11 +586,11 @@ function renderBS(m) {
                   <p class="text-[10px] text-slate-400">From P&amp;L statement</p>
                 </div>
                 <span class="w-24 text-right text-xs font-bold tabular-nums
-                             ${isProfit ? 'text-violet-700' : 'text-rose-600'}">${fmtC(Math.abs(m.netProfit))}</span>
+                             ${isProfit ? 'text-violet-700' : 'text-rose-600'}">${fmtINR(Math.abs(m.netProfit))}</span>
               </div>
               <div class="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2 bg-slate-50/60">
                 <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Total Capital</span>
-                <span class="text-sm font-black tabular-nums text-emerald-700">${fmtC(m.capital + m.netProfit)}</span>
+                <span class="text-sm font-black tabular-nums text-emerald-700">${fmtINR(m.capital + m.netProfit)}</span>
               </div>
             </div>
 
@@ -703,11 +701,11 @@ function renderBS(m) {
                                  : 'bg-gradient-to-br from-rose-600 to-pink-800'}">
           <div class="flex items-center justify-between gap-2 px-5 py-3">
             <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Liabilities</span>
-            <span class="text-base font-black text-white tabular-nums">${fmtC(m.totalLiabSide)}</span>
+            <span class="text-base font-black text-white tabular-nums">${fmtINR(m.totalLiabSide)}</span>
           </div>
           <div class="flex items-center justify-between gap-2 px-5 py-3">
             <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Assets</span>
-            <span class="text-base font-black text-white tabular-nums">${fmtC(m.totalAssets)}</span>
+            <span class="text-base font-black text-white tabular-nums">${fmtINR(m.totalAssets)}</span>
           </div>
         </div>
       </div>
@@ -740,12 +738,12 @@ function secHdr(label, count, color) {
 function lineRow(head, amount, color) {
   const c = C[color] || C.slate;
   return `<div class="group flex items-center justify-between gap-2 px-4 py-2 hover:bg-slate-50/60 transition">
-    <p class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title="${escH(head)}">${escH(head)}</p>
+    <p class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title="${esc(head)}">${esc(head)}</p>
     <div class="flex flex-shrink-0 items-center gap-1.5">
       <a href="/ledger/account/${encodeURIComponent(head)}" data-navigo
          class="hidden group-hover:inline-flex items-center rounded-md border border-blue-100 bg-blue-50
                 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 hover:bg-blue-100 transition">↗</a>
-      <span class="w-24 text-right text-xs font-bold tabular-nums ${c.val}">${fmtC(amount)}</span>
+      <span class="w-24 text-right text-xs font-bold tabular-nums ${c.val}">${fmtINR(amount)}</span>
     </div>
   </div>`;
 }
@@ -754,12 +752,12 @@ function lineRow(head, amount, color) {
 function bsRow(head, amount, color) {
   const c = C[color] || C.slate;
   return `<div class="group flex items-center justify-between gap-2 px-4 py-2 hover:bg-slate-50/60 transition">
-    <p class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title="${escH(head)}">${escH(head)}</p>
+    <p class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title="${esc(head)}">${esc(head)}</p>
     <div class="flex flex-shrink-0 items-center gap-1.5">
       <a href="/ledger/account/${encodeURIComponent(head)}" data-navigo
          class="hidden group-hover:inline-flex items-center rounded-md border border-blue-100 bg-blue-50
                 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 hover:bg-blue-100 transition">↗</a>
-      <span class="w-24 text-right text-xs font-bold tabular-nums ${c.val}">${fmtC(amount)}</span>
+      <span class="w-24 text-right text-xs font-bold tabular-nums ${c.val}">${fmtINR(amount)}</span>
     </div>
   </div>`;
 }
@@ -768,7 +766,7 @@ function subtotal(label, amount, color) {
   const c = C[color] || C.slate;
   return `<div class="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2 ${c.sub}">
     <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">${label}</span>
-    <span class="text-sm font-black tabular-nums ${c.lbl}">${fmtC(amount)}</span>
+    <span class="text-sm font-black tabular-nums ${c.lbl}">${fmtINR(amount)}</span>
   </div>`;
 }
 
@@ -779,7 +777,7 @@ function transferRow(label, amount, color, sub) {
       <p class="text-xs font-bold ${c.lbl}">${label}</p>
       <p class="text-[10px] text-slate-400">${sub}</p>
     </div>
-    <span class="text-sm font-black tabular-nums ${c.lbl}">${fmtC(amount)}</span>
+    <span class="text-sm font-black tabular-nums ${c.lbl}">${fmtINR(amount)}</span>
   </div>`;
 }
 
@@ -790,12 +788,12 @@ function balancingRow(label, amount, color, sub) {
       <p class="text-xs font-bold ${c.lbl}">${label}</p>
       <p class="text-[10px] text-slate-400">${sub}</p>
     </div>
-    <span class="text-base font-black tabular-nums ${c.lbl}">${fmtC(amount)}</span>
+    <span class="text-base font-black tabular-nums ${c.lbl}">${fmtINR(amount)}</span>
   </div>`;
 }
 
 function nilRow(msg) {
-  return `<div class="px-4 py-4 text-center text-xs text-slate-400">${escH(msg)}</div>`;
+  return `<div class="px-4 py-4 text-center text-xs text-slate-400">${esc(msg)}</div>`;
 }
 
 // ─── Bind actions ─────────────────────────────────────────────────────────────
@@ -822,7 +820,6 @@ function bindActions(router) {
 
   // Date filters
   const val = id => document.getElementById(id)?.value || null;
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
   const reload = async () => {
     const mount = document.getElementById('pl-content');
     if (!mount) return;
@@ -833,8 +830,12 @@ function bindActions(router) {
   document.getElementById('pl-refresh')?.addEventListener('click', reload);
   document.getElementById('pl-apply')  ?.addEventListener('click', reload);
   document.getElementById('pl-clear')  ?.addEventListener('click', async () => {
-    set('pl-start-date', ''); set('pl-end-date', '');
+    const startInput = document.getElementById('pl-start-date');
+    const endInput   = document.getElementById('pl-end-date');
+    if (startInput) startInput.value = '';
+    if (endInput)   endInput.value = '';
     await reload();
+    showToast('Filters reset', 'info');
   });
 
   // PDF export — detects which tab is active and hits the correct endpoint
@@ -842,6 +843,7 @@ function bindActions(router) {
     const bsVisible = !document.getElementById('fin-tab-bs')?.classList.contains('hidden');
     const endpoint  = bsVisible ? '/api/ledger/export/balance-sheet' : '/api/ledger/export/profit-loss';
     const qs        = buildQS(val('pl-start-date'), val('pl-end-date'));
+    showToast('Generating PDF...', 'info');
     window.location.href = endpoint + qs;
   });
 }
@@ -853,9 +855,9 @@ function kpi(label, value, meta, tone) {
                            shadow-[0_8px_22px_-18px_rgba(15,23,42,0.5)]">
     <div class="h-1 bg-gradient-to-r ${tone}"></div>
     <div class="px-3 py-2.5">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">${escH(label)}</p>
-      <p class="mt-1 text-base font-black text-slate-900">${escH(value)}</p>
-      <p class="mt-0.5 text-[10px] text-slate-400">${escH(meta)}</p>
+      <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">${esc(label)}</p>
+      <p class="mt-1 text-base font-black text-slate-900">${esc(value)}</p>
+      <p class="mt-0.5 text-[10px] text-slate-400">${esc(meta)}</p>
     </div>
   </article>`;
 }
@@ -867,32 +869,15 @@ function periodStr(s, e) {
        : 'All periods';
 }
 
-function fmtC(v) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency', currency: 'INR',
-    maximumFractionDigits: Math.abs(toN(v)) >= 100000 ? 0 : 2,
-  }).format(toN(v));
-}
-
-function fmtP(v) { return `${Math.abs(toN(v)).toFixed(1)}%`; }
-
-function fmtDate(s) {
-  try { return new Date(s + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
-  catch { return s || ''; }
-}
-
-function toN(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
-
-function escH(v) {
-  return String(v ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function fmtP(v) { 
+  const n = Number(v);
+  return `${(Number.isFinite(n) ? Math.abs(n) : 0).toFixed(1)}%`; 
 }
 
 function emptyHTML(msg) {
   return `<div class="rounded-[18px] border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
     <p class="text-sm font-bold text-slate-700">No data</p>
-    <p class="mt-1 text-xs text-slate-400">${escH(msg)}</p>
+    <p class="mt-1 text-xs text-slate-400">${esc(msg)}</p>
   </div>`;
 }
 
@@ -900,7 +885,7 @@ function errorHTML(msg) {
   return `<div class="rounded-[18px] border border-rose-200 bg-white/90 p-5 shadow-sm">
     <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-rose-500">Error</p>
     <h2 class="mt-1 text-base font-black text-slate-900">Unable to load financial statements</h2>
-    <p class="mt-1 text-sm text-slate-600">${escH(msg || 'Unexpected error.')}</p>
+    <p class="mt-1 text-sm text-slate-600">${esc(msg || 'Unexpected error.')}</p>
     <button id="pl-refresh"
             class="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white
                    transition hover:bg-slate-800">Retry</button>
