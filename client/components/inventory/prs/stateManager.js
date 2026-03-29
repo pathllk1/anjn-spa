@@ -74,6 +74,7 @@ export function createInitialState() {
         otherCharges:    [],
         currentFirmName: 'Your Company Name',
         gstEnabled:      true,
+        currentBillFileUrl: null,
 
         // FIX: Firm GST locations — required for multi-GSTIN intra/inter-state
         // determination.  Same logic as the sales system — see sales stateManager.js
@@ -228,6 +229,8 @@ export async function loadExistingBillData(state, billId) {
             amount:  parseFloat(charge.amount)  || 0,
             gstRate: parseFloat(charge.gstRate) || 0,
         }));
+
+        state.currentBillFileUrl = bill.file_url || null;
 
         state.historyCache = {};
         return true;

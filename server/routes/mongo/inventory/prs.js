@@ -62,6 +62,7 @@ router.post('/parties', inventoryController.createParty);
 // --- BILLS API ---
 router.post('/bills', inventoryController.createBill);
 router.post('/bills/:id/upload', handleBillFileUpload, inventoryController.uploadBillFile);
+router.get('/bills/:id/attachment', inventoryController.openBillAttachment);
 router.get('/bills/export', inventoryController.exportBillsExcel);
 router.get('/bills/export/pdf', inventoryController.exportBillsToPdf);
 router.get('/bills/:id/pdf', generateInvoicePDF);

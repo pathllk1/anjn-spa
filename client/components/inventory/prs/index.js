@@ -7,7 +7,7 @@ import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBi
 import { formatCurrency, populateConsigneeFromBillTo, getPartyId, escHtml } from './utils.js';
 import { addOtherCharge, removeOtherCharge, updateOtherCharge } from './otherChargesManager.js';
 import { addItemToCart, removeItemFromCart, updateCartItem, updateCartItemNarration, clearCart } from './cartManager.js';
-import { renderItemsList, renderTotals, renderPartyCard } from './layoutRenderer.js';
+import { renderItemsList, renderTotals, renderPartyCard, renderAttachmentBadge } from './layoutRenderer.js';
 import { openStockModal } from './stockModal.js';
 import { showBatchSelectionModal } from './batchModal.js';
 import { openPartyItemHistoryModal } from './historyModal.js';
@@ -171,6 +171,14 @@ export function initPurchaseSystem(router) {
                         <input type="date" value="${escHtml(state.meta.billDate)}"
                                class="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none text-slate-700">
                     </div>
+
+                    <!-- Existing attachment display during edit mode -->
+                    ${isEditMode && state.currentBillFileUrl ? `
+                    <div class="flex flex-col">
+                        <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider mb-1">Attachment</label>
+                        <div id="main-attachment-display" class="flex items-center gap-1"></div>
+                    </div>
+                    ` : ''}
 
                     <!-- FIX: Receiving GSTIN selector — only shown when firm has multiple GST registrations -->
                     ${renderFirmGstinSelector()}
@@ -361,6 +369,12 @@ export function initPurchaseSystem(router) {
 
                     <!-- Upload scanned bill section -->
                     <div class="border-t border-gray-100 pt-3 mt-1">
+                        <!-- Existing attachment display -->
+                        <div id="existing-attachment-section" class="hidden mb-3">
+                            <p class="text-[11px] text-gray-500 font-bold uppercase tracking-wide mb-2">Attached Document</p>
+                            <div id="existing-attachment-badge" class="mb-2"></div>
+                        </div>
+
                         <p class="text-[11px] text-gray-500 font-bold uppercase tracking-wide mb-2">Attach Scanned Bill <span class="font-normal text-gray-400">(Optional)</span></p>
                         <input type="file" id="bill-file-input" accept=".pdf,.jpg,.jpeg"
                                class="w-full text-xs text-gray-600 border border-gray-200 rounded-lg px-2 py-1.5
@@ -428,6 +442,15 @@ export function initPurchaseSystem(router) {
                 if (selectPartyBtn) selectPartyBtn.onclick = handlePartySelection;
                 if (changePartyBtn) changePartyBtn.onclick = handlePartySelection;
             });
+        }
+
+        // Main attachment display (edit mode)
+        const mainAttachmentDisplay = document.getElementById('main-attachment-display');
+        if (mainAttachmentDisplay && isEditMode && state.currentBillFileUrl && editBillId) {
+            const badgeHtml = renderAttachmentBadge(state.currentBillFileUrl, editBillId);
+            if (badgeHtml) {
+                mainAttachmentDisplay.innerHTML = badgeHtml;
+            }
         }
 
         attachEventListeners(isEditMode, editBillId || null);
@@ -521,6 +544,7 @@ export function initPurchaseSystem(router) {
             resetBtn.onclick = () => {
                 if (confirm('Clear current invoice details?')) {
                     clearCart(state);
+                    state.currentBillFileUrl = null;
                     renderMainLayout(isEditMode);
                 }
             };
@@ -607,7 +631,7 @@ export function initPurchaseSystem(router) {
                         ? `Purchase bill updated! Purchase No: ${result.billNo || state.meta.billNo}`
                         : `Purchase saved! Purchase No: ${result.billNo}`;
                     showToast(successMsg, 'success');
-                    showSaveConfirmationModal(result.id, result.billNo, isEditMode);
+                    showSaveConfirmationModal(result.id, result.billNo, isEditMode, state.currentBillFileUrl);
 
                 } catch (err) {
                     console.error('Error saving bill:', err);
@@ -722,11 +746,24 @@ export function initPurchaseSystem(router) {
         else if (e.key === 'F9') { e.preventDefault(); document.getElementById('btn-reset')?.click(); }
     });
 
-    function showSaveConfirmationModal(billId, billNo, isEditMode) {
+    function showSaveConfirmationModal(billId, billNo, isEditMode, fileUrl) {
         const modal    = document.getElementById('save-confirmation-modal');
         const billNoEl = document.getElementById('modal-bill-no');
         if (billNoEl) billNoEl.textContent = billNo;
         modal.classList.remove('hidden');
+
+        // Display existing attachment if present
+        const existingAttachmentSection = document.getElementById('existing-attachment-section');
+        const existingAttachmentBadge = document.getElementById('existing-attachment-badge');
+        if (fileUrl && existingAttachmentSection && existingAttachmentBadge) {
+                const badgeHtml = renderAttachmentBadge(fileUrl, billId);
+            if (badgeHtml) {
+                existingAttachmentSection.classList.remove('hidden');
+                existingAttachmentBadge.innerHTML = badgeHtml;
+            }
+        } else if (existingAttachmentSection) {
+            existingAttachmentSection.classList.add('hidden');
+        }
 
         // Reset upload section state on every open
         const fileInput     = document.getElementById('bill-file-input');
@@ -745,7 +782,7 @@ export function initPurchaseSystem(router) {
             };
         }
         if (uploadBtn) {
-            uploadBtn.onclick = () => handleFileUpload(billId);
+            uploadBtn.onclick = () => handleFileUpload(billId, state);
         }
 
         const handleAfterModal = () => {
@@ -753,6 +790,7 @@ export function initPurchaseSystem(router) {
                 setTimeout(() => router.navigate('/inventory/reports'), 500);
             } else {
                 clearCart(state);
+                state.currentBillFileUrl = null;
                 fetchData(state).then(() => renderMainLayout(isEditMode));
             }
         };
@@ -775,7 +813,7 @@ export function initPurchaseSystem(router) {
      * Uses fetchWithCSRF to ensure proper security while allowing the browser
      * to set the correct multipart/form-data boundary for FormData uploads.
      */
-    async function handleFileUpload(billId) {
+    async function handleFileUpload(billId, state) {
         const fileInput     = document.getElementById('bill-file-input');
         const uploadBtn     = document.getElementById('upload-bill-btn');
         const uploadSpinner = document.getElementById('upload-spinner');
@@ -817,6 +855,11 @@ export function initPurchaseSystem(router) {
             const result = await response.json();
             if (!response.ok || !result.success) {
                 throw new Error(result.error || `Upload failed (${response.status})`);
+            }
+
+            // Update state with the uploaded file URL
+            if (result.fileUrl && state) {
+                state.currentBillFileUrl = result.fileUrl;
             }
 
             // Success — hide file input + button, show checkmark

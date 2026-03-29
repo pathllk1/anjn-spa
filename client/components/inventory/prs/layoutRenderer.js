@@ -246,14 +246,18 @@ export async function renderPartyCard(state) {
  * Usage (e.g. in the bills DataTable column renderer):
  *   import { renderAttachmentBadge } from './layoutRenderer.js';
  *   ...
- *   cellRenderer: ({ data }) => renderAttachmentBadge(data.file_url)
+ *   cellRenderer: ({ data }) => renderAttachmentBadge(data.file_url, data._id)
  *
  * @param {string|null|undefined} fileUrl - The bill's file_url field from MongoDB.
+ * @param {string|null|undefined} billId - The bill's MongoDB _id, used to open via server proxy.
  * @returns {string} HTML string — a clickable badge if attached, empty string if not.
  */
-export function renderAttachmentBadge(fileUrl) {
+export function renderAttachmentBadge(fileUrl, billId = null) {
     if (!fileUrl) return '';
-    const safeUrl = escHtml(fileUrl);
+    const href = billId
+        ? `/api/inventory/purchase/bills/${encodeURIComponent(String(billId))}/attachment`
+        : fileUrl;
+    const safeUrl = escHtml(href);
     return `
         <a href="${safeUrl}" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200

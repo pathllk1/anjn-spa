@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { createHash } from 'crypto';
+import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 import { put as blobPut, del as blobDel } from '@vercel/blob';
@@ -384,6 +385,47 @@ function extractB2ObjectName(fileUrl) {
   }
 }
 
+async function resolveB2BucketName(auth, bucketId) {
+  const configuredBucketName = String(process.env.B2_BUCKET_NAME || '').trim();
+  if (configuredBucketName) return configuredBucketName;
+
+  const listResp = await axios.post(`${auth.apiUrl}/b2api/v2/b2_list_buckets`, {
+    accountId: auth.accountId,
+    bucketId,
+  }, {
+    headers: { Authorization: auth.authorizationToken },
+  });
+
+  const bucket = (listResp.data?.buckets || []).find(entry => entry.bucketId === bucketId);
+  return bucket?.bucketName || null;
+}
+
+async function normalizeCloudBillFileUrl(fileUrl) {
+  if (!fileUrl) return null;
+  if (!fileUrl.includes('/file/')) return fileUrl;
+
+  const keyId = String(process.env.B2_APPLICATION_KEY_ID || '').trim();
+  const appKey = String(process.env.B2_APPLICATION_KEY || '').trim();
+  const bucketId = String(process.env.B2_BUCKET_ID || '').trim();
+  const targetName = extractB2ObjectName(fileUrl);
+
+  if (!keyId || !appKey || !bucketId || !targetName) return fileUrl;
+
+  try {
+    const authResp = await axios.get('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+      headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${appKey}`).toString('base64')}` },
+    });
+    const auth = authResp.data;
+    const bucketName = await resolveB2BucketName(auth, bucketId);
+
+    if (!bucketName) return fileUrl;
+    return `${auth.downloadUrl}/file/${bucketName}/${encodeURIComponent(targetName)}`;
+  } catch (err) {
+    console.warn('[NORMALIZE_CLOUD_BILL_FILE_URL] Failed to normalize B2 URL:', err.message);
+    return fileUrl;
+  }
+}
+
 async function deleteFromBackblazeB2(fileUrl) {
   const keyId = String(process.env.B2_APPLICATION_KEY_ID || '').trim();
   const appKey = String(process.env.B2_APPLICATION_KEY || '').trim();
@@ -765,7 +807,7 @@ export const updateBill = async (req, res) => {
     });
 
     await session.commitTransaction();
-    res.json({ success: true, message: 'Bill updated successfully' });
+    res.json({ success: true, id: billId, billNo: existingBill.bno, message: 'Bill updated successfully' });
   } catch (err) {
     await session.abortTransaction();
     console.error('[UPDATE_BILL] Error:', err.message);
@@ -790,31 +832,48 @@ async function uploadToBackblazeB2(buffer, fileName, contentType) {
 
     if (!keyId || !appKey || !bucketId) return null;
 
-    const authResp = await axios.get('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
-        headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${appKey}`).toString('base64')}` },
-    });
-    const auth = authResp.data;
+    try {
+        const authResp = await axios.get('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+            headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${appKey}`).toString('base64')}` },
+        });
+        const auth = authResp.data;
 
-    const urlResp = await axios.post(`${auth.apiUrl}/b2api/v2/b2_get_upload_url`, { bucketId }, {
-        headers: { Authorization: auth.authorizationToken },
-    });
-    const uploadInfo = urlResp.data;
+        const urlResp = await axios.post(`${auth.apiUrl}/b2api/v2/b2_get_upload_url`, { bucketId }, {
+            headers: { Authorization: auth.authorizationToken },
+        });
+        const uploadInfo = urlResp.data;
 
-    const targetName = prefix ? `${prefix}/${fileName}` : fileName;
-    const sha1       = createHash('sha1').update(buffer).digest('hex');
+        const targetName = prefix ? `${prefix}/${fileName}` : fileName;
+        const sha1       = createHash('sha1').update(buffer).digest('hex');
 
-    const uploadResp = await axios.post(uploadInfo.uploadUrl, buffer, {
-        headers: {
-            Authorization:       uploadInfo.authorizationToken,
-            'X-Bz-File-Name':    encodeURIComponent(targetName),
-            'Content-Type':      contentType || 'application/octet-stream',
-            'Content-Length':    buffer.length,
-            'X-Bz-Content-Sha1': sha1,
-        },
-        maxBodyLength: Infinity,
-    });
+        const uploadResp = await axios.post(uploadInfo.uploadUrl, buffer, {
+            headers: {
+                Authorization:       uploadInfo.authorizationToken,
+                'X-Bz-File-Name':    encodeURIComponent(targetName),
+                'Content-Type':      contentType || 'application/octet-stream',
+                'Content-Length':    buffer.length,
+                'X-Bz-Content-Sha1': sha1,
+            },
+            maxBodyLength: Infinity,
+        });
 
-    return `${auth.downloadUrl}/file/${uploadResp.data.bucketName}/${encodeURIComponent(targetName)}`;
+        // Validate response has required fields
+        if (!uploadResp.data.bucketName) {
+            console.error('[UPLOAD_TO_B2] Missing bucketName in response:', uploadResp.data);
+            return null;
+        }
+
+        const fileUrl = `${auth.downloadUrl}/file/${uploadResp.data.bucketName}/${encodeURIComponent(targetName)}`;
+        console.log('[UPLOAD_TO_B2] File uploaded successfully:', fileUrl.substring(0, 80) + '...');
+        return fileUrl;
+    } catch (err) {
+        console.error('[UPLOAD_TO_B2] Error:', {
+            status: err.response?.status,
+            message: err.response?.data?.message || err.message,
+            code: err.response?.data?.code,
+        });
+        return null;
+    }
 }
 
 /**
@@ -860,26 +919,40 @@ export const uploadBillFile = async (req, res) => {
 
         let fileUrl = null;
 
-        // Try Backblaze B2 first
-        try {
-            fileUrl = await uploadToBackblazeB2(req.file.buffer, cloudPath, req.file.mimetype);
-        } catch (b2Err) {
-            console.warn('[UPLOAD_BILL_FILE] Backblaze upload failed:', b2Err.message);
+        // Try Backblaze B2 first (only if properly configured)
+        const b2Configured = String(process.env.B2_APPLICATION_KEY_ID || '').trim() &&
+                             String(process.env.B2_APPLICATION_KEY || '').trim() &&
+                             String(process.env.B2_BUCKET_ID || '').trim();
+        
+        if (b2Configured) {
+            try {
+                console.log('[UPLOAD_BILL_FILE] Attempting B2 upload...');
+                fileUrl = await uploadToBackblazeB2(req.file.buffer, cloudPath, req.file.mimetype);
+            } catch (b2Err) {
+                console.warn('[UPLOAD_BILL_FILE] Backblaze upload failed:', b2Err.message);
+            }
+        } else {
+            console.log('[UPLOAD_BILL_FILE] B2 not properly configured, skipping to Vercel Blob');
         }
 
         // Fallback to Vercel Blob if B2 failed or was not configured
         if (!fileUrl) {
             try {
+                console.log('[UPLOAD_BILL_FILE] Attempting Vercel Blob upload...');
                 fileUrl = await uploadToVercelBlob(req.file.buffer, cloudPath, req.file.mimetype);
             } catch (blobErr) {
                 console.error('[UPLOAD_BILL_FILE] Vercel Blob also failed:', blobErr.message);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Cloud storage upload failed. Verify BLOB_READ_WRITE_TOKEN is set. If using B2, ensure B2_BUCKET_ID is valid.',
+                });
             }
         }
 
         if (!fileUrl) {
             return res.status(500).json({
                 success: false,
-                error: 'Cloud storage upload failed. Verify B2_APPLICATION_KEY_* or BLOB_READ_WRITE_TOKEN are set.',
+                error: 'Cloud storage upload failed. No valid storage backend available.',
             });
         }
 
@@ -900,6 +973,94 @@ export const uploadBillFile = async (req, res) => {
         console.error('[UPLOAD_BILL_FILE] Error:', err.message);
         res.status(500).json({ success: false, error: err.message });
     }
+};
+
+export const openBillAttachment = async (req, res) => {
+  try {
+    const firmId = getFirmId(req, res, 'OPEN_BILL_ATTACHMENT');
+    if (!firmId) return;
+
+    const billId = validateObjectId(req.params.id, 'bill ID', res);
+    if (!billId) return;
+
+    const bill = await Bill.findOne({ _id: billId, firm_id: firmId })
+      .select('file_url file_path bno')
+      .lean();
+
+    if (!bill || (!bill.file_url && !bill.file_path)) {
+      return res.status(404).json({ success: false, error: 'Attachment not found' });
+    }
+
+    // Try local file first (legacy support)
+    if (bill.file_path) {
+      const candidatePath = path.isAbsolute(bill.file_path)
+        ? bill.file_path
+        : path.resolve(process.cwd(), bill.file_path);
+
+      if (fs.existsSync(candidatePath)) {
+        return res.sendFile(candidatePath, {
+          headers: {
+            'Cache-Control': 'private, no-store',
+          },
+        });
+      }
+    }
+
+    if (!bill.file_url) {
+      return res.status(404).json({ success: false, error: 'Attachment file is unavailable' });
+    }
+
+    // Validate URL before attempting to fetch
+    if (bill.file_url.includes('undefined') || bill.file_url.includes('null') || !bill.file_url.startsWith('http')) {
+      console.error('[OPEN_BILL_ATTACHMENT] Malformed URL detected:', bill.file_url);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Attachment URL is corrupted. The file may need to be re-uploaded.' 
+      });
+    }
+
+    // For cloud URLs, serve through proxy to handle auth headers
+    try {
+      console.log('[OPEN_BILL_ATTACHMENT] Fetching from URL:', bill.file_url.substring(0, 100) + '...');
+      const response = await axios.get(bill.file_url, {
+        responseType: 'stream',
+        timeout: 30000,
+        validateStatus: () => true,
+      });
+
+      if (response.status >= 400) {
+        console.error('[OPEN_BILL_ATTACHMENT] Cloud returned error:', response.status, response.statusText);
+        return res.status(response.status).json({ 
+          success: false, 
+          error: `Cloud storage error: ${response.status}` 
+        });
+      }
+
+      if (response.headers['content-type']) {
+        res.setHeader('Content-Type', response.headers['content-type']);
+      }
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      response.data.pipe(res);
+    } catch (cloudErr) {
+      console.error('[OPEN_BILL_ATTACHMENT] Cloud file access failed:', {
+        message: cloudErr.message,
+        code: cloudErr.code,
+        status: cloudErr.response?.status,
+      });
+      return res.status(502).json({ 
+        success: false, 
+        error: 'Failed to retrieve attachment from cloud storage. File may have expired or been deleted.' 
+      });
+    }
+
+  } catch (err) {
+    console.error('[OPEN_BILL_ATTACHMENT] Error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
 };
 
 
