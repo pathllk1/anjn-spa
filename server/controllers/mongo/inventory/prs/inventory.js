@@ -204,6 +204,8 @@ function aggregateReturnCart(returnCart) {
   for (const item of returnCart) {
     const stockId = item?.stockId ? String(item.stockId) : null;
     const returnQty = toPositiveNumber(item?.returnQty);
+    const itemType = String(item?.itemType || item?.item_type || 'GOODS').toUpperCase();
+    if (!stockId && itemType === 'SERVICE') continue;
     if (!stockId || !mongoose.Types.ObjectId.isValid(stockId)) {
       throw new Error(`Invalid stockId for return item: ${item?.item ?? '(unknown)'}`);
     }
@@ -225,6 +227,20 @@ function aggregateReturnCart(returnCart) {
   }
 
   return aggregated;
+}
+
+function getOriginalPurchaseUnitCost(originalReg) {
+  const qty = parseFloat(originalReg?.qty) || 0;
+  const total = parseFloat(originalReg?.total) || 0;
+  if (qty > 0 && total >= 0) return total / qty;
+
+  const fallbackCost = parseFloat(originalReg?.cost_rate);
+  if (Number.isFinite(fallbackCost) && fallbackCost >= 0) return fallbackCost;
+
+  const fallbackRate = parseFloat(originalReg?.rate);
+  if (Number.isFinite(fallbackRate) && fallbackRate >= 0) return fallbackRate;
+
+  return null;
 }
 
 function buildAtomicPurchaseAddPipeline({ item, requestedQty, lineValue, actorUsername }) {
@@ -652,7 +668,7 @@ export const createBill = async (req, res) => {
         qty:            item.qty, uom: item.uom, rate: item.rate,
         grate:          item.grate, disc: item.disc || 0,
         total:          lineValue,
-        cost_rate:      parseFloat(item.rate),
+        cost_rate:      requestedQty > 0 ? (lineValue / requestedQty) : 0,
         stock_id:       item.stockId, bill_id: billId,
         user:           actorUsername, qtyh: updatedStock.qty,
       });
@@ -750,6 +766,10 @@ export const updateBill = async (req, res) => {
     if (!existingBill) return res.status(404).json({ error: 'Bill not found' });
     if (existingBill.status === 'CANCELLED') return res.status(400).json({ error: 'Cancelled bills cannot be modified' });
     if (meta.billNo && meta.billNo !== existingBill.bno) return res.status(400).json({ error: 'Bill number cannot be changed' });
+    if (existingBill.btype === 'DEBIT_NOTE') {
+      await session.abortTransaction();
+      return res.status(400).json({ error: 'Editing debit notes is not supported. Cancel and recreate the debit note instead.' });
+    }
 
     const supplierBillNo = normalizeOptionalText(meta?.supplierBillNo, 80);
     await ensureUniqueSupplierBillNo({ firmId, partyId: partyDoc._id, supplierBillNo, excludeBillId: billId });
@@ -825,7 +845,7 @@ export const updateBill = async (req, res) => {
         item: item.item, item_narration: item.narration || null,
         batch: item.batch || null, hsn: item.hsn, qty: item.qty, uom: item.uom,
         rate: item.rate, grate: item.grate, disc: item.disc || 0,
-        total: lineValue, cost_rate: parseFloat(item.rate),
+        total: lineValue, cost_rate: requestedQty > 0 ? (lineValue / requestedQty) : 0,
         stock_id: item.stockId, bill_id: billId, user: actorUsername, qtyh: updatedStock.qty,
       });
       purchasedItems.push({ stockId: item.stockId, stockRegId, item: item.item, lineValue });
@@ -1119,18 +1139,35 @@ export const cancelBill = async (req, res) => {
     const items = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const item of items) {
       if (!item.stock_id) continue;
-      const stockRecord = await Stock.findOne({ _id: item.stock_id, firm_id: firmId }).session(session).lean();
-      if (!stockRecord) continue;
-
       const costValue   = item.total || (item.qty * (item.cost_rate ?? item.rate));
-      await Stock.findOneAndUpdate(
-        { _id: item.stock_id, firm_id: firmId },
-        buildAtomicPurchaseReversePipeline({ batch: item.batch, removedQty: item.qty, costValue, actorUsername }),
-        { session }
-      );
+      if (bill.btype === 'DEBIT_NOTE') {
+        await Stock.findOneAndUpdate(
+          { _id: item.stock_id, firm_id: firmId },
+          buildAtomicPurchaseAddPipeline({
+            item: {
+              batch: item.batch,
+              uom: item.uom,
+              rate: item.cost_rate ?? item.rate,
+              grate: item.grate,
+              expiry: null,
+              mrp: null,
+            },
+            requestedQty: item.qty,
+            lineValue: costValue,
+            actorUsername,
+          }),
+          { session }
+        );
+      } else {
+        await Stock.findOneAndUpdate(
+          { _id: item.stock_id, firm_id: firmId },
+          buildAtomicPurchaseReversePipeline({ batch: item.batch, removedQty: item.qty, costValue, actorUsername }),
+          { session }
+        );
+      }
     }
 
-    await Ledger.deleteMany({ voucher_id: bill.voucher_id, voucher_type: 'PURCHASE', firm_id: firmId }, { session });
+    await Ledger.deleteMany({ voucher_id: bill.voucher_id, voucher_type: bill.btype, firm_id: firmId }, { session });
 
     await Bill.findOneAndUpdate(
       { _id: billId, firm_id: firmId },
@@ -1241,31 +1278,48 @@ export const createDebitNote = async (req, res) => {
       }
     }
 
+    const originalOtherCharges = Array.isArray(originalBill.other_charges) ? originalBill.other_charges : [];
+    const originalGoodsTotal = originalStockRegs.reduce((sum, reg) => sum + (parseFloat(reg.total) || 0), 0);
+
     // Generate debit note number and voucher
     const dnBillNo = await getNextBillNumber(firmId, 'DEBIT_NOTE');
     const dnVoucherId = await getNextVoucherNumber(firmId);
 
     // Calculate totals for debit note
     const gstEnabled = await isGstEnabled(firmId);
-    let dnGtot = 0, dnNtot = 0, dnCgst = 0, dnSgst = 0, dnIgst = 0;
+    let returnedGoodsTotal = 0;
 
     for (const returnItem of aggregatedReturnCart.values()) {
       const lineTotal = returnItem.returnQty * returnItem.rate * (1 - (returnItem.disc || 0) / 100);
-      dnGtot += lineTotal;
-
-      if (gstEnabled) {
-        const gstRate = parseFloat(returnItem.gstRate ?? returnItem.grate) || 0;
-        const gstAmt = lineTotal * gstRate / 100;
-        if (originalBill.bill_subtype === 'INTRA-STATE') {
-          dnCgst += gstAmt / 2;
-          dnSgst += gstAmt / 2;
-        } else {
-          dnIgst += gstAmt;
-        }
-      }
+      returnedGoodsTotal += lineTotal;
     }
 
-    dnNtot = dnGtot + dnCgst + dnSgst + dnIgst;
+    const returnRatio = originalGoodsTotal > 0 ? Math.min(1, returnedGoodsTotal / originalGoodsTotal) : 0;
+    const noteOtherCharges = originalOtherCharges
+      .map((charge) => {
+        const amount = (parseFloat(charge?.amount) || 0) * returnRatio;
+        if (!(amount > 0)) return null;
+        return { ...charge, amount };
+      })
+      .filter(Boolean);
+
+    const returnQtyFn = (item) => parseFloat(item.returnQty) || 0;
+    const returnItems = Array.from(aggregatedReturnCart.values());
+    const {
+      gtot: dnGtot,
+      cgst: dnCgst,
+      sgst: dnSgst,
+      igst: dnIgst,
+      ntot: dnNtot,
+      rof: dnRof,
+    } = calcBillTotals(
+      returnItems,
+      noteOtherCharges,
+      gstEnabled,
+      String(originalBill.bill_subtype || '').toLowerCase(),
+      Boolean(originalBill.reverse_charge),
+      returnQtyFn,
+    );
 
     // Create debit note bill
     const firmRecord = await Firm.findById(firmId).select('name').lean().session(session);
@@ -1291,7 +1345,7 @@ export const createDebitNote = async (req, res) => {
 
       gtot: dnGtot,
       ntot: dnNtot,
-      rof: 0,
+      rof: dnRof,
       btype: 'DEBIT_NOTE',
       bill_subtype: originalBill.bill_subtype,
       usern: actorUsername,
@@ -1301,6 +1355,7 @@ export const createDebitNote = async (req, res) => {
       cgst: dnCgst,
       sgst: dnSgst,
       igst: dnIgst,
+      other_charges: noteOtherCharges.length > 0 ? noteOtherCharges : null,
       narration: normalizeOptionalMultilineText(narration, 2000),
     }], { session });
 
@@ -1313,8 +1368,9 @@ export const createDebitNote = async (req, res) => {
       const originalReg = originalStockRegs.find(r => String(r.stock_id) === String(returnItem.stockId));
       if (!originalReg) continue;
 
-      // Use original cost_rate for stock removal (maintains WAC)
-      const costPerUnit = parseFloat(originalReg.cost_rate);
+      // Purchase returns reverse the original net item cost.
+      // Bill-level charges are reversed separately through noteOtherCharges.
+      const costPerUnit = getOriginalPurchaseUnitCost(originalReg);
       if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
         throw new Error(`Missing original cost rate for item: ${originalReg.item}`);
       }
@@ -1391,8 +1447,8 @@ export const createDebitNote = async (req, res) => {
       cgst: dnCgst,
       sgst: dnSgst,
       igst: dnIgst,
-      rof: 0,
-      otherCharges: [],
+      rof: dnRof,
+      otherCharges: noteOtherCharges,
       purchasedItems: purchasedItemsForLedger,
       actorUsername,
       session,

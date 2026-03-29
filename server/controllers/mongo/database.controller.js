@@ -720,6 +720,182 @@ export const backupDatabase = async (req, res) => {
  */
 export const backupDatabaseToWebDav = backupDatabase;
 
+/**
+ * Cron-aware backup function — identical to backupDatabase but skips the
+ * ensureSuperAdmin check (cron jobs don't have user context).
+ *
+ * Used by /api/cron/backup endpoint (requires X-Cron-Secret header instead).
+ * All backup logic, provider uploads, and error handling are identical to
+ * the admin endpoint — only auth mechanism differs.
+ */
+export const backupDatabaseCron = async (req, res) => {
+  try {
+    // Authentication already validated by cronMiddleware — no role check needed
+
+    const db = mongoose.connection;
+    if (!db?.db) {
+      return res.status(503).json({ success: false, error: 'Database connection is not ready' });
+    }
+
+    // ── 1. Serialise all collections as a BSON stream ────────────────────
+    const rawCollections = await db.db.listCollections().toArray();
+    const collectionNames = rawCollections
+      .map(e => e.name)
+      .filter(n => !n.startsWith('system.'))
+      .sort();
+
+    const generatedAt = new Date();
+    const chunks      = [];
+
+    // Header document — carries metadata, identifies the stream format
+    chunks.push(bsonSerialize({
+      type:             'header',
+      provider:         'SecureApp MongoDB Backup',
+      generated_at:     generatedAt,
+      database_name:    db.db.databaseName,
+      collection_count: collectionNames.length,
+      format:           'bson.gz',
+      bson_stream_version: 1,
+    }));
+
+    for (const name of collectionNames) {
+      const docs = await db.collection(name).find({}).toArray();
+
+      // Collection marker — one per collection, announces name + doc count
+      chunks.push(bsonSerialize({ type: 'collection', name, count: docs.length }));
+
+      // Raw documents — bsonSerialize preserves ObjectId, Date, Binary, etc.
+      for (const doc of docs) {
+        chunks.push(bsonSerialize(doc));
+      }
+    }
+
+    // Footer document — confirms stream is complete, not truncated mid-write
+    chunks.push(bsonSerialize({ type: 'footer', generated_at: generatedAt }));
+
+    const bsonBuf   = Buffer.concat(chunks);
+    const timestamp = generatedAt.toISOString().replace(/[:.]/g, '-');
+    const fileName  = `${db.db.databaseName || 'mongodb'}-backup-${timestamp}.bson.gz`;
+    const gzipBuf   = gzipSync(bsonBuf);
+
+    console.log(`[DATABASE] cron backup: "${fileName}" ${gzipBuf.length} bytes (bson: ${bsonBuf.length} bytes) ${collectionNames.length} collections`);
+
+    // ── 2. Guard: at least one provider must be configured ───────────────
+    const infiniEnabled = Boolean(
+      process.env.INFINI_CLOUD_WEBDAV_URL      &&
+      process.env.INFINI_CLOUD_WEBDAV_USERNAME &&
+      process.env.INFINI_CLOUD_WEBDAV_PASSWORD
+    );
+    const vercelEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    const b2Enabled     = Boolean(
+      process.env.B2_APPLICATION_KEY_ID &&
+      process.env.B2_APPLICATION_KEY    &&
+      process.env.B2_BUCKET_ID
+    );
+
+    if (!infiniEnabled && !vercelEnabled && !b2Enabled) {
+      return res.status(503).json({
+        success: false,
+        error:   'No backup providers are configured. '
+               + 'Set INFINI_CLOUD_WEBDAV_* and/or BLOB_READ_WRITE_TOKEN and/or B2_APPLICATION_KEY_ID + B2_APPLICATION_KEY + B2_BUCKET_ID.',
+      });
+    }
+
+    // ── 3. Run all three uploads in parallel — fully isolated ────────────
+    const [infiniResult, vercelResult, b2Result] = await Promise.allSettled([
+      infiniEnabled
+        ? uploadToInfiniCloud(gzipBuf, fileName)
+        : Promise.reject(new Error('Not configured — skipped')),
+
+      vercelEnabled
+        ? uploadToVercelBlob(gzipBuf, fileName)
+        : Promise.reject(new Error('Not configured — skipped')),
+
+      b2Enabled
+        ? uploadToBackblazeB2(gzipBuf, fileName)
+        : Promise.reject(new Error('Not configured — skipped')),
+    ]);
+
+    // ── 4. Build structured per-destination outcome objects ───────────────
+    const infiniMissing = [
+      !process.env.INFINI_CLOUD_WEBDAV_URL      && 'INFINI_CLOUD_WEBDAV_URL',
+      !process.env.INFINI_CLOUD_WEBDAV_USERNAME && 'INFINI_CLOUD_WEBDAV_USERNAME',
+      !process.env.INFINI_CLOUD_WEBDAV_PASSWORD && 'INFINI_CLOUD_WEBDAV_PASSWORD',
+    ].filter(Boolean);
+
+    const vercelMissing = [
+      !process.env.BLOB_READ_WRITE_TOKEN && 'BLOB_READ_WRITE_TOKEN',
+    ].filter(Boolean);
+
+    const b2Missing = [
+      !process.env.B2_APPLICATION_KEY_ID && 'B2_APPLICATION_KEY_ID',
+      !process.env.B2_APPLICATION_KEY    && 'B2_APPLICATION_KEY',
+      !process.env.B2_BUCKET_ID          && 'B2_BUCKET_ID',
+    ].filter(Boolean);
+
+    const infiniOutcome = resolveOutcome('Infini-Cloud WebDAV', infiniEnabled, infiniResult, infiniMissing);
+    const vercelOutcome = resolveOutcome('Vercel Blob',          vercelEnabled, vercelResult, vercelMissing);
+    const b2Outcome     = resolveOutcome('Backblaze B2',         b2Enabled,     b2Result,     b2Missing);
+
+    const allOutcomes  = [infiniOutcome, vercelOutcome, b2Outcome];
+    const successCount = allOutcomes.filter(o => o.status === 'success').length;
+    const failedCount  = allOutcomes.filter(o => o.status === 'failed').length;
+    const allFailed    = failedCount > 0 && successCount === 0;
+
+    // Log each provider with full detail
+    const outcomeLabel = (o) =>
+      o.status === 'skipped' ? `skipped (${o.reason})`
+      : o.status === 'failed'  ? `failed (${o.error})`
+      : 'success';
+    console.log(
+      `[DATABASE] cron backup results — infini:${outcomeLabel(infiniOutcome)} ` +
+      `vercel:${outcomeLabel(vercelOutcome)} b2:${outcomeLabel(b2Outcome)}`
+    );
+
+    // ── 5. Respond ────────────────────────────────────────────────────────
+    const base = {
+      fileName,
+      sizeBytes:   gzipBuf.length,
+      collections: collectionNames.length,
+      generatedAt: generatedAt.toISOString(),
+      destinations: {
+        infiniCloud: infiniOutcome,
+        vercelBlob:  vercelOutcome,
+        backblazeB2: b2Outcome,
+      },
+    };
+
+    if (allFailed) {
+      // Every enabled provider failed — hard failure
+      return res.status(500).json({
+        ...base,
+        success: false,
+        error: 'All backup destinations failed. See destinations for individual errors.',
+      });
+    }
+
+    const successNames = allOutcomes
+      .filter(o => o.status === 'success')
+      .map(o => o.provider)
+      .join(' and ');
+
+    const partialFailure = failedCount > 0;
+
+    return res.status(partialFailure ? 207 : 200).json({
+      ...base,
+      success: true,
+      message: partialFailure
+        ? `Cron backup succeeded on ${successNames}. Check destinations for partial failure details.`
+        : `Cron backup uploaded successfully to ${successNames}.`,
+    });
+
+  } catch (err) {
+    // Only reachable for errors before the parallel uploads (e.g. DB serialisation failure)
+    console.error('[DATABASE] backupDatabaseCron unexpected error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to backup database' });
+  }
+};
+
 // ─── Internal: convert Promise.allSettled entry into a flat outcome object ───
 
 /**

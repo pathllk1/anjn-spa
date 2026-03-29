@@ -177,6 +177,8 @@ function aggregateReturnCart(returnCart) {
   for (const item of returnCart) {
     const stockId = item?.stockId ? String(item.stockId) : null;
     const returnQty = toPositiveNumber(item?.returnQty);
+    const itemType = String(item?.itemType || item?.item_type || 'GOODS').toUpperCase();
+    if (!stockId && itemType === 'SERVICE') continue;
     if (!stockId || !mongoose.Types.ObjectId.isValid(stockId)) {
       throw new Error(`Invalid stockId for return item: ${item?.item ?? '(unknown)'}`);
     }
@@ -247,6 +249,73 @@ function buildAtomicSalesReturnPipeline({ batch, returnedQty, restoredValue, res
                 { $gt: ['$$nextQty', 0] },
                 { $round: [{ $divide: ['$$nextTotal', '$$nextQty'] }, 6] },
                 restoredRate,
+              ],
+            },
+          },
+        },
+        user: actorUsername,
+      },
+    },
+  ];
+}
+
+function buildAtomicSalesReturnReversalPipeline({ batch, removedQty, removedValue, actorUsername }) {
+  return [
+    {
+      $set: {
+        batches: {
+          $map: {
+            input: { $ifNull: ['$batches', []] },
+            as: 'b',
+            in: {
+              $cond: [
+                { $eq: [{ $ifNull: ['$$b.batch', null] }, batch ?? null] },
+                {
+                  $mergeObjects: [
+                    '$$b',
+                    {
+                      qty: { $max: [0, { $subtract: [{ $ifNull: ['$$b.qty', 0] }, removedQty] }] },
+                    },
+                  ],
+                },
+                '$$b',
+              ],
+            },
+          },
+        },
+        qty: { $max: [0, { $subtract: [{ $ifNull: ['$qty', 0] }, removedQty] }] },
+        total: {
+          $max: [
+            0,
+            {
+              $subtract: [
+                { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+                removedValue,
+              ],
+            },
+          ],
+        },
+        rate: {
+          $let: {
+            vars: {
+              nextQty: { $max: [0, { $subtract: [{ $ifNull: ['$qty', 0] }, removedQty] }] },
+              nextTotal: {
+                $max: [
+                  0,
+                  {
+                    $subtract: [
+                      { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+                      removedValue,
+                    ],
+                  },
+                ],
+              },
+            },
+            in: {
+              $cond: [
+                { $gt: ['$$nextQty', 0] },
+                { $round: [{ $divide: ['$$nextTotal', '$$nextQty'] }, 6] },
+                { $ifNull: ['$rate', 0] },
               ],
             },
           },
@@ -551,6 +620,10 @@ export const updateBill = async (req, res) => {
     if (!existingBill) return res.status(404).json({ error: 'Bill not found' });
     if (existingBill.status === 'CANCELLED') return res.status(400).json({ error: 'Cancelled bills cannot be modified' });
     if (meta.billNo && meta.billNo !== existingBill.bno) return res.status(400).json({ error: 'Bill number cannot be changed' });
+    if (existingBill.btype === 'CREDIT_NOTE') {
+      await session.abortTransaction();
+      return res.status(400).json({ error: 'Editing credit notes is not supported. Cancel and recreate the credit note instead.' });
+    }
 
     // Step 1: Restore stock from old sale (add back atomically)
     const existingItems = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
@@ -742,29 +815,38 @@ export const cancelBill = async (req, res) => {
     const items = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
     for (const item of items) {
       if (!item.stock_id) continue;
-      const stockRecord = await Stock.findOne({ _id: item.stock_id, firm_id: firmId }).session(session).lean();
-      if (!stockRecord) continue;
-
       const cogsValue = item.cost_rate ? (item.qty * item.cost_rate) : 0;
-
-      await Stock.findOneAndUpdate(
-        { _id: item.stock_id, firm_id: firmId },
-        { 
-          $inc: { 
-            'batches.$[elem].qty': item.qty,
-            'qty': item.qty,
-            'total': cogsValue
+      if (bill.btype === 'CREDIT_NOTE') {
+        await Stock.findOneAndUpdate(
+          { _id: item.stock_id, firm_id: firmId },
+          buildAtomicSalesReturnReversalPipeline({
+            batch: item.batch,
+            removedQty: item.qty,
+            removedValue: cogsValue,
+            actorUsername,
+          }),
+          { session }
+        );
+      } else {
+        await Stock.findOneAndUpdate(
+          { _id: item.stock_id, firm_id: firmId },
+          {
+            $inc: {
+              'batches.$[elem].qty': item.qty,
+              qty: item.qty,
+              total: cogsValue,
+            },
+            $set: { user: actorUsername },
           },
-          $set: { user: actorUsername }
-        },
-        { 
-          session,
-          arrayFilters: [{ 'elem.batch': item.batch || null }]
-        }
-      );
+          {
+            session,
+            arrayFilters: [{ 'elem.batch': item.batch || null }],
+          }
+        );
+      }
     }
 
-    await Ledger.deleteMany({ voucher_id: bill.voucher_id, voucher_type: 'SALES', firm_id: firmId }, { session });
+    await Ledger.deleteMany({ voucher_id: bill.voucher_id, voucher_type: bill.btype, firm_id: firmId }, { session });
 
     await Bill.findOneAndUpdate(
       { _id: billId, firm_id: firmId },
@@ -856,31 +938,48 @@ export const createCreditNote = async (req, res) => {
       }
     }
 
+    const originalOtherCharges = Array.isArray(originalBill.other_charges) ? originalBill.other_charges : [];
+    const originalGoodsTotal = originalStockRegs.reduce((sum, reg) => sum + (parseFloat(reg.total) || 0), 0);
+
     // Generate credit note number and voucher
     const cnBillNo = await getNextBillNumber(firmId, 'CREDIT_NOTE');
     const cnVoucherId = await getNextVoucherNumber(firmId);
 
     // Calculate totals for credit note
     const gstEnabled = await isGstEnabled(firmId);
-    let cnGtot = 0, cnNtot = 0, cnCgst = 0, cnSgst = 0, cnIgst = 0;
+    let returnedGoodsTotal = 0;
 
     for (const returnItem of aggregatedReturnCart.values()) {
       const lineTotal = returnItem.returnQty * returnItem.rate * (1 - (returnItem.disc || 0) / 100);
-      cnGtot += lineTotal;
-
-      if (gstEnabled) {
-        const gstRate = parseFloat(returnItem.gstRate ?? returnItem.grate) || 0;
-        const gstAmt = lineTotal * gstRate / 100;
-        if (originalBill.bill_subtype === 'INTRA-STATE') {
-          cnCgst += gstAmt / 2;
-          cnSgst += gstAmt / 2;
-        } else {
-          cnIgst += gstAmt;
-        }
-      }
+      returnedGoodsTotal += lineTotal;
     }
 
-    cnNtot = cnGtot + cnCgst + cnSgst + cnIgst;
+    const returnRatio = originalGoodsTotal > 0 ? Math.min(1, returnedGoodsTotal / originalGoodsTotal) : 0;
+    const noteOtherCharges = originalOtherCharges
+      .map((charge) => {
+        const amount = (parseFloat(charge?.amount) || 0) * returnRatio;
+        if (!(amount > 0)) return null;
+        return { ...charge, amount };
+      })
+      .filter(Boolean);
+
+    const returnQtyFn = (item) => parseFloat(item.returnQty) || 0;
+    const returnItems = Array.from(aggregatedReturnCart.values());
+    const {
+      gtot: cnGtot,
+      cgst: cnCgst,
+      sgst: cnSgst,
+      igst: cnIgst,
+      ntot: cnNtot,
+      rof: cnRof,
+    } = calcBillTotals(
+      returnItems,
+      noteOtherCharges,
+      gstEnabled,
+      String(originalBill.bill_subtype || '').toLowerCase(),
+      Boolean(originalBill.reverse_charge),
+      returnQtyFn,
+    );
 
     // Create credit note bill
     const firmRecord = await Firm.findById(firmId).select('name').lean().session(session);
@@ -906,7 +1005,7 @@ export const createCreditNote = async (req, res) => {
 
       gtot: cnGtot,
       ntot: cnNtot,
-      rof: 0,
+      rof: cnRof,
       btype: 'CREDIT_NOTE',
       bill_subtype: originalBill.bill_subtype,
       usern: actorUsername,
@@ -916,6 +1015,7 @@ export const createCreditNote = async (req, res) => {
       cgst: cnCgst,
       sgst: cnSgst,
       igst: cnIgst,
+      other_charges: noteOtherCharges.length > 0 ? noteOtherCharges : null,
       narration: normalizeOptionalMultilineText(narration, 2000),
     }], { session });
 
@@ -1007,8 +1107,8 @@ export const createCreditNote = async (req, res) => {
       cgst: cnCgst,
       sgst: cnSgst,
       igst: cnIgst,
-      rof: 0,
-      otherCharges: [],
+      rof: cnRof,
+      otherCharges: noteOtherCharges,
       taxableItemsTotal: cnGtot,
       cogsLines,
       actorUsername,

@@ -19,6 +19,7 @@ import inventoryPurchaseRoutes                  from './routes/mongo/inventory/p
 import ledgerRoutes                             from './routes/mongo/ledger.routes.js';
 import adminRoutes                              from './routes/mongo/admin.js';
 import databaseRoutes                           from './routes/mongo/database.routes.js';
+import cronRoutes                               from './routes/mongo/cron.routes.js';
 import { cleanupExpiredTokens }                 from './utils/mongo/tokenRevocationUtils.js';
 import { cleanupRateLimitEntries }              from './middleware/mongo/rateLimitMiddleware.js';
 import morgan from 'morgan';
@@ -66,6 +67,14 @@ app.use(morgan(isProduction ? 'combined' : 'dev', {
 
 app.use('/iframes', express.static(join(__dirname, '../client/iframes')));
 app.use(securityMiddleware);
+
+// ── Cron job routes (bypass CSRF validation) ──────────────────────────────
+// Cron routes use header-based authentication (X-Cron-Secret) instead of
+// session cookies, so they cannot participate in CSRF token validation.
+// Register them HERE, before csrfGenerateToken/csrfValidateToken are applied.
+app.use('/api/cron', cronRoutes);
+
+// ── CSRF protection for all other routes ──────────────────────────────────
 app.use(csrfGenerateToken);
 app.use(csrfValidateToken);
 
