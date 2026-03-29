@@ -6,6 +6,10 @@ export async function renderInventoryReports(router) {
   const canAccess = await requireAuth(router);
   if (!canAccess) return;
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const action = urlParams.get('action');
+  const returnTypeHint = urlParams.get('type') === 'PURCHASE' ? 'Purchase (Debit Note)' : 'Sales (Credit Note)';
+
   const content = `
   <div class="px-3 py-3 space-y-3">
 
@@ -29,6 +33,23 @@ export async function renderInventoryReports(router) {
         Dashboard
       </a>
     </div>
+
+    ${action === 'return' ? `
+    <!-- Return Action Notice -->
+    <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded shadow-sm animate-pulse">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-amber-700 font-bold uppercase tracking-tight">Create ${returnTypeHint} Return</p>
+          <p class="text-sm text-amber-600">Please locate the <strong>original bill</strong> in the list below and click the amber <span class="bg-amber-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">Return</span> button to proceed.</p>
+        </div>
+      </div>
+    </div>
+    ` : ''}
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -94,6 +115,8 @@ export async function renderInventoryReports(router) {
             <option value="">All Types</option>
             <option value="SALES">Sales</option>
             <option value="PURCHASE">Purchase</option>
+            <option value="CREDIT_NOTE">Credit Note (Sales Return)</option>
+            <option value="DEBIT_NOTE">Debit Note (Purchase Return)</option>
           </select>
         </div>
         <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 justify-between">
@@ -679,14 +702,25 @@ function initializeBillsPage(router) {
 
     tableBody.innerHTML = paginatedBills.map(bill => {
       const isCancelled   = (bill.status || 'ACTIVE') === 'CANCELLED';
-      const isPurchase    = (bill.btype  || 'SALES').toUpperCase() === 'PURCHASE';
+      const btype         = (bill.btype  || 'SALES').toUpperCase();
+      const isPurchase    = btype === 'PURCHASE';
+      const isCreditNote  = btype === 'CREDIT_NOTE';
+      const isDebitNote   = btype === 'DEBIT_NOTE';
+      
       const taxableAmount = bill.gtot || 0;
       const taxAmount     = (bill.cgst || 0) + (bill.sgst || 0) + (bill.igst || 0);
       const totalAmount   = bill.ntot || 0;
 
-      const typeBadge = isPurchase
-        ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">PUR</span>`
-        : `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700">SLS</span>`;
+      let typeBadge = '';
+      if (isPurchase) {
+        typeBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">PUR</span>`;
+      } else if (isCreditNote) {
+        typeBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">CN</span>`;
+      } else if (isDebitNote) {
+        typeBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">DN</span>`;
+      } else {
+        typeBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700">SLS</span>`;
+      }
 
       const statusBadge = isCancelled
         ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0"></span>Cancelled</span>`
@@ -703,6 +737,8 @@ function initializeBillsPage(router) {
         ? 'bg-red-50/60 border-l-2 border-l-red-300'
         : 'hover:bg-amber-50 transition-colors';
 
+      const canReturn = !isCancelled && (btype === 'SALES' || btype === 'PURCHASE');
+
       return `
         <tr class="${rowCls}" data-bill-id="${bill._id}">
           <td class="px-3 py-2 whitespace-nowrap">
@@ -716,14 +752,18 @@ function initializeBillsPage(router) {
           <td class="px-3 py-2 whitespace-nowrap text-right">${totalCell}</td>
           <td class="px-3 py-2 whitespace-nowrap">${statusBadge}</td>
           <td class="px-3 py-2 whitespace-nowrap text-center">
-            <button class="bill-view-btn inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-              data-bill-id="${bill._id}" title="View details">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3 pointer-events-none">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              </svg>
-              View
-            </button>
+            <div class="flex items-center justify-center gap-1">
+              <button class="bill-view-btn inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 rounded hover:bg-blue-700 transition"
+                data-bill-id="${bill._id}" title="View details">
+                View
+              </button>
+              ${canReturn ? `
+              <button class="bill-return-btn inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-amber-600 rounded hover:bg-amber-700 transition"
+                data-bill-id="${bill._id}" data-btype="${btype}" title="Return Items">
+                Return
+              </button>
+              ` : ''}
+            </div>
           </td>
         </tr>
       `;
@@ -902,10 +942,31 @@ function initializeBillsPage(router) {
       modalBillNo.textContent  = bill.bno || '—';
       modalBillDate.textContent= formatDate(bill.bdate);
 
-      const isP = (bill.btype || 'SALES').toUpperCase() === 'PURCHASE';
-      modalBillType.innerHTML = isP
-        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">PURCHASE</span>`
-        : `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700">SALES</span>`;
+      const btypeRaw = (bill.btype || 'SALES').toUpperCase();
+      const isP = btypeRaw === 'PURCHASE';
+      const isCN = btypeRaw === 'CREDIT_NOTE';
+      const isDN = btypeRaw === 'DEBIT_NOTE';
+
+      let typeBadge = '';
+      if (isP) {
+        typeBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">PURCHASE</span>`;
+      } else if (isCN) {
+        typeBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">CREDIT NOTE</span>`;
+      } else if (isDN) {
+        typeBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">DEBIT NOTE</span>`;
+      } else {
+        typeBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700">SALES</span>`;
+      }
+      modalBillType.innerHTML = typeBadge;
+
+      // Show reference bill if it exists
+      if (bill.ref_bill_id) {
+        const refLink = document.createElement('div');
+        refLink.className = 'mt-1 text-[10px] text-blue-600 hover:underline cursor-pointer font-bold';
+        refLink.textContent = `Original Bill ID: ${bill.ref_bill_id}`;
+        refLink.onclick = () => showBillDetails(bill.ref_bill_id);
+        modalBillType.appendChild(refLink);
+      }
 
       const isCancelled = (bill.status || 'ACTIVE') === 'CANCELLED';
       modalBillStatus.innerHTML = isCancelled
@@ -1503,14 +1564,21 @@ function initializeBillsPage(router) {
     updatePagination();
   });
 
-  // Table → open modal (event delegation, CSP-safe)
+  // Table → open modal / handle return (event delegation, CSP-safe)
   tableBody.addEventListener('click', e => {
-    const btn = e.target.classList.contains('bill-view-btn')
-      ? e.target
-      : e.target.closest('.bill-view-btn');
-    if (btn) {
-      const id = btn.getAttribute('data-bill-id');
+    const viewBtn = e.target.classList.contains('bill-view-btn') ? e.target : e.target.closest('.bill-view-btn');
+    const returnBtn = e.target.classList.contains('bill-return-btn') ? e.target : e.target.closest('.bill-return-btn');
+
+    if (viewBtn) {
+      const id = viewBtn.getAttribute('data-bill-id');
       if (id) showBillDetails(id);
+    } else if (returnBtn) {
+      const id = returnBtn.getAttribute('data-bill-id');
+      const btype = returnBtn.getAttribute('data-btype');
+      if (id) {
+        sessionStorage.setItem('returnFromBillId', id);
+        router.navigate(btype === 'PURCHASE' ? '/inventory/prs' : '/inventory/sls');
+      }
     }
   });
 

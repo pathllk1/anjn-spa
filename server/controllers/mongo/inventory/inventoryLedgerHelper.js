@@ -354,5 +354,29 @@ export async function postDebitNoteLedger({
     docs.push({ ...base, account_head: 'Inventory', account_type: 'ASSET', debit_amount: 0, credit_amount: pi.lineValue, narration: `Goods returned to supplier: ${pi.item} — Debit Note No: ${billNo}`, party_id: null, stock_id: pi.stockId ?? null, stock_reg_id: pi.stockRegId ?? null });
   }
 
+  const debitTotal = docs.reduce((sum, doc) => sum + (doc.debit_amount || 0), 0);
+  const creditTotal = docs.reduce((sum, doc) => sum + (doc.credit_amount || 0), 0);
+  const imbalance = Number((creditTotal - debitTotal).toFixed(6));
+
+  if (Math.abs(imbalance) > 0.000001) {
+    const adjustmentLedger = await resolveLedgerPostingAccount({
+      firmId,
+      accountHead: 'Inventory Adjustment',
+      fallbackType: imbalance > 0 ? 'EXPENSE' : 'INCOME',
+      session,
+    });
+    docs.push({
+      ...base,
+      account_head: adjustmentLedger.accountHead,
+      account_type: adjustmentLedger.accountType,
+      debit_amount: imbalance > 0 ? imbalance : 0,
+      credit_amount: imbalance < 0 ? Math.abs(imbalance) : 0,
+      narration: `Inventory valuation adjustment — Debit Note No: ${billNo}`,
+      party_id: null,
+      stock_id: null,
+      stock_reg_id: null,
+    });
+  }
+
   await Ledger.insertMany(docs, ...ins);
 }

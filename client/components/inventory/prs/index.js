@@ -28,8 +28,11 @@ export function initPurchaseSystem(router) {
     const sessionEditId   = sessionStorage.getItem('editBillId');
     const finalEditParam  = editBillIdParam || sessionEditId;
 
+    const returnFromBillId = sessionStorage.getItem('returnFromBillId');
+
     let editBillId = null;
     let isEditMode = false;
+    let isReturnMode = false;
 
     if (finalEditParam) {
         const isValidObjectId = /^[a-f\d]{24}$/i.test(finalEditParam);
@@ -42,9 +45,12 @@ export function initPurchaseSystem(router) {
             window.location.href = '/inventory/prs';
             return;
         }
+    } else if (returnFromBillId) {
+        isReturnMode = true;
     }
 
     const state = createInitialState();
+    state.isReturnMode = isReturnMode;
 
     // fetchCurrentUserFirmName now also populates state.firmLocations
     fetchCurrentUserFirmName(state);
@@ -62,6 +68,31 @@ export function initPurchaseSystem(router) {
             console.error('Failed to load bill data:', err);
             sessionStorage.removeItem('editBillId');
             showEditError(container, err.message, editBillId);
+        });
+    } else if (isReturnMode) {
+        loadExistingBillData(state, returnFromBillId).then(() => {
+            sessionStorage.removeItem('returnFromBillId');
+            const origBillNo = state.meta.billNo;
+            state.ref_bill_id = returnFromBillId;
+            state.meta.billNo = 'New Debit Note';
+            state.meta.supplierBillNo = `Return of ${origBillNo || ''}`;
+            state.meta.billDate = new Date().toISOString().split('T')[0];
+            
+            // Initialize return quantities to 0
+            state.cart.forEach(item => {
+                item.returnQty = 0;
+            });
+
+            fetchData(state).then(() => {
+                renderMainLayout(false);
+            }).catch(err => {
+                console.error('Failed to load data for return mode:', err);
+                showEditError(container, err.message, returnFromBillId);
+            });
+        }).catch(err => {
+            console.error('Failed to load original bill for return:', err);
+            sessionStorage.removeItem('returnFromBillId');
+            showEditError(container, err.message, returnFromBillId);
         });
     } else {
         fetchData(state).then(() => {
@@ -82,8 +113,8 @@ export function initPurchaseSystem(router) {
     function showEditError(container, errorMessage, billId) {
         container.innerHTML = `
             <div class="p-8 text-center text-red-600 border border-red-200 bg-red-50 rounded">
-                <h3 class="font-bold text-lg">Edit Bill Error</h3>
-                <p class="mb-4">Unable to load bill ${escHtml(String(billId))} for editing:</p>
+                <h3 class="font-bold text-lg">Edit/Return Bill Error</h3>
+                <p class="mb-4">Unable to load bill ${escHtml(String(billId))}:</p>
                 <p class="mb-6 font-mono text-sm">${escHtml(errorMessage)}</p>
                 <div class="flex gap-3 justify-center">
                     <button onclick="window.location.href='/inventory/reports'"
@@ -142,33 +173,40 @@ export function initPurchaseSystem(router) {
                 <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Receiving GSTIN</label>
                 <select id="firmGstinSelector"
                         class="border border-orange-300 bg-orange-50 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-orange-400 outline-none text-slate-700 font-medium"
-                        title="Select which firm GSTIN is receiving these goods (ITC will accrue to this GSTIN)">
+                        title="Select which firm GSTIN is receiving these goods (ITC will accrue to this GSTIN)"
+                        ${state.isReturnMode ? 'disabled' : ''}>
                     ${options}
                 </select>
             </div>`;
     }
 
     function renderMainLayout(isEditMode = false) {
+        const isReturnMode = state.isReturnMode;
+        const themeClass = isReturnMode ? 'bg-amber-50/50' : 'bg-gray-50';
+        const headerClass = isReturnMode ? 'border-amber-200' : 'border-gray-200';
+        const titleText = isReturnMode ? 'Purchase Return (Debit Note)' : 'Purchase Invoice';
+
         container.innerHTML = `
-        <div class="h-[calc(100vh-140px)] flex flex-col bg-gray-50 text-slate-800 font-sans text-sm border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+        <div class="h-[calc(100vh-140px)] flex flex-col ${themeClass} text-slate-800 font-sans text-sm border ${isReturnMode ? 'border-amber-300' : 'border-gray-300'} rounded-lg shadow-sm overflow-hidden transition-colors duration-300">
 
             <!-- Header -->
-            <div class="bg-white border-b border-gray-200 p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm z-20">
+            <div class="bg-white border-b ${headerClass} p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm z-20">
                 <div class="flex flex-col sm:flex-row flex-wrap gap-2">
                     <div class="flex items-center gap-2">
-                        <h1 class="text-lg font-bold text-gray-800">Purchase Invoice</h1>
+                        <h1 class="text-lg font-bold ${isReturnMode ? 'text-amber-800' : 'text-gray-800'}">${titleText}</h1>
                         ${isEditMode ? '<span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full border border-orange-200">EDIT MODE</span>' : ''}
+                        ${isReturnMode ? '<span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full border border-amber-200 animate-pulse">RETURN MODE</span>' : ''}
                     </div>
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Supplier Bill No</label>
                         <input type="text" id="supplier-bill-no" value="${escHtml(state.meta.supplierBillNo || '')}"
-                               class="border border-amber-300 rounded px-2 py-1 text-xs font-bold w-40 bg-amber-50 text-slate-700 focus:ring-1 focus:ring-amber-500 outline-none"
+                               class="border ${isReturnMode ? 'border-amber-400 bg-amber-50' : 'border-amber-300 bg-amber-50'} rounded px-2 py-1 text-xs font-bold w-40 text-slate-700 focus:ring-1 focus:ring-amber-500 outline-none"
                                placeholder="Enter supplier bill no"
                                title="Enter the supplier's actual bill or invoice number">
                     </div>
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Date</label>
-                        <input type="date" value="${escHtml(state.meta.billDate)}"
+                        <input type="date" id="bill-date-input" value="${escHtml(state.meta.billDate)}"
                                class="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none text-slate-700">
                     </div>
 
@@ -185,14 +223,14 @@ export function initPurchaseSystem(router) {
 
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Transaction Type</label>
-                        <select id="billTypeSelector" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 font-medium">
+                        <select id="billTypeSelector" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-blue-500 outline-none text-slate-700 font-medium" ${isReturnMode ? 'disabled' : ''}>
                             <option value="intra-state" ${state.meta.billType === 'intra-state' ? 'selected' : ''}>Intra-State (CGST + SGST)</option>
                             <option value="inter-state" ${state.meta.billType === 'inter-state' ? 'selected' : ''}>Inter-State (IGST)</option>
                         </select>
                     </div>
                     <div class="flex items-center gap-2 pt-4">
                         <label class="flex items-center cursor-pointer">
-                            <input type="checkbox" id="reverse-charge-toggle" ${state.meta.reverseCharge ? 'checked' : ''} class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                            <input type="checkbox" id="reverse-charge-toggle" ${state.meta.reverseCharge ? 'checked' : ''} class="form-checkbox h-4 w-4 text-blue-600 rounded" ${isReturnMode ? 'disabled' : ''}>
                             <span class="ml-2 text-[10px] uppercase text-gray-500 font-bold tracking-wider whitespace-nowrap">Reverse Charge</span>
                         </label>
                         <div class="text-[10px] font-bold px-2 py-1 rounded ${state.gstEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -202,12 +240,14 @@ export function initPurchaseSystem(router) {
                 </div>
 
                 <div class="flex flex-wrap gap-2">
+                    ${!isReturnMode ? `
                     <button id="btn-other-charges" class="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap">Other Charges</button>
                     <button id="btn-add-item"      class="px-3 py-1.5 text-xs text-indigo-600 border border-indigo-200 bg-indigo-50 rounded hover:bg-indigo-100 transition-colors whitespace-nowrap">Add Items (F2)</button>
                     <button id="btn-reset"         class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
-                    <button id="btn-save"          class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
+                    ` : ''}
+                    <button id="btn-save"          class="px-4 py-1.5 ${isReturnMode ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-800 hover:bg-slate-900'} text-white text-xs rounded shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
                         <span id="save-icon">💾</span>
-                        <span id="save-text">${isEditMode ? 'Update Purchase Bill' : 'Save Purchase Invoice'}</span>
+                        <span id="save-text">${isReturnMode ? 'Save Debit Note' : (isEditMode ? 'Update Purchase Bill' : 'Save Purchase Invoice')}</span>
                         <div id="save-spinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
                     </button>
                 </div>
@@ -217,7 +257,7 @@ export function initPurchaseSystem(router) {
             <div class="flex-1 overflow-hidden flex flex-col md:flex-row">
 
                 <!-- Sidebar -->
-                <div class="w-full md:w-64 bg-slate-50 border-r border-gray-200 flex flex-col overflow-y-auto z-10">
+                <div class="w-full md:w-64 ${isReturnMode ? 'bg-amber-50/30' : 'bg-slate-50'} border-r border-gray-200 flex flex-col overflow-y-auto z-10">
                     <div class="p-3 border-b border-gray-200 bg-white">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Supplier (Bill From)</label>
                         <div id="party-display">
@@ -233,7 +273,7 @@ export function initPurchaseSystem(router) {
                         <div class="flex justify-between items-center mb-2">
                             <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Consignee Details</label>
                             <label class="flex items-center cursor-pointer text-[10px] text-blue-600 font-medium">
-                                <input type="checkbox" id="consignee-same-as-bill-to" ${state.consigneeSameAsBillTo ? 'checked' : ''} class="form-checkbox h-3 w-3 text-blue-600 rounded mr-1">
+                                <input type="checkbox" id="consignee-same-as-bill-to" ${state.consigneeSameAsBillTo ? 'checked' : ''} class="form-checkbox h-3 w-3 text-blue-600 rounded mr-1" ${isReturnMode ? 'disabled' : ''}>
                                 Same as Bill To
                             </label>
                         </div>
@@ -242,37 +282,37 @@ export function initPurchaseSystem(router) {
                                 <div>
                                     <label class="text-[10px] text-gray-500 font-bold mb-1 block">Consignee Name *</label>
                                     <input type="text" id="consignee-name" value="${escHtml(state.selectedConsignee?.name || '')}"
-                                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter consignee name">
+                                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter consignee name" ${isReturnMode ? 'readonly' : ''}>
                                 </div>
                                 <div>
                                     <label class="text-[10px] text-gray-500 font-bold mb-1 block">Address *</label>
-                                    <textarea id="consignee-address" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-16 resize-none" placeholder="Enter delivery address">${escHtml(state.selectedConsignee?.address || '')}</textarea>
+                                    <textarea id="consignee-address" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-16 resize-none" placeholder="Enter delivery address" ${isReturnMode ? 'readonly' : ''}>${escHtml(state.selectedConsignee?.address || '')}</textarea>
                                 </div>
                                 <div class="grid grid-cols-2 gap-2">
                                     <div>
                                         <label class="text-[10px] text-gray-500 font-bold mb-1 block">GSTIN</label>
                                         <input type="text" id="consignee-gstin" value="${escHtml(state.selectedConsignee?.gstin || '')}"
-                                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none uppercase" placeholder="27ABCDE1234F1Z5" maxlength="15">
+                                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none uppercase" placeholder="27ABCDE1234F1Z5" maxlength="15" ${isReturnMode ? 'readonly' : ''}>
                                     </div>
                                     <div>
                                         <label class="text-[10px] text-gray-500 font-bold mb-1 block">State *</label>
                                         <input type="text" id="consignee-state" value="${escHtml(state.selectedConsignee?.state || '')}"
-                                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter state">
+                                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter state" ${isReturnMode ? 'readonly' : ''}>
                                     </div>
                                 </div>
                                 <div>
                                     <label class="text-[10px] text-gray-500 font-bold mb-1 block">PIN Code</label>
                                     <input type="text" id="consignee-pin" value="${escHtml(state.selectedConsignee?.pin || '')}"
-                                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter PIN code" maxlength="6">
+                                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Enter PIN code" maxlength="6" ${isReturnMode ? 'readonly' : ''}>
                                 </div>
                                 <div>
                                     <label class="text-[10px] text-gray-500 font-bold mb-1 block">Contact</label>
                                     <input type="text" id="consignee-contact" value="${escHtml(state.selectedConsignee?.contact || '')}"
-                                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Phone/Email">
+                                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="Phone/Email" ${isReturnMode ? 'readonly' : ''}>
                                 </div>
                                 <div>
                                     <label class="text-[10px] text-gray-500 font-bold mb-1 block">Delivery Instructions</label>
-                                    <textarea id="consignee-delivery-instructions" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-12 resize-none" placeholder="Special delivery instructions">${escHtml(state.selectedConsignee?.deliveryInstructions || '')}</textarea>
+                                    <textarea id="consignee-delivery-instructions" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none h-12 resize-none" placeholder="Special delivery instructions" ${isReturnMode ? 'readonly' : ''}>${escHtml(state.selectedConsignee?.deliveryInstructions || '')}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -290,7 +330,7 @@ export function initPurchaseSystem(router) {
                         <div>
                             <label class="text-[10px] text-gray-500 font-bold">Reference / PO No</label>
                             <input type="text" id="reference-no" value="${escHtml(state.meta.referenceNo)}"
-                                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="e.g. PO-2025-001">
+                                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none" placeholder="e.g. PO-2025-001" ${isReturnMode ? 'readonly' : ''}>
                         </div>
                         <div>
                             <label class="text-[10px] text-gray-500 font-bold">Vehicle No</label>
@@ -310,7 +350,8 @@ export function initPurchaseSystem(router) {
                         <div class="p-2 w-10 text-center">#</div>
                         <div class="p-2 flex-1">Item Description</div>
                         <div class="p-2 w-20">HSN</div>
-                        <div class="p-2 w-16 text-right">Qty</div>
+                        <div class="p-2 w-16 text-right">${isReturnMode ? 'Orig Qty' : 'Qty'}</div>
+                        ${isReturnMode ? '<div class="p-2 w-16 text-right">Ret Qty</div>' : ''}
                         <div class="p-2 w-12 text-center">Unit</div>
                         <div class="p-2 w-24 text-right">Rate</div>
                         <div class="p-2 w-16 text-right">Disc %</div>
@@ -323,11 +364,23 @@ export function initPurchaseSystem(router) {
                         ${renderItemsList(state)}
                     </div>
 
+                    ${!isReturnMode ? `
                     <div class="p-2 border-t border-dashed border-gray-200 bg-gray-50 shrink-0">
-                        <button id="btn-add-item" class="w-full py-2 border border-dashed border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-xs font-bold transition-colors uppercase tracking-wide">
+                        <button id="btn-add-item-bottom" class="w-full py-2 border border-dashed border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-xs font-bold transition-colors uppercase tracking-wide">
                             + Add Items (F2) &nbsp;|&nbsp; Select Supplier (F3) &nbsp;|&nbsp; Charges (F4) &nbsp;|&nbsp; Save (F8) &nbsp;|&nbsp; Reset (F9)
                         </button>
                     </div>
+                    ` : `
+                    <div class="p-3 border-t border-amber-200 bg-amber-50 shrink-0 text-amber-800 text-xs flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div>
+                            <p class="font-bold uppercase tracking-tight">Return Mode Active</p>
+                            <p class="opacity-80">Adjust the <strong>Ret Qty</strong> column for items being returned. Items with 0 return quantity will be ignored. Rates and discounts are locked to original bill values.</p>
+                        </div>
+                    </div>
+                    `}
 
                     <div class="bg-slate-50 border-t border-slate-300 p-4 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]" id="totals-section">
                         ${renderTotals(state)}
@@ -348,14 +401,14 @@ export function initPurchaseSystem(router) {
         <!-- Save Confirmation Modal -->
         <div id="save-confirmation-modal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-                <div class="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-5 text-white text-center">
+                <div class="${isReturnMode ? 'bg-gradient-to-r from-amber-600 to-orange-500' : 'bg-gradient-to-r from-green-600 to-emerald-500'} px-6 py-5 text-white text-center">
                     <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                         </svg>
                     </div>
-                    <h3 class="text-base font-bold tracking-wide">Purchase Saved!</h3>
-                    <p class="text-green-100 text-sm mt-1">Purchase No: <span id="modal-bill-no" class="font-bold text-white"></span></p>
+                    <h3 class="text-base font-bold tracking-wide">${isReturnMode ? 'Debit Note Saved!' : 'Purchase Saved!'}</h3>
+                    <p class="text-white/80 text-sm mt-1">${isReturnMode ? 'Debit Note' : 'Purchase'} No: <span id="modal-bill-no-display" class="font-bold text-white"></span></p>
                 </div>
                 <div class="p-5 flex flex-col gap-2">
                     <button id="download-pdf-btn"
@@ -368,7 +421,7 @@ export function initPurchaseSystem(router) {
                     </button>
 
                     <!-- Upload scanned bill section -->
-                    <div class="border-t border-gray-100 pt-3 mt-1">
+                    <div class="border-t border-gray-100 pt-3 mt-1 ${isReturnMode ? 'hidden' : ''}">
                         <!-- Existing attachment display -->
                         <div id="existing-attachment-section" class="hidden mb-3">
                             <p class="text-[11px] text-gray-500 font-bold uppercase tracking-wide mb-2">Attached Document</p>
@@ -415,6 +468,7 @@ export function initPurchaseSystem(router) {
                 partyContainer.innerHTML = html;
 
                 const handlePartySelection = () => {
+                    if (isReturnMode) return; // Cannot change party in return mode
                     openPartyModal(state, {
                         onSelectParty: async (party) => {
                             state.selectedParty = party;
@@ -503,6 +557,7 @@ export function initPurchaseSystem(router) {
     }
 
     function attachEventListeners(isEditMode = false, editBillId = null) {
+        const isReturnMode = state.isReturnMode;
 
         const showSaveSpinner = () => {
             document.getElementById('btn-save')?.setAttribute('disabled', 'true');
@@ -520,6 +575,9 @@ export function initPurchaseSystem(router) {
         // Add item
         const addBtn = document.getElementById('btn-add-item');
         if (addBtn) addBtn.onclick = () => openStockModal(state, buildStockModalCallbacks(isEditMode));
+        
+        const addBtnBottom = document.getElementById('btn-add-item-bottom');
+        if (addBtnBottom) addBtnBottom.onclick = () => openStockModal(state, buildStockModalCallbacks(isEditMode));
 
         // Other charges
         const chargesBtn = document.getElementById('btn-other-charges');
@@ -574,6 +632,14 @@ export function initPurchaseSystem(router) {
                     return;
                 }
 
+                if (isReturnMode) {
+                    const hasReturnItems = state.cart.some(item => (item.returnQty || 0) > 0);
+                    if (!hasReturnItems) {
+                        showToast('Please specify return quantity for at least one item.', 'error');
+                        return;
+                    }
+                }
+
                 if (isEditMode) {
                     const confirmed = confirm(
                         '⚠️ Edit Bill Confirmation\n\n' +
@@ -591,29 +657,56 @@ export function initPurchaseSystem(router) {
 
                 try {
                     const partyId  = getPartyId(state.selectedParty);
-                    const billData = {
-                        meta: {
-                            ...state.meta,
-                            // FIX: send the active firm GSTIN so the backend can
-                            // validate the bill type and record it on the bill document.
-                            // For purchases this is the *receiving* GSTIN — ITC accrues here.
-                            firmGstin: state.activeFirmLocation?.gst_number || null,
-                        },
-                        party:        partyId,
-                        cart:         state.cart,
-                        otherCharges: state.otherCharges,
-                        consignee:    state.selectedConsignee,
-                    };
+                    
+                    let response;
+                    if (isReturnMode) {
+                        // DEBIT NOTE DATA STRUCTURE
+                        const returnData = {
+                            originalBillId: state.ref_bill_id,
+                            returnCart: state.cart
+                                .filter(item => (item.returnQty || 0) > 0)
+                                .map(item => ({
+                                    stockId: item.stockId,
+                                    returnQty: item.returnQty,
+                                    rate: item.rate,
+                                    grate: item.grate,
+                                    disc: item.disc,
+                                    item: item.item,
+                                    gstRate: item.grate, // Backend expectation
+                                })),
+                            narration: state.meta.narration,
+                        };
 
-                    const method = isEditMode ? 'PUT' : 'POST';
-                    const url    = isEditMode
-                        ? `/api/inventory/purchase/bills/${editBillId}`
-                        : '/api/inventory/purchase/bills';
+                        response = await fetchWithCSRF('/api/inventory/purchase/create-debit-note', {
+                            method: 'POST',
+                            body: JSON.stringify(returnData),
+                        });
+                    } else {
+                        // REGULAR BILL DATA STRUCTURE
+                        const billData = {
+                            meta: {
+                                ...state.meta,
+                                // FIX: send the active firm GSTIN so the backend can
+                                // validate the bill type and record it on the bill document.
+                                // For purchases this is the *receiving* GSTIN — ITC accrues here.
+                                firmGstin: state.activeFirmLocation?.gst_number || null,
+                            },
+                            party:        partyId,
+                            cart:         state.cart,
+                            otherCharges: state.otherCharges,
+                            consignee:    state.selectedConsignee,
+                        };
 
-                    const response = await fetchWithCSRF(url, {
-                        method,
-                        body: JSON.stringify(billData),
-                    });
+                        const method = isEditMode ? 'PUT' : 'POST';
+                        const url    = isEditMode
+                            ? `/api/inventory/purchase/bills/${editBillId}`
+                            : '/api/inventory/purchase/bills';
+
+                        response = await fetchWithCSRF(url, {
+                            method,
+                            body: JSON.stringify(billData),
+                        });
+                    }
 
                     if (!response.ok) {
                         const error = await response.json();
@@ -627,9 +720,11 @@ export function initPurchaseSystem(router) {
                         return;
                     }
 
-                    const successMsg = isEditMode
-                        ? `Purchase bill updated! Purchase No: ${result.billNo || state.meta.billNo}`
-                        : `Purchase saved! Purchase No: ${result.billNo}`;
+                    const successMsg = isReturnMode 
+                        ? `Debit Note saved! No: ${result.billNo}`
+                        : (isEditMode
+                            ? `Purchase bill updated! Purchase No: ${result.billNo || state.meta.billNo}`
+                            : `Purchase saved! Purchase No: ${result.billNo}`);
                     showToast(successMsg, 'success');
                     showSaveConfirmationModal(result.id, result.billNo, isEditMode, state.currentBillFileUrl);
 
@@ -652,10 +747,12 @@ export function initPurchaseSystem(router) {
                 const totalsSection = document.getElementById('totals-section');
                 if (totalsSection) totalsSection.innerHTML = renderTotals(state);
 
-                const rowTotalEl = e.target.closest('.flex')?.querySelector('.row-total');
+                const rowContainer = e.target.closest('.flex');
+                const rowTotalEl = rowContainer?.querySelector('.row-total');
                 if (rowTotalEl) {
                     const item     = state.cart[idx];
-                    const rowTotal = item.qty * item.rate * (1 - (item.disc || 0) / 100);
+                    const effectiveQty = isReturnMode ? (item.returnQty || 0) : (item.qty || 0);
+                    const rowTotal = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
                     rowTotalEl.textContent = formatCurrency(rowTotal);
                 }
             };
@@ -728,7 +825,7 @@ export function initPurchaseSystem(router) {
         bindInput('consignee-address',               v => { if (!state.selectedConsignee) state.selectedConsignee = {}; state.selectedConsignee.address = v; });
 
         // Bill date
-        const billDateInput = document.querySelector('input[type="date"]');
+        const billDateInput = document.getElementById('bill-date-input');
         if (billDateInput) {
             billDateInput.oninput = (e) => { state.meta.billDate = e.target.value; };
         }
@@ -748,7 +845,7 @@ export function initPurchaseSystem(router) {
 
     function showSaveConfirmationModal(billId, billNo, isEditMode, fileUrl) {
         const modal    = document.getElementById('save-confirmation-modal');
-        const billNoEl = document.getElementById('modal-bill-no');
+        const billNoEl = document.getElementById('modal-bill-no-display');
         if (billNoEl) billNoEl.textContent = billNo;
         modal.classList.remove('hidden');
 
@@ -786,7 +883,7 @@ export function initPurchaseSystem(router) {
         }
 
         const handleAfterModal = () => {
-            if (isEditMode) {
+            if (isEditMode || state.isReturnMode) {
                 setTimeout(() => router.navigate('/inventory/reports'), 500);
             } else {
                 clearCart(state);

@@ -67,6 +67,17 @@ const billSchema = new Schema(
     cgst:                 { type: Number, default: 0 },
     sgst:                 { type: Number, default: 0 },
     igst:                 { type: Number, default: 0 },
+    
+    // ── Credit/Debit Note Reference ────────────────────────────────────────
+    // For CREDIT_NOTE (sales return) or DEBIT_NOTE (purchase return), this links
+    // back to the original SALES or PURCHASE bill being returned.
+    // NULL for regular bills (SALES, PURCHASE, etc.)
+    ref_bill_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'Bill',
+      default: null,
+    },
+    
     status:               { type: String, default: 'ACTIVE' },
     cancellation_reason:  { type: String },
     cancelled_at:         { type: Date, default: null },
@@ -102,6 +113,8 @@ billSchema.index({ firm_id: 1, status: 1 });
 billSchema.index({ firm_id: 1, party_id: 1, supplier_bill_no: 1, status: 1 });
 // GSTR-1 filing queries: all bills for a given firm GSTIN in a date range
 billSchema.index({ firm_id: 1, firm_gstin: 1, bdate: 1 });
+// Contextual return queries: find notes linked to a specific original bill
+billSchema.index({ ref_bill_id: 1 });
 
 const Bill = mongoose.model('Bill', billSchema);
 

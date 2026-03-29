@@ -6,10 +6,10 @@ import {
   getActorUsername, getFirmId, validateObjectId,
   normalizeOptionalText, normalizeOptionalMultilineText,
   getNextBillNumber, previewNextBillNumber, getNextVoucherNumber,
-  isGstEnabled, calcBillTotals,
+  isGstEnabled, calcBillTotals, getLocalDateString,
   isServiceItem, getEffectiveItemQty,
 } from '../billUtils.js';
-import { postSalesLedger } from '../inventoryLedgerHelper.js';
+import { postSalesLedger, postCreditNoteLedger } from '../inventoryLedgerHelper.js';
 import { getStateCode } from '../../../../utils/mongo/gstCalculator.js';
 
 /* ── Re-export everything shared ─────────────────────────────────────────── */
@@ -164,6 +164,97 @@ function validateGstBillType(billType, firmStateCode, partyStateCode, reverseCha
     return `GST type mismatch: firm state (${firmStateCode}) and party state (${partyStateCode}) differ — must use IGST (inter-state), not CGST+SGST.`;
   }
   return null;
+}
+
+function toPositiveNumber(value) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function aggregateReturnCart(returnCart) {
+  const aggregated = new Map();
+
+  for (const item of returnCart) {
+    const stockId = item?.stockId ? String(item.stockId) : null;
+    const returnQty = toPositiveNumber(item?.returnQty);
+    if (!stockId || !mongoose.Types.ObjectId.isValid(stockId)) {
+      throw new Error(`Invalid stockId for return item: ${item?.item ?? '(unknown)'}`);
+    }
+    if (!returnQty) {
+      throw new Error(`Return quantity must be > 0 for item: ${item?.item ?? '(unknown)'}`);
+    }
+
+    const existing = aggregated.get(stockId);
+    if (existing) {
+      existing.returnQty += returnQty;
+      continue;
+    }
+
+    aggregated.set(stockId, {
+      ...item,
+      stockId,
+      returnQty,
+    });
+  }
+
+  return aggregated;
+}
+
+function buildAtomicSalesReturnPipeline({ batch, returnedQty, restoredValue, restoredRate, actorUsername }) {
+  return [
+    {
+      $set: {
+        batches: {
+          $map: {
+            input: { $ifNull: ['$batches', []] },
+            as: 'b',
+            in: {
+              $cond: [
+                { $eq: [{ $ifNull: ['$$b.batch', null] }, batch ?? null] },
+                {
+                  $mergeObjects: [
+                    '$$b',
+                    {
+                      qty: { $add: [{ $ifNull: ['$$b.qty', 0] }, returnedQty] },
+                    },
+                  ],
+                },
+                '$$b',
+              ],
+            },
+          },
+        },
+        qty: { $add: [{ $ifNull: ['$qty', 0] }, returnedQty] },
+        total: {
+          $add: [
+            { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+            restoredValue,
+          ],
+        },
+        rate: {
+          $let: {
+            vars: {
+              nextQty: { $add: [{ $ifNull: ['$qty', 0] }, returnedQty] },
+              nextTotal: {
+                $add: [
+                  { $ifNull: ['$total', { $multiply: [{ $ifNull: ['$qty', 0] }, { $ifNull: ['$rate', 0] }] }] },
+                  restoredValue,
+                ],
+              },
+            },
+            in: {
+              $cond: [
+                { $gt: ['$$nextQty', 0] },
+                { $round: [{ $divide: ['$$nextTotal', '$$nextQty'] }, 6] },
+                restoredRate,
+              ],
+            },
+          },
+        },
+        user: actorUsername,
+      },
+    },
+  ];
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -687,6 +778,249 @@ export const cancelBill = async (req, res) => {
     await session.abortTransaction();
     console.error('[CANCEL_BILL] Error:', err.message);
     res.status(500).json({ error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+
+/**
+ * CREATE CREDIT NOTE (Sales Return)
+ * 
+ * A credit note references an original SALES bill and returns inventory items.
+ * Stock quantities are restored using the original WAC (cost_rate).
+ * Ledger entries reverse the original sale with matching amounts.
+ */
+export const createCreditNote = async (req, res) => {
+  const { originalBillId, returnCart, narration } = req.body;
+  const actorUsername = getActorUsername(req);
+  if (!actorUsername) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const firmId = getFirmId(req, res, 'CREATE_CREDIT_NOTE');
+  if (!firmId) return;
+
+  const billIdObj = validateObjectId(originalBillId, 'originalBillId', res);
+  if (!billIdObj) return;
+
+  if (!returnCart || !Array.isArray(returnCart) || returnCart.length === 0) {
+    return res.status(400).json({ error: 'Return cart cannot be empty' });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Fetch original bill
+    const originalBill = await Bill.findOne({ _id: billIdObj, firm_id: firmId }).session(session).lean();
+    if (!originalBill) {
+      throw new Error('Original bill not found');
+    }
+    if (originalBill.btype !== 'SALES') {
+      throw new Error('Can only create credit notes for SALES bills');
+    }
+    if (originalBill.status === 'CANCELLED') {
+      throw new Error('Cannot create credit note against a cancelled bill');
+    }
+
+    // Fetch original StockReg entries
+    const originalStockRegs = await StockReg.find({ bill_id: billIdObj, firm_id: firmId }).session(session).lean();
+
+    // Fetch already-returned quantities for each item
+    const returnedQtyByStockId = {};
+    const existingCreditNotes = await Bill.find({
+      ref_bill_id: billIdObj,
+      btype: 'CREDIT_NOTE',
+      status: 'ACTIVE',
+      firm_id: firmId,
+    }).session(session).lean();
+
+    for (const existingCN of existingCreditNotes) {
+      const existingRegs = await StockReg.find({ bill_id: existingCN._id, firm_id: firmId }).session(session).lean();
+      for (const reg of existingRegs) {
+        returnedQtyByStockId[String(reg.stock_id)] = (returnedQtyByStockId[String(reg.stock_id)] || 0) + reg.qty;
+      }
+    }
+
+    const aggregatedReturnCart = aggregateReturnCart(returnCart);
+
+    // Validate return quantities
+    for (const returnItem of aggregatedReturnCart.values()) {
+      const originalReg = originalStockRegs.find(r => String(r.stock_id) === String(returnItem.stockId));
+      if (!originalReg) {
+        throw new Error(`Item not found in original bill: ${returnItem.item}`);
+      }
+      const alreadyReturned = returnedQtyByStockId[String(returnItem.stockId)] || 0;
+      const maxReturnQty = originalReg.qty - alreadyReturned;
+      if (returnItem.returnQty > maxReturnQty) {
+        throw new Error(`Cannot return ${returnItem.returnQty} units of ${returnItem.item} (max: ${maxReturnQty})`);
+      }
+    }
+
+    // Generate credit note number and voucher
+    const cnBillNo = await getNextBillNumber(firmId, 'CREDIT_NOTE');
+    const cnVoucherId = await getNextVoucherNumber(firmId);
+
+    // Calculate totals for credit note
+    const gstEnabled = await isGstEnabled(firmId);
+    let cnGtot = 0, cnNtot = 0, cnCgst = 0, cnSgst = 0, cnIgst = 0;
+
+    for (const returnItem of aggregatedReturnCart.values()) {
+      const lineTotal = returnItem.returnQty * returnItem.rate * (1 - (returnItem.disc || 0) / 100);
+      cnGtot += lineTotal;
+
+      if (gstEnabled) {
+        const gstRate = parseFloat(returnItem.gstRate ?? returnItem.grate) || 0;
+        const gstAmt = lineTotal * gstRate / 100;
+        if (originalBill.bill_subtype === 'INTRA-STATE') {
+          cnCgst += gstAmt / 2;
+          cnSgst += gstAmt / 2;
+        } else {
+          cnIgst += gstAmt;
+        }
+      }
+    }
+
+    cnNtot = cnGtot + cnCgst + cnSgst + cnIgst;
+
+    // Create credit note bill
+    const firmRecord = await Firm.findById(firmId).select('name').lean().session(session);
+    const [creditNoteBill] = await Bill.create([{
+      firm_id: firmId,
+      voucher_id: String(cnVoucherId),
+      bno: cnBillNo,
+      bdate: getLocalDateString(),
+      ref_bill_id: billIdObj,
+      
+      // Copy party info from original
+      supply: originalBill.supply,
+      addr: originalBill.addr,
+      gstin: originalBill.gstin,
+      state: originalBill.state,
+      pin: originalBill.pin,
+      state_code: originalBill.state_code,
+
+      // Copy firm info from original (critical for GSTR-1)
+      firm_gstin: originalBill.firm_gstin,
+      firm_state: originalBill.firm_state,
+      firm_state_code: originalBill.firm_state_code,
+
+      gtot: cnGtot,
+      ntot: cnNtot,
+      rof: 0,
+      btype: 'CREDIT_NOTE',
+      bill_subtype: originalBill.bill_subtype,
+      usern: actorUsername,
+      firm: firmRecord?.name || '',
+      party_id: originalBill.party_id,
+      reverse_charge: originalBill.reverse_charge,
+      cgst: cnCgst,
+      sgst: cnSgst,
+      igst: cnIgst,
+      narration: normalizeOptionalMultilineText(narration, 2000),
+    }], { session });
+
+    const cnBillId = creditNoteBill._id;
+    const cogsLines = [];
+    const stockRegDocs = [];
+
+    // Restore stock and create audit trail
+    for (const returnItem of aggregatedReturnCart.values()) {
+      const originalReg = originalStockRegs.find(r => String(r.stock_id) === String(returnItem.stockId));
+      if (!originalReg) continue;
+
+      // Use original cost_rate for stock restoration
+      const costPerUnit = parseFloat(originalReg.cost_rate);
+      if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+        throw new Error(`Missing original cost rate for item: ${originalReg.item}`);
+      }
+      const restoredValue = returnItem.returnQty * costPerUnit;
+
+      // Atomic stock increment (reverse the original decrement)
+      const stockId = originalReg.stock_id;
+      const stockRecord = await Stock.findOne({ _id: stockId, firm_id: firmId }).session(session).lean();
+      if (!stockRecord) {
+        throw new Error(`Stock record not found: ${stockId}`);
+      }
+
+      // Since a CREDIT_NOTE is a return of goods, we increment stock qty, batch qty, and restore asset value
+      const updatedStock = await Stock.findOneAndUpdate(
+        { _id: stockId, firm_id: firmId },
+        buildAtomicSalesReturnPipeline({
+          batch: originalReg.batch,
+          returnedQty: returnItem.returnQty,
+          restoredValue,
+          restoredRate: costPerUnit,
+          actorUsername,
+        }),
+        { session, new: true }
+      );
+      if (!updatedStock) {
+        throw new Error(`Failed to update stock for item ${originalReg.item}`);
+      }
+
+      // Create StockReg for audit trail
+      const stockRegId = new mongoose.Types.ObjectId();
+      stockRegDocs.push({
+        _id: stockRegId,
+        firm_id: firmId,
+        type: 'CREDIT_NOTE',
+        bno: cnBillNo,
+        bdate: creditNoteBill.bdate,
+        supply: originalBill.supply,
+        item: originalReg.item,
+        item_narration: originalReg.item_narration,
+        batch: originalReg.batch,
+        hsn: originalReg.hsn,
+        qty: returnItem.returnQty,
+        uom: originalReg.uom,
+        rate: returnItem.rate,
+        grate: returnItem.grate,
+        disc: returnItem.disc || 0,
+        total: returnItem.returnQty * returnItem.rate * (1 - (returnItem.disc || 0) / 100),
+        cost_rate: costPerUnit,
+        stock_id: stockId,
+        bill_id: cnBillId,
+        user: actorUsername,
+        qtyh: updatedStock.qty,
+      });
+
+      // For ledger COGS reversal
+      cogsLines.push({
+        stockId,
+        stockRegId,
+        item: originalReg.item,
+        cogsValue: returnItem.returnQty * costPerUnit,
+      });
+    }
+
+    await StockReg.insertMany(stockRegDocs, { session });
+
+    // Post ledger entries (reverse the original sale)
+    await postCreditNoteLedger({
+      firmId,
+      billId: cnBillId,
+      voucherId: cnVoucherId,
+      billNo: cnBillNo,
+      billDate: creditNoteBill.bdate,
+      party: { _id: originalBill.party_id, firm: originalBill.supply },
+      ntot: cnNtot,
+      cgst: cnCgst,
+      sgst: cnSgst,
+      igst: cnIgst,
+      rof: 0,
+      otherCharges: [],
+      taxableItemsTotal: cnGtot,
+      cogsLines,
+      actorUsername,
+      session,
+    });
+
+    await session.commitTransaction();
+    res.json({ success: true, id: cnBillId, billNo: cnBillNo, message: 'Credit note created successfully' });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('[CREATE_CREDIT_NOTE] Error:', err.message);
+    res.status(400).json({ error: err.message });
   } finally {
     session.endSession();
   }

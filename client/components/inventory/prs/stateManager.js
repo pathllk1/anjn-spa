@@ -159,6 +159,7 @@ export async function loadExistingBillData(state, billId) {
         if (!billData.success) throw new Error(billData.error || 'Failed to load bill data');
 
         const bill = billData.data;
+        state.currentBill = bill; // Store full bill for reference
 
         state.meta = {
             billNo:          bill.bno,
@@ -210,6 +211,7 @@ export async function loadExistingBillData(state, billId) {
 
         state.cart = (bill.items || []).map(item => ({
             stockId:   item.stock_id,
+            itemType:  item.item_type || (item.stock_id ? 'GOODS' : 'SERVICE'),
             item:      item.item,
             narration: item.item_narration || '',
             batch:     item.batch          || null,
@@ -218,6 +220,7 @@ export async function loadExistingBillData(state, billId) {
             qty:       parseFloat(item.qty)   || 0,
             uom:       item.uom               || 'PCS',
             rate:      parseFloat(item.rate)  || 0,
+            costRate:  parseFloat(item.cost_rate) || 0,
             grate:     parseFloat(item.grate) || 0,
             disc:      parseFloat(item.disc)  || 0,
         }));

@@ -25,20 +25,57 @@ export function renderItemsList(state) {
         </div>`;
     }
 
+    const isReturnMode = state.isReturnMode;
+
+    // Update header if in return mode
+    const header = document.querySelector('.bg-gray-100.border-b.border-gray-200.text-\\[11px\\]');
+    if (header) {
+        if (isReturnMode) {
+            header.innerHTML = `
+                <div class="p-2 w-10 text-center">#</div>
+                <div class="p-2 flex-1">Item Description</div>
+                <div class="p-2 w-20">HSN</div>
+                <div class="p-2 w-16 text-right">Orig Qty</div>
+                <div class="p-2 w-16 text-right">Ret Qty</div>
+                <div class="p-2 w-12 text-center">Unit</div>
+                <div class="p-2 w-24 text-right">Rate</div>
+                <div class="p-2 w-16 text-right">Disc %</div>
+                <div class="p-2 w-16 text-right">Tax %</div>
+                <div class="p-2 w-28 text-right">Total</div>
+                <div class="p-2 w-10 text-center"></div>
+            `;
+        } else {
+            header.innerHTML = `
+                <div class="p-2 w-10 text-center">#</div>
+                <div class="p-2 flex-1">Item Description</div>
+                <div class="p-2 w-20">HSN</div>
+                <div class="p-2 w-16 text-right">Qty</div>
+                <div class="p-2 w-12 text-center">Unit</div>
+                <div class="p-2 w-24 text-right">Rate</div>
+                <div class="p-2 w-16 text-right">Disc %</div>
+                <div class="p-2 w-16 text-right">Tax %</div>
+                <div class="p-2 w-28 text-right">Total</div>
+                <div class="p-2 w-10 text-center"></div>
+            `;
+        }
+    }
+
     // FIX: escHtml applied to all user/API data in template strings
     return state.cart.map((item, index) => {
         const isService = isServiceItem(item);
-        const rowTotal  = getItemLineTotal(item);
-        const qtyValue  = getItemDisplayQty(item);
+        const effectiveQty = isReturnMode ? (item.returnQty || 0) : getItemEffectiveQty(item);
+        const rowTotal  = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+        const qtyValue  = isReturnMode ? (item.returnQty || 0) : getItemDisplayQty(item);
+        
         return `
-        <div class="flex items-center border-b border-gray-100 text-xs text-gray-700 hover:bg-blue-50 transition-colors min-h-10 group bg-white">
+        <div class="flex items-center border-b border-gray-100 text-xs text-gray-700 hover:bg-blue-50 transition-colors min-h-10 group bg-white ${isReturnMode ? 'bg-amber-50/20' : ''}">
             <div class="p-2 w-10 text-center text-gray-400 font-mono">${index + 1}</div>
             <div class="p-2 flex-1 font-medium truncate flex flex-col justify-center">
                 ${isService
                     ? `<input type="text" data-idx="${index}" data-field="item"
                        value="${escHtml(item.item || '')}"
                        class="w-full text-xs bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 font-medium text-gray-800"
-                       placeholder="Service description">`
+                       placeholder="Service description" ${isReturnMode ? 'readonly' : ''}>`
                     : `<span class="text-gray-800">${escHtml(item.item)}</span>`}
                 <span class="text-[10px] text-gray-400 font-normal">${isService ? 'Service Line' : `Batch: ${escHtml(item.batch || '-')} | OEM: ${escHtml(item.oem || '-')}`}</span>
             </div>
@@ -47,48 +84,59 @@ export function renderItemsList(state) {
                     ? `<input type="text" data-idx="${index}" data-field="hsn"
                        value="${escHtml(item.hsn || '')}"
                        class="w-full text-xs bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-500"
-                       placeholder="SAC">`
+                       placeholder="SAC" ${isReturnMode ? 'readonly' : ''}>`
                     : escHtml(item.hsn)}
             </div>
 
+            ${isReturnMode ? `
+            <div class="p-2 w-16 text-right text-gray-400 font-medium border-l border-transparent group-hover:border-blue-100">
+                ${item.qty}
+            </div>
+            <div class="p-1 w-16 border-l border-transparent group-hover:border-blue-100">
+                <input type="number" min="0" max="${item.qty}" step="0.01" data-idx="${index}" data-field="returnQty"
+                       value="${qtyValue}"
+                       class="tbl-input w-full text-right bg-amber-50 border-b border-amber-200 focus:bg-white focus:border-amber-500 outline-none px-1 font-bold text-amber-700 shadow-sm rounded">
+            </div>
+            ` : `
             <div class="p-1 w-16 border-l border-transparent group-hover:border-blue-100">
                 <input type="number" min="0" step="0.01" data-idx="${index}" data-field="qty"
                        value="${qtyValue === '' ? '' : Number(qtyValue)}"
                        class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 font-semibold text-blue-700">
             </div>
+            `}
 
             <div class="p-2 w-12 text-center text-gray-500 text-[10px] border-l border-transparent group-hover:border-blue-100">
                 ${isService
                     ? `<input type="text" data-idx="${index}" data-field="uom"
                        value="${escHtml(item.uom || '')}"
                        class="w-full text-[10px] text-center bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1"
-                       placeholder="${shouldShowItemQty(item) ? 'UOM' : ''}">`
+                       placeholder="${shouldShowItemQty(item) ? 'UOM' : ''}" ${isReturnMode ? 'readonly' : ''}>`
                     : escHtml(item.uom)}
             </div>
 
             <div class="p-1 w-24 border-l border-transparent group-hover:border-blue-100">
                 <input type="number" min="0" step="0.01" data-idx="${index}" data-field="rate"
                        value="${Number(item.rate)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1">
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1" ${isReturnMode ? 'readonly' : ''}>
             </div>
 
             <div class="p-1 w-16 border-l border-transparent group-hover:border-blue-100">
                 <input type="number" min="0" max="100" step="0.01" data-idx="${index}" data-field="disc"
                        value="${Number(item.disc || 0)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 placeholder-gray-300" placeholder="0">
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 placeholder-gray-300" placeholder="0" ${isReturnMode ? 'readonly' : ''}>
             </div>
 
             <div class="p-1 w-16 border-l border-transparent group-hover:border-blue-100">
                 ${isService
                     ? `<input type="number" min="0" max="100" step="0.01" data-idx="${index}" data-field="grate"
                        value="${Number(item.grate || 0)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-600">`
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-600" ${isReturnMode ? 'readonly' : ''}>`
                     : `<div class="p-1 text-right text-gray-600">${escHtml(String(item.grate))}%</div>`}
             </div>
             <div class="p-2 w-28 text-right font-bold text-gray-800 row-total border-l border-transparent group-hover:border-blue-100 bg-gray-50/50 group-hover:bg-transparent tabular-nums">${formatCurrency(rowTotal)}</div>
 
             <div class="p-2 w-10 text-center border-l border-transparent group-hover:border-blue-100">
-                <button data-idx="${index}" class="btn-remove text-gray-300 hover:text-red-500 transition-colors font-bold text-lg leading-none">&times;</button>
+                ${!isReturnMode ? `<button data-idx="${index}" class="btn-remove text-gray-300 hover:text-red-500 transition-colors font-bold text-lg leading-none">&times;</button>` : ''}
             </div>
         </div>
         <div class="flex items-start border-b border-gray-100 text-xs text-gray-700 group bg-white pl-20 pr-2 py-1">
@@ -109,7 +157,7 @@ export function renderItemsList(state) {
                 <input type="number" min="0" step="0.01" data-idx="${index}" data-field="costRate"
                        value="${Number(item.costRate || 0)}"
                        class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-amber-700 font-semibold"
-                       placeholder="0.00">
+                       placeholder="0.00" ${isReturnMode ? 'readonly' : ''}>
             </div>
             <div class="flex-1 text-[10px] text-gray-400 pl-3">Optional per-unit cost for service COGS posting</div>
         </div>`;
@@ -118,25 +166,35 @@ export function renderItemsList(state) {
 
 export function renderTotals(state) {
     const gstEnabled = state.gstEnabled !== undefined ? state.gstEnabled : true;
+    const isReturnMode = state.isReturnMode;
+    
+    // Create a virtual cart for total calculation if in return mode
+    const effectiveCart = isReturnMode 
+        ? state.cart.map(item => ({ ...item, qty: item.returnQty || 0 }))
+        : state.cart;
+
     const totals = calculateBillTotals({
-        cart: state.cart,
+        cart: effectiveCart,
         otherCharges: state.otherCharges,
         gstEnabled,
         billType: state.meta.billType,
         reverseCharge: state.meta.reverseCharge,
     });
 
-    const totalQty = state.cart.reduce((sum, item) => {
+    const totalQty = effectiveCart.reduce((sum, item) => {
         if (!shouldShowItemQty(item)) return sum;
-        return sum + getItemEffectiveQty(item);
+        return sum + (isReturnMode ? (item.returnQty || 0) : getItemEffectiveQty(item));
     }, 0).toFixed(2);
+
+    const titleLabel = isReturnMode ? 'Return Totals' : 'Invoice Totals';
+    const qtyLabel = isReturnMode ? 'Ret Qty' : 'Total Quantity';
 
     return `
     <div class="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
         <div class="text-[11px] text-gray-400 space-y-1">
             <div class="flex gap-4">
                 <span>Total Items: <b class="text-gray-600">${state.cart.length}</b></span>
-                <span>Total Quantity: <b class="text-gray-600">${totalQty}</b></span>
+                <span>${qtyLabel}: <b class="${isReturnMode ? 'text-amber-700' : 'text-gray-600'}">${totalQty}</b></span>
             </div>
             ${state.meta.reverseCharge ? '<div class="text-red-600 font-bold mt-1">REVERSE CHARGE APPLIES</div>' : ''}
             <div class="text-gray-400 italic mt-2">* Rates are inclusive of discounts before tax</div>
@@ -144,15 +202,17 @@ export function renderTotals(state) {
 
         <div class="flex gap-6 text-xs">
             <div class="text-right space-y-1.5 text-gray-500 font-medium">
+                <div class="mb-2 text-[10px] uppercase font-bold tracking-wider text-gray-400">${titleLabel}</div>
                 <div>Taxable Value</div>
                 ${state.meta.billType === 'intra-state'
                     ? `<div>CGST Output</div><div>SGST Output</div>`
                     : `<div>IGST Output</div>`}
                 ${state.otherCharges.length > 0 ? `<div>Other Charges</div>` : ''}
                 <div>Round Off</div>
-                <div class="pt-2 mt-2 border-t border-gray-200 font-bold text-gray-700">Grand Total</div>
+                <div class="pt-2 mt-2 border-t border-gray-200 font-bold text-gray-700">Net Return Total</div>
             </div>
             <div class="text-right space-y-1.5 font-mono font-bold text-gray-800">
+                <div class="mb-2 h-4"></div>
                 <div class="tabular-nums">${formatCurrency(totals.itemTaxableTotal)}</div>
                 ${state.meta.billType === 'intra-state'
                     ? `<div class="text-gray-600 tabular-nums">${formatCurrency(totals.cgst)}</div><div class="text-gray-600 tabular-nums">${formatCurrency(totals.sgst)}</div>`
@@ -160,7 +220,7 @@ export function renderTotals(state) {
                 ${state.otherCharges.length > 0
                     ? `<div class="text-gray-600 tabular-nums">${formatCurrency(totals.otherChargesTotal)}</div>` : ''}
                 <div class="text-gray-600 tabular-nums">${formatCurrency(totals.rof)}</div>
-                <div class="pt-2 mt-2 border-t border-gray-200 font-bold text-lg text-blue-700 leading-none tabular-nums">
+                <div class="pt-2 mt-2 border-t border-gray-200 font-bold text-lg ${isReturnMode ? 'text-amber-700' : 'text-blue-700'} leading-none tabular-nums">
                     ${formatCurrency(totals.ntot)}
                 </div>
             </div>
@@ -224,7 +284,7 @@ export async function renderPartyCard(state) {
                         title="${escHtml(state.selectedParty.firm)}">${escHtml(state.selectedParty.firm)}</h3>
                     <button id="btn-change-party"
                             class="text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-white p-1.5 rounded shadow-sm border border-gray-200 hover:border-blue-300 whitespace-nowrap ml-2"
-                            title="Change Party">
+                            title="Change Party" ${state.isReturnMode ? 'disabled style="display:none"' : ''}>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                   d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>

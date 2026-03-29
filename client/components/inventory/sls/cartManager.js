@@ -93,8 +93,9 @@ export function updateCartItem(state, index, field, value) {
         return;
     }
 
-    if (field === 'qty') {
-        if (item.itemType === 'SERVICE') {
+    if (field === 'qty' || field === 'returnQty') {
+        const isReturn = field === 'returnQty';
+        if (item.itemType === 'SERVICE' && !isReturn) {
             if (value === '' || value === null || value === undefined) {
                 item.qty = 1;
                 item.showQty = false;
@@ -112,8 +113,13 @@ export function updateCartItem(state, index, field, value) {
         }
         let parsed = parseFloat(value);
         if (!Number.isFinite(parsed) || parsed < 0) parsed = 0;
-        item.qty = parsed;
-        item.showQty = true;
+        
+        if (isReturn) {
+            item.returnQty = parsed;
+        } else {
+            item.qty = parsed;
+            item.showQty = true;
+        }
         return;
     }
 

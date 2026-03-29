@@ -287,6 +287,12 @@ export const generateInvoicePDF = async (req, res) => {
         const bill = await Bill.findOne({ _id: billId, firm_id: firmId }).lean();
         if (!bill) return res.status(404).json({ error: 'Bill not found' });
 
+        // Fetch original bill metadata if this is a return (Credit/Debit Note)
+        let refBill = null;
+        if (bill.ref_bill_id) {
+            refBill = await Bill.findOne({ _id: bill.ref_bill_id }).select('bno bdate').lean();
+        }
+
         const items = await StockReg.find({ bill_id: billId, firm_id: firmId }).lean();
 
         let otherCharges = [];
@@ -413,6 +419,16 @@ export const generateInvoicePDF = async (req, res) => {
                                                     { text: isPurchase ? 'Purchase No' : 'Invoice No', style: 'metaLabel' },
                                                     { text: bill.bno || '', style: 'metaValue' }
                                                 ],
+                                                ...(refBill ? [
+                                                    [
+                                                        { text: 'Orig Bill No', style: 'metaLabel' },
+                                                        { text: refBill.bno || '', style: 'metaValue' }
+                                                    ],
+                                                    [
+                                                        { text: 'Orig Date', style: 'metaLabel' },
+                                                        { text: formatDate(refBill.bdate) || '', style: 'metaValue' }
+                                                    ]
+                                                ] : []),
                                                 ...(isPurchase && bill.supplier_bill_no ? [[
                                                     { text: 'Supplier Bill No', style: 'metaLabel' },
                                                     { text: bill.supplier_bill_no, style: 'metaValue' }

@@ -11,7 +11,7 @@ export function addItemToCart(state, stockItem) {
     const inheritedHsn = stockItem.hsn || stockItem.hsnSac || '';
     const inheritedUom = stockItem.uom || stockItem.unit || 'PCS';
     const existing = state.cart.find(
-        i => i.stockId === stockItem.id && i.batch === stockItem.batch
+        i => i.stockId === stockItem.id && i.batch === stockItem.batch && i.itemType !== 'SERVICE'
     );
     if (existing) {
         existing.qty += 1;
@@ -20,6 +20,7 @@ export function addItemToCart(state, stockItem) {
     } else {
         state.cart.push({
             stockId:   stockItem.id,
+            itemType:  'GOODS',
             item:      stockItem.item,
             narration: '',
             batch:     stockItem.batch  || null,
@@ -38,7 +39,7 @@ export function addItemToCartWithOverrides(state, stockItem, overrides = {}) {
     const inheritedHsn = overrides.hsn !== undefined ? overrides.hsn : (stockItem.hsn || stockItem.hsnSac || '');
     const inheritedUom = overrides.uom !== undefined ? overrides.uom : (stockItem.uom || stockItem.unit || 'PCS');
     const existing     = state.cart.find(
-        i => i.stockId === stockItem.id && i.batch === stockItem.batch
+        i => i.stockId === stockItem.id && i.batch === stockItem.batch && i.itemType !== 'SERVICE'
     );
     const resolvedRate = overrides.rate !== undefined ? parseFloat(overrides.rate) : parseFloat(stockItem.rate);
     const resolvedDisc = overrides.disc !== undefined ? parseFloat(overrides.disc) : 0;
@@ -52,6 +53,7 @@ export function addItemToCartWithOverrides(state, stockItem, overrides = {}) {
     } else {
         state.cart.push({
             stockId:   stockItem.id,
+            itemType:  'GOODS',
             item:      stockItem.item,
             narration: '',
             batch:     stockItem.batch  || null,
@@ -66,16 +68,70 @@ export function addItemToCartWithOverrides(state, stockItem, overrides = {}) {
     }
 }
 
+export function addServiceToCart(state) {
+    state.cart.push({
+        stockId:   null,
+        itemType:  'SERVICE',
+        item:      '',
+        narration: '',
+        batch:     null,
+        oem:       '',
+        hsn:       '',
+        qty:       1,
+        showQty:   false,
+        uom:       '',
+        rate:      0,
+        costRate:  0,
+        grate:     18,
+        disc:      0,
+    });
+}
+
 export function removeItemFromCart(state, index) {
     state.cart.splice(index, 1);
 }
 
 export function updateCartItem(state, index, field, value) {
-    if (state.cart[index]) {
-        let val = parseFloat(value);
-        if (isNaN(val) || val < 0) val = 0;
-        state.cart[index][field] = val;
+    const item = state.cart[index];
+    if (!item) return;
+
+    if (field === 'item' || field === 'hsn' || field === 'uom') {
+        item[field] = value;
+        return;
     }
+
+    if (field === 'qty' || field === 'returnQty') {
+        const isReturn = field === 'returnQty';
+        if (item.itemType === 'SERVICE' && !isReturn) {
+            if (value === '' || value === null || value === undefined) {
+                item.qty = 1;
+                item.showQty = false;
+                return;
+            }
+            const parsed = parseFloat(value);
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                item.qty = 1;
+                item.showQty = false;
+                return;
+            }
+            item.qty = parsed;
+            item.showQty = true;
+            return;
+        }
+        let parsed = parseFloat(value);
+        if (!Number.isFinite(parsed) || parsed < 0) parsed = 0;
+        
+        if (isReturn) {
+            item.returnQty = parsed;
+        } else {
+            item.qty = parsed;
+        }
+        return;
+    }
+
+    let val = parseFloat(value);
+    if (isNaN(val) || val < 0) val = 0;
+    item[field] = val;
 }
 
 export function updateCartItemNarration(state, index, narration) {

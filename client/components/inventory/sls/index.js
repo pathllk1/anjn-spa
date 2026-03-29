@@ -23,15 +23,31 @@ export function initSalesSystem(router) {
     const container = document.getElementById('sales-system');
     if (!container) return;
 
-    const urlParams       = new URLSearchParams(window.location.search);
-    const editBillIdParam = urlParams.get('edit');
-    const sessionEditId   = sessionStorage.getItem('editBillId');
-    const finalEditParam  = editBillIdParam || sessionEditId;
+    const urlParams        = new URLSearchParams(window.location.search);
+    const editBillIdParam  = urlParams.get('edit');
+    const returnFromParam  = urlParams.get('returnFrom');
+    const sessionEditId    = sessionStorage.getItem('editBillId');
+    const sessionReturnId  = sessionStorage.getItem('returnFromBillId');
+    const finalEditParam   = editBillIdParam || sessionEditId;
+    const finalReturnParam = returnFromParam || sessionReturnId;
 
-    let editBillId  = null;
-    let isEditMode  = false;
+    let editBillId   = null;
+    let isEditMode   = false;
+    let returnBillId = null;
+    let isReturnMode = false;
 
-    if (finalEditParam) {
+    if (finalReturnParam) {
+        const isValidObjectId = /^[a-f\d]{24}$/i.test(finalReturnParam);
+        if (isValidObjectId) {
+            returnBillId  = finalReturnParam;
+            isReturnMode  = true;
+        } else {
+            console.warn('Invalid return bill ID:', finalReturnParam);
+            sessionStorage.removeItem('returnFromBillId');
+            window.location.href = '/inventory/sls';
+            return;
+        }
+    } else if (finalEditParam) {
         const isValidObjectId = /^[a-f\d]{24}$/i.test(finalEditParam);
         if (isValidObjectId) {
             editBillId = finalEditParam;
@@ -45,11 +61,40 @@ export function initSalesSystem(router) {
     }
 
     const state = createInitialState();
+    state.isReturnMode = isReturnMode;
+    state.returnFromBillId = returnBillId;
 
     // fetchCurrentUserFirmName now also populates state.firmLocations
     fetchCurrentUserFirmName(state);
 
-    if (isEditMode) {
+    if (isReturnMode) {
+        loadExistingBillData(state, returnBillId).then(() => {
+            sessionStorage.removeItem('returnFromBillId');
+            // Reset cart - we'll populate it with return quantities
+            state.cart = [];
+            // Load the items from the original bill as returnable items
+            const originalBill = state.currentBill;
+            if (originalBill && originalBill.items && Array.isArray(originalBill.items)) {
+                for (const originalItem of originalBill.items) {
+                    state.cart.push({
+                        ...originalItem,
+                        returnQty: 0, // User will set quantities to return
+                        originalItem: true,
+                    });
+                }
+            }
+            fetchData(state).then(() => {
+                renderMainLayout(false, isReturnMode);
+            }).catch(err => {
+                console.error('Failed to load data for return mode:', err);
+                showEditError(container, err.message, returnBillId);
+            });
+        }).catch(err => {
+            console.error('Failed to load bill data:', err);
+            sessionStorage.removeItem('returnFromBillId');
+            showEditError(container, err.message, returnBillId);
+        });
+    } else if (isEditMode) {
         loadExistingBillData(state, editBillId).then(() => {
             sessionStorage.removeItem('editBillId');
             fetchData(state).then(() => {
@@ -152,20 +197,39 @@ export function initSalesSystem(router) {
             </div>`;
     }
 
-    function renderMainLayout(isEditMode = false) {
+    function renderMainLayout(isEditMode = false, isReturnMode = false) {
+        const title = isReturnMode ? 'Credit Note (Sales Return)' : 'Sales Invoice';
+        const saveText = isReturnMode ? 'Save Credit Note' : (isEditMode ? 'Update Bill' : 'Save Invoice');
+        const themeClass = isReturnMode ? 'border-amber-300' : 'border-gray-300';
+        const headerThemeClass = isReturnMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200';
+
         container.innerHTML = `
-        <div class="h-[calc(100vh-140px)] flex flex-col bg-gray-50 text-slate-800 font-sans text-sm border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+        <div class="h-[calc(100vh-140px)] flex flex-col bg-gray-50 text-slate-800 font-sans text-sm border ${themeClass} rounded-lg shadow-sm overflow-hidden">
+
+            <!-- Return Banner -->
+            ${isReturnMode && state.currentBill ? `
+            <div class="bg-amber-100 border-b border-amber-200 px-4 py-2 flex items-center justify-between">
+                <div class="flex items-center gap-2 text-amber-800 font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3"/>
+                    </svg>
+                    <span>Returning items from Bill <strong>#${escHtml(state.currentBill.bno)}</strong> (dated ${escHtml(state.currentBill.bdate)})</span>
+                </div>
+                <button onclick="window.location.href='/inventory/sls'" class="text-xs text-amber-700 hover:underline">Cancel Return</button>
+            </div>
+            ` : ''}
 
             <!-- Header -->
-            <div class="bg-white border-b border-gray-200 p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm z-20">
+            <div class="${headerThemeClass} border-b p-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-sm z-20">
                 <div class="flex flex-col sm:flex-row flex-wrap gap-2">
                     <div class="flex items-center gap-2">
-                        <h1 class="text-lg font-bold text-gray-800">Sales Invoice</h1>
+                        <h1 class="text-lg font-bold text-gray-800">${title}</h1>
                         ${isEditMode ? '<span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full border border-orange-200">EDIT MODE</span>' : ''}
+                        ${isReturnMode ? '<span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full border border-amber-200">RETURN MODE</span>' : ''}
                     </div>
                     <div class="flex flex-col">
                         <label class="text-[10px] uppercase text-gray-500 font-bold tracking-wider">Bill No</label>
-                        <input type="text" value="${escHtml(state.meta.billNo)}" readonly
+                        <input type="text" value="${isReturnMode ? 'CN-AUTO' : escHtml(state.meta.billNo)}" readonly
                                class="border border-gray-300 rounded px-2 py-1 text-xs font-bold w-32 bg-gray-100 text-slate-500 cursor-not-allowed"
                                title="${isEditMode ? 'Bill number cannot be changed in edit mode' : 'Auto-generated when saved'}">
                     </div>
@@ -198,12 +262,14 @@ export function initSalesSystem(router) {
 
                 <div class="flex flex-wrap gap-2">
                     <button id="btn-other-charges" class="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap">Other Charges</button>
+                    ${!isReturnMode ? `
                     <button id="btn-add-item"    class="px-3 py-1.5 text-xs text-indigo-600 border border-indigo-200 bg-indigo-50 rounded hover:bg-indigo-100 transition-colors whitespace-nowrap">Add Items (F2)</button>
                     <button id="btn-add-service" class="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors whitespace-nowrap">Add Service</button>
+                    ` : ''}
                     <button id="btn-reset"       class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
                     <button id="btn-save"        class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
                         <span id="save-icon">💾</span>
-                        <span id="save-text">${isEditMode ? 'Update Bill' : 'Save Invoice'}</span>
+                        <span id="save-text">${saveText}</span>
                         <div id="save-spinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2"></div>
                     </button>
                 </div>
@@ -519,11 +585,22 @@ export function initSalesSystem(router) {
         const saveBtn = document.getElementById('btn-save');
         if (saveBtn) {
             saveBtn.onclick = async () => {
+                const isReturnMode = state.isReturnMode;
+
                 // VALIDATE FIRST - before showing spinner
                 if (state.cart.length === 0) {
                     showToast('Cannot save an empty invoice. Please add items.', 'error');
                     return;
                 }
+                
+                if (isReturnMode) {
+                    const hasReturn = state.cart.some(item => (item.returnQty || 0) > 0);
+                    if (!hasReturn) {
+                        showToast('Please enter return quantities for at least one item.', 'error');
+                        return;
+                    }
+                }
+
                 if (!state.selectedParty) {
                     showToast('Please select a party before saving.', 'error');
                     return;
@@ -539,6 +616,16 @@ export function initSalesSystem(router) {
                         'This action cannot be undone. Continue?'
                     );
                     if (!confirmed) return;
+                } else if (isReturnMode) {
+                    const confirmed = confirm(
+                        '⚠️ Create Credit Note Confirmation\n\n' +
+                        'This will:\n' +
+                        '• Restore items back to stock\n' +
+                        '• Reverse sales revenue and tax liability\n' +
+                        '• Reduce party balance\n\n' +
+                        'Continue?'
+                    );
+                    if (!confirmed) return;
                 }
 
                 // THEN show spinner for actual save operation
@@ -546,28 +633,53 @@ export function initSalesSystem(router) {
 
                 try {
                     const partyId  = getPartyId(state.selectedParty);
-                    const billData = {
-                        meta: {
-                            ...state.meta,
-                            // FIX: send the active firm GSTIN so the backend can
-                            // validate the bill type and store it on the bill record
-                            firmGstin: state.activeFirmLocation?.gst_number || null,
-                        },
-                        party:        partyId,
-                        cart:         state.cart,
-                        otherCharges: state.otherCharges,
-                        consignee:    state.selectedConsignee,
-                    };
+                    
+                    let response;
+                    if (isReturnMode) {
+                        // CREDIT NOTE DATA STRUCTURE
+                        const returnData = {
+                            originalBillId: state.returnFromBillId,
+                            returnCart: state.cart
+                                .filter(item => (item.returnQty || 0) > 0)
+                                .map(item => ({
+                                    stockId: item.stockId,
+                                    returnQty: item.returnQty,
+                                    rate: item.rate,
+                                    grate: item.grate,
+                                    disc: item.disc,
+                                    item: item.item,
+                                    gstRate: item.grate, // Backend expectation
+                                })),
+                            narration: state.meta.narration,
+                        };
 
-                    const method = isEditMode ? 'PUT' : 'POST';
-                    const url    = isEditMode
-                        ? `/api/inventory/sales/bills/${editBillId}`
-                        : '/api/inventory/sales/bills';
+                        response = await fetchWithCSRF('/api/inventory/sales/create-credit-note', {
+                            method: 'POST',
+                            body: JSON.stringify(returnData),
+                        });
+                    } else {
+                        // REGULAR BILL DATA STRUCTURE
+                        const billData = {
+                            meta: {
+                                ...state.meta,
+                                firmGstin: state.activeFirmLocation?.gst_number || null,
+                            },
+                            party:        partyId,
+                            cart:         state.cart,
+                            otherCharges: state.otherCharges,
+                            consignee:    state.selectedConsignee,
+                        };
 
-                    const response = await fetchWithCSRF(url, {
-                        method,
-                        body: JSON.stringify(billData),
-                    });
+                        const method = isEditMode ? 'PUT' : 'POST';
+                        const url    = isEditMode
+                            ? `/api/inventory/sales/bills/${editBillId}`
+                            : '/api/inventory/sales/bills';
+
+                        response = await fetchWithCSRF(url, {
+                            method,
+                            body: JSON.stringify(billData),
+                        });
+                    }
 
                     if (!response.ok) {
                         const error = await response.json();
@@ -581,15 +693,21 @@ export function initSalesSystem(router) {
                         return;
                     }
 
-                    const successMsg = isEditMode
-                        ? `Bill updated! Bill No: ${result.billNo || state.meta.billNo}`
-                        : `Invoice saved! Bill No: ${result.billNo}`;
+                    let successMsg;
+                    if (isReturnMode) {
+                        successMsg = `Credit Note created! No: ${result.billNo}`;
+                    } else {
+                        successMsg = isEditMode
+                            ? `Bill updated! Bill No: ${result.billNo || state.meta.billNo}`
+                            : `Invoice saved! Bill No: ${result.billNo}`;
+                    }
+                    
                     showToast(successMsg, 'success');
-                    showSaveConfirmationModal(result.id, result.billNo, isEditMode);
+                    showSaveConfirmationModal(result.id, result.billNo, isEditMode || isReturnMode);
 
                 } catch (err) {
-                    console.error('Error saving bill:', err);
-                    showToast((isEditMode ? 'Error updating bill: ' : 'Error saving invoice: ') + err.message, 'error');
+                    console.error('Error saving:', err);
+                    showToast('Error saving: ' + err.message, 'error');
                 } finally {
                     hideSaveSpinner();
                 }

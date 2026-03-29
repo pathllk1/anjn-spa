@@ -153,6 +153,7 @@ export async function loadExistingBillData(state, billId) {
         if (!billData.success) throw new Error(billData.error || 'Failed to load bill data');
 
         const bill = billData.data;
+        state.currentBill = bill; // Store full bill for reference (e.g. return mode)
 
         state.meta = {
             billNo:          bill.bno,

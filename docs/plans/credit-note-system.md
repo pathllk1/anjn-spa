@@ -1,108 +1,95 @@
-# Detailed Implementation Plan: Credit Note & Debit Note System
+# Complete Implementation Plan: Credit Note & Debit Note System
 
-This document provides a technical blueprint for implementing Sales Returns (Credit Notes) and Purchase Returns (Debit Notes) with full Perpetual Inventory and Accounting integration.
+This document provides a comprehensive, "world-class" developer's blueprint for completing the Sales Returns (Credit Notes) and Purchase Returns (Debit Notes) system.
 
-## 1. Architectural Overview
+## 1. System Architecture & Flow
 
-The system will leverage existing atomic stock update patterns and ledger posting helpers. A "Return" is treated as a specialized transaction that references an original bill to ensure price and cost consistency.
+### 1.1 Process Flow: Sales Return (Credit Note)
+1.  **Initiation:** User clicks "Return" on a Sales Bill in the Reports page.
+2.  **Redirection:** Router navigates to `/inventory/sls?returnFrom=[BillID]`.
+3.  **State Init:** `initSalesSystem` detects `returnFrom`, loads original bill data, clears cart, and populates returnable items from original items.
+4.  **User Action:** User specifies quantities to return (validation: `qty <= originalQty`).
+5.  **Submission:** Frontend calls `POST /api/inventory/sales/create-credit-note`.
+6.  **Backend Atomic Operation:**
+    *   Validate original bill and return quantities.
+    *   Increment stock `qty` and `total` (value) using the **original cost rate** to perfectly reverse COGS.
+    *   Create `StockReg` entry of type `CREDIT_NOTE`.
+    *   Create `Bill` entry of type `CREDIT_NOTE` with `ref_bill_id`.
+    *   Post inverted ledger entries (DR Sales, DR GST, CR Party, DR Inventory, CR COGS).
 
----
-
-## 2. Backend Implementation (Node.js/MongoDB)
-
-### 2.1 Model Updates (`server/models/`)
-*   **`Bill.model.js`**:
-    *   Add `ref_bill_id`: `{ type: Schema.Types.ObjectId, ref: 'Bill', default: null }`
-    *   Ensure `btype` enum documentation includes `CREDIT_NOTE` and `DEBIT_NOTE`.
-*   **`StockReg.model.js`**:
-    *   Type enum update: `SALE`, `PURCHASE`, `CREDIT_NOTE`, `DEBIT_NOTE`.
-
-### 2.2 Controller Logic (`server/controllers/mongo/inventory/`)
-
-#### 2.2.1 Credit Note (Sales Return) - `sls/inventory.js`
-1.  **Transaction Start:** Open mongoose session.
-2.  **Fetch Original:** Load original `Bill` and its `StockReg` entries.
-3.  **Stock Restoration:** For each item in the return cart:
-    *   Find the original `StockReg` to get the `cost_rate` (WAC at time of sale).
-    *   **Atomic Update:**
-        ```javascript
-        await Stock.findOneAndUpdate(
-          { _id: item.stockId, firm_id },
-          { $inc: { 
-              qty: returnedQty, 
-              total: returnedQty * originalCostRate // Restore asset value at original cost
-          }}
-        );
-        ```
-4.  **Create Credit Note Bill:**
-    *   `btype: 'CREDIT_NOTE'`, `ref_bill_id: originalBillId`.
-    *   Use `billUtils.getNextBillNumber(firmId, 'CREDIT_NOTE')`.
-5.  **Audit Trail:** Create `StockReg` with `type: 'CREDIT_NOTE'`.
-6.  **Ledger Posting:** Call `postCreditNoteLedger` from `inventoryLedgerHelper.js`.
-
-#### 2.2.2 Debit Note (Purchase Return) - `prs/inventory.js`
-1.  **Transaction Start.**
-2.  **Stock Deduction:** 
-    *   **Atomic Update:**
-        ```javascript
-        // Use buildAtomicPurchaseReversePipeline logic from prs/inventory.js
-        // but with type DEBIT_NOTE in StockReg.
-        ```
-3.  **Create Debit Note Bill:** `btype: 'DEBIT_NOTE'`.
-4.  **Ledger Posting:** Call `postDebitNoteLedger`.
-
-### 2.3 Shared Utilities (`billUtils.js`)
-*   Update `BILL_PREFIX` to include `CN` for Credit Notes and `DN` for Debit Notes.
+### 1.2 Process Flow: Purchase Return (Debit Note)
+1.  **Initiation:** User clicks "Return" on a Purchase Bill in the Reports page.
+2.  **Redirection:** Router navigates to `/inventory/prs?returnFrom=[BillID]`.
+3.  **State Init:** `initPurchaseSystem` detects `returnFrom`, loads data similarly to sales.
+4.  **Submission:** Frontend calls `POST /api/inventory/purchase/create-debit-note`.
+5.  **Backend Atomic Operation:**
+    *   Validate quantities.
+    *   Decrement stock `qty` and `total` (value).
+    *   Create `StockReg` entry of type `DEBIT_NOTE`.
+    *   Create `Bill` entry of type `DEBIT_NOTE` with `ref_bill_id`.
+    *   Post inverted ledger entries (DR Party, CR Inventory, CR GST Input Credit).
 
 ---
 
-## 3. Frontend Implementation (Vanilla JS / SPA)
+## 2. Implementation Checklist
 
-### 3.1 State Management (`sls/stateManager.js`)
-*   Add `mode: 'REGULAR' | 'RETURN'` to initial state.
-*   Add `originalBillId: null`.
-*   Update `loadExistingBillData` (or create `loadReturnData`) to:
-    *   Fetch original bill.
-    *   Initialize cart with 0 quantities but original rates/HSN/GST.
-    *   Set `mode: 'RETURN'`.
+### Phase 1: Models & Backend Refinement (90% Complete)
+- [x] **`Bill.model.js`**: Add `ref_bill_id` (ObjectId, ref: 'Bill').
+- [x] **`StockReg.model.js`**: Ensure `type` enum includes `CREDIT_NOTE`, `DEBIT_NOTE`.
+- [x] **Controllers**: `createCreditNote` (sls) and `createDebitNote` (prs) implemented.
+- [x] **Ledger Helpers**: `postCreditNoteLedger` and `postDebitNoteLedger` implemented.
+- [ ] **Verification**: Ensure `createCreditNote` and `createDebitNote` check if the original bill is already cancelled.
 
-### 3.2 Orchestrator (`sls/index.js`)
-*   **Routing:** Handle `?returnFrom=[ID]` URL parameter.
-*   **UI Adjustments:**
-    *   Change Header title to **"Credit Note (Sales Return)"**.
-    *   Add a banner: "Returning items from Bill #INV/..."
-    *   Change "Save Invoice" button to **"Save Credit Note"**.
-    *   Apply a distinct theme (e.g., amber border) to indicate return mode.
+### Phase 2: Sales Frontend (`client/components/inventory/sls/`)
+- [ ] **`stateManager.js`**:
+    *   Update `loadExistingBillData` to set `state.currentBill = bill;`.
+    *   Ensure `meta` in state correctly handles return modes.
+- [ ] **`index.js`**:
+    *   Refine `renderMainLayout` to show "Credit Note" title and "Save Credit Note" button when `isReturnMode` is true.
+    *   Add a visual "Return Banner" showing the original Bill No.
+    *   Ensure the "Save" button calls the correct endpoint (`/create-credit-note`).
+- [ ] **`cartManager.js`**:
+    *   Ensure return quantities are handled correctly in the cart state.
+- [ ] **`layoutRenderer.js`**:
+    *   Modify `renderItemsList` to show "Original Qty" vs "Return Qty" for better UX in return mode.
 
-### 3.3 Reporting Page (`inventory-reports.js`)
-*   **Action Button:** In the "View" modal and table rows, add a **"Return Items"** button for `ACTIVE` Sales/Purchase bills.
-*   **Visuals:** Add badges for `CN` (Credit Note) and `DN` (Debit Note) with specific colors.
-*   **Filtering:** Add `CREDIT_NOTE` and `DEBIT_NOTE` to the Type filter dropdown.
+### Phase 3: Purchase Frontend (`client/components/inventory/prs/`)
+- [ ] **`index.js`**:
+    *   Implement `returnFrom` parameter handling (port from sales).
+    *   Implement "Return Mode" logic for state initialization and layout rendering.
+    *   Update save button logic to call `/create-debit-note`.
+- [ ] **`stateManager.js`**:
+    *   Update `loadExistingBillData` to support return loading.
+
+### Phase 4: Reports & Navigation (`client/pages/`)
+- [ ] **`inventory-reports.js`**:
+    *   Add "Return" button to the bill action menu/modal for `ACTIVE` sales and purchases.
+    *   Update `typeBadge` logic to handle `CN` (Credit Note) and `DN` (Debit Note) with distinct colors (e.g., Amber for CN, Blue-Grey for DN).
+    *   Update the "View Details" modal to show the link to the original bill if it's a return.
+
+### Phase 5: PDF & Excel Export
+- [ ] **`pdfMakeController.js`**:
+    *   Update document title based on `btype` (Invoice vs Credit Note vs Debit Note).
+    *   Ensure "Ref Bill No" is printed on returns.
 
 ---
 
-## 4. Accounting Entry Details (Recap)
+## 3. Technical Detail: Stock Reversal Math
 
-### Credit Note (Sales Return)
-| Account | DR | CR | Narration |
-| :--- | :--- | :--- | :--- |
-| **Party (Debtor)** | | Total | Return against Bill #... |
-| **Sales** | Taxable | | Revenue Reversal |
-| **GST Payable** | GST Amt | | Tax Liability Reduction |
-| **Inventory** | COGS | | Goods back in stock |
-| **COGS** | | COGS | Expense Reversal |
+When a sale is returned (Credit Note):
+- **Stock Qty** increments by `returnedQty`.
+- **Stock Value** (`total`) increments by `returnedQty * originalSaleCostRate`.
+- This ensures the **WAC** (Weighted Average Cost) does not fluctuate due to a return, as the items are coming back at the same cost they left.
+
+When a purchase is returned (Debit Note):
+- **Stock Qty** decrements by `returnedQty`.
+- **Stock Value** (`total`) decrements by `returnedQty * originalPurchaseRate`.
 
 ---
 
-## 5. Verification & Edge Cases
+## 4. Testing Strategy
 
-### 5.1 Validation Rules
-*   **Max Return Qty:** Frontend and Backend must ensure `returnedQty <= (originalQty - alreadyReturnedQty)`.
-*   **Financial Year:** Returns should ideally stay within the same financial year or follow statutory GST timelines.
-
-### 5.2 Test Scenarios
-1.  **Full Return:** Return all items from a bill. Verify stock matches pre-sale levels.
-2.  **Partial Return:** Return 1 out of 5 items. Verify WAC remains stable.
-3.  **Service Items:** Returns for service items should only affect Revenue/GST/Ledger, not Inventory/Stock.
-4.  **Cancelled Bill Return:** System must block returns against `CANCELLED` bills.
-5.  **Multi-GSTIN:** Ensure return uses the same `firm_gstin` as the original bill.
+1.  **Data Integrity:** Verify `Ledger` entries balance (Sum DR = Sum CR) for every return.
+2.  **Stock Consistency:** Perform a sale, then a partial return, then another sale. Check if WAC remains consistent.
+3.  **UI/UX:** Ensure the user cannot return more than the original quantity.
+4.  **State Management:** Ensure that navigating away from a return and back to a regular invoice clears the return state.

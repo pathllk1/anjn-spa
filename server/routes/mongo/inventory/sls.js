@@ -40,6 +40,9 @@ router.get('/stock-movements/export', inventoryController.exportStockMovementsTo
 router.get('/stock-movements/:stockId', inventoryController.getStockMovementsByStock);
 router.post('/stock-movements', inventoryController.createStockMovement);
 
+// --- CREDIT NOTE API ---
+router.post('/create-credit-note', inventoryController.createCreditNote);
+
 // --- UTILITY ENDPOINTS ---
 router.get('/party-item-history', inventoryController.getPartyItemHistory);
 router.get('/other-charges-types', inventoryController.getOtherChargesTypes);

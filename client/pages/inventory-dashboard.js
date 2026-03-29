@@ -27,6 +27,16 @@ const DASHBOARD_LINKS = [
   },
   {
     href: '/inventory/reports',
+    title: 'Returns / Notes',
+    subtitle: 'Issue Credit & Debit Notes',
+    gradient: 'from-amber-600 via-orange-500 to-amber-400',
+    accent: 'text-amber-100',
+    icon: `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+    `,
+  },
+  {
+    href: '/inventory/reports',
     title: 'Reports',
     subtitle: 'Bills, totals, cancellations, exports',
     gradient: 'from-amber-500 via-orange-500 to-rose-400',
@@ -354,6 +364,11 @@ function renderDashboard(model) {
                  class="inline-flex items-center gap-1.5 rounded-[14px] border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 shadow-sm transition hover:bg-rose-50 hover:border-rose-300">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="h-3 w-3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                 New Sale
+              </a>
+              <a href="/inventory/reports" data-navigo
+                 class="inline-flex items-center gap-1.5 rounded-[14px] border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-700 shadow-sm transition hover:bg-amber-100 hover:border-amber-300">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="h-3 w-3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
+                Return Items
               </a>
             </div>
             <a href="/inventory/reports" data-navigo

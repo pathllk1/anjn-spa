@@ -11,9 +11,9 @@ import {
   getActorUsername, getFirmId, validateObjectId,
   normalizeOptionalText, normalizeOptionalMultilineText, escapeRegex,
   getNextBillNumber, previewNextBillNumber, getNextVoucherNumber,
-  isGstEnabled, ensureUniqueSupplierBillNo, calcBillTotals,
+  isGstEnabled, ensureUniqueSupplierBillNo, calcBillTotals, getLocalDateString,
 } from '../billUtils.js';
-import { postPurchaseLedger } from '../inventoryLedgerHelper.js';
+import { postPurchaseLedger, postDebitNoteLedger } from '../inventoryLedgerHelper.js';
 import { getStateCode } from '../../../../utils/mongo/gstCalculator.js';
 
 /* ── Re-export everything shared ─────────────────────────────────────────── */
@@ -191,6 +191,40 @@ function buildBatchDocument(item, qty) {
     expiry: item.expiry || null,
     mrp:    toNullableNumber(item.mrp),
   };
+}
+
+function toPositiveNumber(value) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function aggregateReturnCart(returnCart) {
+  const aggregated = new Map();
+
+  for (const item of returnCart) {
+    const stockId = item?.stockId ? String(item.stockId) : null;
+    const returnQty = toPositiveNumber(item?.returnQty);
+    if (!stockId || !mongoose.Types.ObjectId.isValid(stockId)) {
+      throw new Error(`Invalid stockId for return item: ${item?.item ?? '(unknown)'}`);
+    }
+    if (!returnQty) {
+      throw new Error(`Return quantity must be > 0 for item: ${item?.item ?? '(unknown)'}`);
+    }
+
+    const existing = aggregated.get(stockId);
+    if (existing) {
+      existing.returnQty += returnQty;
+      continue;
+    }
+
+    aggregated.set(stockId, {
+      ...item,
+      stockId,
+      returnQty,
+    });
+  }
+
+  return aggregated;
 }
 
 function buildAtomicPurchaseAddPipeline({ item, requestedQty, lineValue, actorUsername }) {
@@ -1124,6 +1158,252 @@ export const cancelBill = async (req, res) => {
     await session.abortTransaction();
     console.error('[CANCEL_BILL] Error:', err.message);
     res.status(500).json({ error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/* ─── DEBIT NOTE (purchase return) ───────────────────────────────────────── */
+
+export const createDebitNote = async (req, res) => {
+  const { originalBillId, returnCart, narration } = req.body;
+  const actorUsername = getActorUsername(req);
+  if (!actorUsername) return res.status(401).json({ error: 'Unauthorized' });
+  
+  const firmId = getFirmId(req, res, 'CREATE_DEBIT_NOTE');
+  if (!firmId) return;
+
+  const billIdObj = validateObjectId(originalBillId, 'originalBillId', res);
+  if (!billIdObj) return;
+
+  if (!returnCart || !Array.isArray(returnCart) || returnCart.length === 0) {
+    return res.status(400).json({ error: 'Return cart cannot be empty' });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Fetch original bill
+    const originalBill = await Bill.findOne({ _id: billIdObj, firm_id: firmId }).session(session).lean();
+    if (!originalBill) {
+      throw new Error('Original bill not found');
+    }
+    if (originalBill.btype !== 'PURCHASE') {
+      throw new Error('Can only create debit notes for PURCHASE bills');
+    }
+    if (originalBill.status === 'CANCELLED') {
+      throw new Error('Cannot create debit note against a cancelled bill');
+    }
+
+    // Fetch original StockReg entries
+    const originalStockRegs = await StockReg.find({ bill_id: billIdObj, firm_id: firmId }).session(session).lean();
+
+    // Fetch already-returned quantities for each item
+    const returnedQtyByStockId = {};
+    const existingDebitNotes = await Bill.find({
+      ref_bill_id: billIdObj,
+      btype: 'DEBIT_NOTE',
+      status: 'ACTIVE',
+      firm_id: firmId,
+    }).session(session).lean();
+
+    for (const existingDN of existingDebitNotes) {
+      const existingRegs = await StockReg.find({ bill_id: existingDN._id, firm_id: firmId }).session(session).lean();
+      for (const reg of existingRegs) {
+        returnedQtyByStockId[String(reg.stock_id)] = (returnedQtyByStockId[String(reg.stock_id)] || 0) + reg.qty;
+      }
+    }
+
+    const aggregatedReturnCart = aggregateReturnCart(returnCart);
+
+    // Validate return quantities
+    for (const returnItem of aggregatedReturnCart.values()) {
+      const originalReg = originalStockRegs.find(r => String(r.stock_id) === String(returnItem.stockId));
+      if (!originalReg) {
+        throw new Error(`Item not found in original bill: ${returnItem.item}`);
+      }
+      const alreadyReturned = returnedQtyByStockId[String(returnItem.stockId)] || 0;
+      const maxReturnQty = originalReg.qty - alreadyReturned;
+      if (returnItem.returnQty > maxReturnQty) {
+        throw new Error(`Cannot return ${returnItem.returnQty} units of ${returnItem.item} (max: ${maxReturnQty})`);
+      }
+
+      const stockRecord = await Stock.findOne({ _id: returnItem.stockId, firm_id: firmId })
+        .select('qty')
+        .session(session)
+        .lean();
+      if (!stockRecord) {
+        throw new Error(`Stock record not found: ${returnItem.stockId}`);
+      }
+      if (returnItem.returnQty > (parseFloat(stockRecord.qty) || 0)) {
+        throw new Error(`Insufficient stock for ${returnItem.item}. Available: ${stockRecord.qty}, requested return: ${returnItem.returnQty}`);
+      }
+    }
+
+    // Generate debit note number and voucher
+    const dnBillNo = await getNextBillNumber(firmId, 'DEBIT_NOTE');
+    const dnVoucherId = await getNextVoucherNumber(firmId);
+
+    // Calculate totals for debit note
+    const gstEnabled = await isGstEnabled(firmId);
+    let dnGtot = 0, dnNtot = 0, dnCgst = 0, dnSgst = 0, dnIgst = 0;
+
+    for (const returnItem of aggregatedReturnCart.values()) {
+      const lineTotal = returnItem.returnQty * returnItem.rate * (1 - (returnItem.disc || 0) / 100);
+      dnGtot += lineTotal;
+
+      if (gstEnabled) {
+        const gstRate = parseFloat(returnItem.gstRate ?? returnItem.grate) || 0;
+        const gstAmt = lineTotal * gstRate / 100;
+        if (originalBill.bill_subtype === 'INTRA-STATE') {
+          dnCgst += gstAmt / 2;
+          dnSgst += gstAmt / 2;
+        } else {
+          dnIgst += gstAmt;
+        }
+      }
+    }
+
+    dnNtot = dnGtot + dnCgst + dnSgst + dnIgst;
+
+    // Create debit note bill
+    const firmRecord = await Firm.findById(firmId).select('name').lean().session(session);
+    const [debitNoteBill] = await Bill.create([{
+      firm_id: firmId,
+      voucher_id: String(dnVoucherId),
+      bno: dnBillNo,
+      bdate: getLocalDateString(),
+      ref_bill_id: billIdObj,
+      
+      // Copy party info from original
+      supply: originalBill.supply,
+      addr: originalBill.addr,
+      gstin: originalBill.gstin,
+      state: originalBill.state,
+      pin: originalBill.pin,
+      state_code: originalBill.state_code,
+
+      // Copy firm info from original (critical for GSTR-2)
+      firm_gstin: originalBill.firm_gstin,
+      firm_state: originalBill.firm_state,
+      firm_state_code: originalBill.firm_state_code,
+
+      gtot: dnGtot,
+      ntot: dnNtot,
+      rof: 0,
+      btype: 'DEBIT_NOTE',
+      bill_subtype: originalBill.bill_subtype,
+      usern: actorUsername,
+      firm: firmRecord?.name || '',
+      party_id: originalBill.party_id,
+      reverse_charge: originalBill.reverse_charge,
+      cgst: dnCgst,
+      sgst: dnSgst,
+      igst: dnIgst,
+      narration: normalizeOptionalMultilineText(narration, 2000),
+    }], { session });
+
+    const dnBillId = debitNoteBill._id;
+    const purchasedItemsForLedger = [];
+    const stockRegDocs = [];
+
+    // Remove stock (return goods to supplier) and create audit trail
+    for (const returnItem of aggregatedReturnCart.values()) {
+      const originalReg = originalStockRegs.find(r => String(r.stock_id) === String(returnItem.stockId));
+      if (!originalReg) continue;
+
+      // Use original cost_rate for stock removal (maintains WAC)
+      const costPerUnit = parseFloat(originalReg.cost_rate);
+      if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+        throw new Error(`Missing original cost rate for item: ${originalReg.item}`);
+      }
+      const removedValue = returnItem.returnQty * costPerUnit;
+
+      // Atomic stock decrement (reverse the original increment)
+      const stockId = originalReg.stock_id;
+      const stockRecord = await Stock.findOne({ _id: stockId, firm_id: firmId }).session(session).lean();
+      if (!stockRecord) {
+        throw new Error(`Stock record not found: ${stockId}`);
+      }
+
+      // Since a DEBIT_NOTE is a return of goods, we decrement stock qty, batch qty, and asset value
+      const updatedStock = await Stock.findOneAndUpdate(
+        { _id: stockId, firm_id: firmId },
+        buildAtomicPurchaseReversePipeline({
+          batch: originalReg.batch,
+          removedQty: returnItem.returnQty,
+          costValue: removedValue,
+          actorUsername,
+        }),
+        { session, new: true }
+      );
+      if (!updatedStock) {
+        throw new Error(`Failed to update stock for item ${originalReg.item}`);
+      }
+
+      // Create StockReg for audit trail
+      const stockRegId = new mongoose.Types.ObjectId();
+      stockRegDocs.push({
+        _id: stockRegId,
+        firm_id: firmId,
+        type: 'DEBIT_NOTE',
+        bno: dnBillNo,
+        bdate: debitNoteBill.bdate,
+        supply: originalBill.supply,
+        item: originalReg.item,
+        item_narration: originalReg.item_narration,
+        batch: originalReg.batch,
+        hsn: originalReg.hsn,
+        qty: returnItem.returnQty,
+        uom: originalReg.uom,
+        rate: returnItem.rate,
+        grate: returnItem.grate,
+        disc: returnItem.disc || 0,
+        total: returnItem.returnQty * returnItem.rate * (1 - (returnItem.disc || 0) / 100),
+        cost_rate: costPerUnit,
+        stock_id: stockId,
+        bill_id: dnBillId,
+        user: actorUsername,
+        qtyh: updatedStock.qty,
+      });
+
+      // For ledger inventory reversal
+      purchasedItemsForLedger.push({
+        stockId,
+        stockRegId,
+        item: originalReg.item,
+        lineValue: returnItem.returnQty * costPerUnit,
+      });
+    }
+
+    await StockReg.insertMany(stockRegDocs, { session });
+
+    // Post ledger entries (reverse the original purchase)
+    await postDebitNoteLedger({
+      firmId,
+      billId: dnBillId,
+      voucherId: dnVoucherId,
+      billNo: dnBillNo,
+      billDate: debitNoteBill.bdate,
+      party: { _id: originalBill.party_id, firm: originalBill.supply },
+      ntot: dnNtot,
+      cgst: dnCgst,
+      sgst: dnSgst,
+      igst: dnIgst,
+      rof: 0,
+      otherCharges: [],
+      purchasedItems: purchasedItemsForLedger,
+      actorUsername,
+      session,
+    });
+
+    await session.commitTransaction();
+    res.json({ success: true, id: dnBillId, billNo: dnBillNo, message: 'Debit note created successfully' });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('[CREATE_DEBIT_NOTE] Error:', err.message);
+    res.status(400).json({ error: err.message });
   } finally {
     session.endSession();
   }
