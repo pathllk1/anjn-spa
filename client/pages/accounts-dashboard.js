@@ -280,8 +280,8 @@ function renderDashboard(model) {
               General Ledger
             </a>
             <div class="col-span-2 grid grid-cols-3 gap-1.5 rounded-[18px] border border-slate-200 bg-slate-50 p-1.5">
-              <a href="/ledger/journal-entries/new" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50">New Journal</a>
-              <a href="/ledger/vouchers/new" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50">New Voucher</a>
+              <a href="/ledger/journal-entries/new" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50 whitespace-nowrap">New Journal</a>
+              <a href="/ledger/vouchers/new" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50 whitespace-nowrap">New Voucher</a>
               <a href="/ledger/profit-loss" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50">P&amp;L</a>
             </div>
           </div>
