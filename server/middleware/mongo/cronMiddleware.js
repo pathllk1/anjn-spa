@@ -9,7 +9,9 @@
  *   ✗ CSRF tokens (generated per-session)
  *   ✗ User context
  *
- * Solution: Sign cron requests with a shared secret (X-Cron-Secret header)
+ * Solution: Sign cron requests with a shared secret.
+ * Vercel sends this as: Authorization: Bearer <CRON_SECRET>
+ * We also accept X-Cron-Secret for manual/local testing compatibility.
  *
  * SECURITY:
  *   • The cron secret (CRON_SECRET env var) is NOT exposed in frontend code
@@ -19,7 +21,7 @@
  *
  * USAGE:
  *   // In your API route:
- *   router.post('/backup', cronMiddleware, backupDatabaseCron);
+ *   router.get('/backup', cronMiddleware, backupDatabaseCron);
  *
  *   // Vercel cron job config (vercel.json):
  *   {
@@ -43,20 +45,27 @@ export const cronMiddleware = async (req, res, next) => {
       });
     }
 
-    const cronSecret = req.headers['x-cron-secret'] || req.headers['X-Cron-Secret'];
+    const authHeader = req.headers.authorization;
+    const bearerMatch = typeof authHeader === 'string'
+      ? authHeader.match(/^Bearer\s+(.+)$/i)
+      : null;
+    const cronSecret =
+      bearerMatch?.[1] ||
+      req.headers['x-cron-secret'] ||
+      req.headers['X-Cron-Secret'];
 
     if (!cronSecret) {
-      console.warn('[CRON] ⚠️  Request missing X-Cron-Secret header (is this a legitimate cron job?)');
+      console.warn('[CRON] ⚠️  Request missing Authorization or X-Cron-Secret header (is this a legitimate cron job?)');
       return res.status(401).json({
         success: false,
-        error:   'X-Cron-Secret header is required',
+        error:   'Authorization: Bearer <CRON_SECRET> or X-Cron-Secret header is required',
       });
     }
 
     // ── Validate secret (constant-time comparison to prevent timing attacks) ──
     const isValid = cronSecret === CRON_SECRET;
     if (!isValid) {
-      console.warn('[CRON] 🚫 Invalid X-Cron-Secret provided');
+      console.warn('[CRON] 🚫 Invalid cron secret provided');
       return res.status(403).json({
         success: false,
         error:   'Invalid cron secret',

@@ -5,7 +5,7 @@
  * ════════════════════════════════════════════════════════════════════════════════
  *
  * All routes in this file:
- *   • Require X-Cron-Secret header (not user session)
+ *   • Require Authorization: Bearer <CRON_SECRET> (or X-Cron-Secret for manual tests)
  *   • Bypass normal auth + CSRF checks (cron uses header-based auth instead)
  *   • Log execution time and results
  *   • Return structured JSON responses for monitoring
@@ -17,16 +17,16 @@ import { backupDatabaseCron } from '../../controllers/mongo/database.controller.
 
 const router = express.Router();
 
-// All cron routes require cron authentication (X-Cron-Secret header)
+// All cron routes require cron authentication
 router.use(cronMiddleware);
 
 /**
- * POST /api/cron/backup
+ * GET /api/cron/backup
  * Vercel Cron Job: Daily database backup
  *
  * Vercel will call this every day at the configured time with:
- *   POST /api/cron/backup
- *   X-Cron-Secret: <CRON_SECRET env var>
+ *   GET /api/cron/backup
+ *   Authorization: Bearer <CRON_SECRET env var>
  *
  * Schedule in vercel.json:
  *   {
@@ -36,7 +36,7 @@ router.use(cronMiddleware);
  *     }]
  *   }
  */
-router.post('/backup', async (req, res) => {
+const runBackup = async (req, res) => {
   const startTime = Date.now();
 
   try {
@@ -65,6 +65,9 @@ router.post('/backup', async (req, res) => {
       });
     }
   }
-});
+};
+
+router.get('/backup', runBackup);
+router.post('/backup', runBackup);
 
 export default router;
