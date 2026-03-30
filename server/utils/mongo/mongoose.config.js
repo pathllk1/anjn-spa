@@ -15,6 +15,7 @@ const options = {
 };
 
 let isConnected = false;
+let connectionPromise = null;
 
 /**
  * Connect to MongoDB.
@@ -27,25 +28,38 @@ async function connectDB(retries = 5, delay = 1000) {
     return mongoose.connection;
   }
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const conn = await mongoose.connect(MONGODB_URI, options);
-      isConnected = true;
-      console.log(`✅ MongoDB connected: ${conn.connection.host}`);
-      return conn.connection;
-    } catch (error) {
-      console.error(`❌ MongoDB connection attempt ${attempt}/${retries} failed:`, error.message);
-      
-      if (attempt === retries) {
-        console.error('❌ All MongoDB connection attempts failed. Server will continue without database.');
-        throw new Error('Failed to connect to MongoDB after multiple attempts');
+  if (connectionPromise) {
+    console.log('⏳ Awaiting in-flight MongoDB connection');
+    return connectionPromise;
+  }
+
+  connectionPromise = (async () => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const conn = await mongoose.connect(MONGODB_URI, options);
+        isConnected = true;
+        console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+        return conn.connection;
+      } catch (error) {
+        console.error(`❌ MongoDB connection attempt ${attempt}/${retries} failed:`, error.message);
+        
+        if (attempt === retries) {
+          console.error('❌ All MongoDB connection attempts failed. Server will continue without database.');
+          throw new Error('Failed to connect to MongoDB after multiple attempts');
+        }
+        
+        // Exponential backoff: delay * 2^(attempt-1)
+        const waitTime = delay * Math.pow(2, attempt - 1);
+        console.log(`⏳ Retrying MongoDB connection in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
-      
-      // Exponential backoff: delay * 2^(attempt-1)
-      const waitTime = delay * Math.pow(2, attempt - 1);
-      console.log(`⏳ Retrying MongoDB connection in ${waitTime}ms...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
+  })();
+
+  try {
+    return await connectionPromise;
+  } finally {
+    connectionPromise = null;
   }
 }
 

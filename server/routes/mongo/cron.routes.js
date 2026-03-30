@@ -47,7 +47,12 @@ const runBackup = async (req, res) => {
     await backupDatabaseCron(req, res);
 
     const duration = Date.now() - startTime;
-    logCronExecution(req, 'success', { durationMs: duration });
+    const status = res.statusCode;
+    if (status >= 200 && status < 300) {
+      logCronExecution(req, 'success', { durationMs: duration, statusCode: status });
+    } else {
+      logCronExecution(req, 'failed', { durationMs: duration, statusCode: status });
+    }
   } catch (err) {
     const duration = Date.now() - startTime;
     console.error('[CRON] Backup failed:', err);

@@ -27,6 +27,7 @@ import { createHash }     from 'crypto';
 import { serialize as bsonSerialize } from 'bson';   // already installed — hard dep of mongoose
 import axios              from 'axios';
 import { put as blobPut } from '@vercel/blob';
+import { connectDB }      from '../../utils/mongo/mongoose.config.js';
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 
@@ -731,6 +732,10 @@ export const backupDatabaseToWebDav = backupDatabase;
 export const backupDatabaseCron = async (req, res) => {
   try {
     // Authentication already validated by cronMiddleware — no role check needed
+
+    // In Vercel serverless, the request can arrive during cold start before
+    // the app-level background connection attempt has finished.
+    await connectDB();
 
     const db = mongoose.connection;
     if (!db?.db) {
