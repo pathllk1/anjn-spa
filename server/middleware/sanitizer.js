@@ -18,6 +18,7 @@ const clean = (data) => {
 const sanitizer = (req, res, next) => {
     if (req.body)  req.body  = clean(req.body);
     if (req.query) req.query = clean(req.query);
+    
 
     // FIX: req.params is a non-configurable Express object.
     // Re-assigning the reference (req.params = clean(...)) is silently ignored
