@@ -48,7 +48,7 @@ function handleSelect(stock: Stock) {
     <h3 class="font-bold text-sm text-(--ui-text) uppercase tracking-wide shrink-0">Item Selection</h3>
     <div class="flex items-center gap-2 flex-1 justify-end">
       <UInput v-model="searchTerm" autofocus placeholder="Search item, batch, OEM, HSN…"
-              icon="i-heroicons-magnifying-glass" size="sm" class="flex-1 max-w-sm" />
+              icon="i-heroicons-magnifying-glass" size="sm" class="flex-1" />
       <UButton label="New Item" icon="i-heroicons-plus" color="success" size="sm" @click="emit('create')" />
       <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" @click="emit('close')" />
     </div>

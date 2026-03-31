@@ -104,6 +104,7 @@ function chargeTotal(c: OtherCharge): number {
         <div class="relative">
           <UFormField label="Charge Name" required>
             <UInput v-model="name" placeholder="e.g. Freight, Packing" autocomplete="off"
+                    class="w-full"
                     @input="showSuggestions = true" @blur="setTimeout(() => showSuggestions = false, 150)" />
           </UFormField>
           <div v-if="showSuggestions && filteredSuggestions.length"
@@ -118,22 +119,22 @@ function chargeTotal(c: OtherCharge): number {
         </div>
 
         <UFormField label="Type">
-          <USelect v-model="type" :items="typeOptions" value-key="value" label-key="label" />
+          <USelect v-model="type" :items="typeOptions" value-key="value" label-key="label" class="w-full" />
         </UFormField>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <UFormField label="HSN/SAC Code">
-          <UInput v-model="hsnSac" placeholder="e.g. 9965" />
+          <UInput v-model="hsnSac" placeholder="e.g. 9965" class="w-full" />
         </UFormField>
         <UFormField label="Amount (₹)" required>
-          <UInput v-model="amount" type="number" step="0.01" placeholder="0.00" />
+          <UInput v-model="amount" type="number" step="0.01" placeholder="0.00" class="w-full" />
         </UFormField>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <UFormField label="GST %">
-          <USelect v-model="gstRate" :items="gstOptions" value-key="value" label-key="label" />
+          <USelect v-model="gstRate" :items="gstOptions" value-key="value" label-key="label" class="w-full" />
         </UFormField>
         <div class="flex items-end">
           <UButton label="+ Add Charge" color="primary" block @click="addCharge" />

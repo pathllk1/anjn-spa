@@ -33,7 +33,7 @@ function getCSRF(): string {
   const name = 'csrfToken='
   for (const cookie of decodeURIComponent(document.cookie).split(';')) {
     const c = cookie.trim()
-    if (c.startsWith(name)) return c.substring(name.length)
+    if (t.startsWith(name)) return t.substring(name.length)
   }
   return ''
 }
@@ -126,13 +126,13 @@ async function submit() {
     <UAlert v-if="error" :title="error" color="error" variant="subtle" class="col-span-2" />
 
     <UFormField label="Firm Name" required class="col-span-2">
-      <UInput v-model="firm" placeholder="e.g. M/S Global Enterprises" />
+      <UInput v-model="firm" placeholder="e.g. M/S Global Enterprises" class="w-full" />
     </UFormField>
 
     <UFormField label="GSTIN" class="col-span-2">
       <div class="flex gap-2">
         <UInput v-model="gstin" @input="onGstinInput" placeholder="27ABCDE1234F1Z5"
-                maxlength="15" class="flex-1 font-mono uppercase" />
+                maxlength="15" class="flex-1 font-mono uppercase w-full" />
         <UButton label="FETCH" :loading="fetching" color="warning" size="sm"
                  class="shrink-0" @click="fetchGST" />
       </div>
@@ -140,28 +140,28 @@ async function submit() {
     </UFormField>
 
     <UFormField label="Contact No">
-      <UInput v-model="contact" />
+      <UInput v-model="contact" class="w-full" />
     </UFormField>
 
     <UFormField label="State" required>
-      <UInput v-model="state" @input="onStateInput" />
+      <UInput v-model="state" @input="onStateInput" class="w-full" />
     </UFormField>
 
     <UFormField label="State Code">
       <UInput v-model="state_code" readonly maxlength="2"
-              :ui="{ base: 'cursor-not-allowed' }" color="neutral" variant="subtle" />
+              :ui="{ base: 'cursor-not-allowed' }" color="neutral" variant="subtle" class="w-full" />
     </UFormField>
 
     <UFormField label="PAN">
-      <UInput v-model="pan" maxlength="10" class="uppercase font-mono" />
+      <UInput v-model="pan" maxlength="10" class="uppercase font-mono w-full" />
     </UFormField>
 
     <UFormField label="Address" class="col-span-2">
-      <UTextarea v-model="addr" :rows="2" resize />
+      <UTextarea v-model="addr" :rows="2" resize class="w-full" />
     </UFormField>
 
     <UFormField label="Pincode">
-      <UInput v-model="pin" type="number" />
+      <UInput v-model="pin" type="number" class="w-full" />
     </UFormField>
   </div>
 

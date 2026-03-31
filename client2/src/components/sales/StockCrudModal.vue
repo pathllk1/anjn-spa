@@ -66,7 +66,7 @@ function getCSRF(): string {
   const name = 'csrfToken='
   for (const cookie of decodeURIComponent(document.cookie).split(';')) {
     const c = cookie.trim()
-    if (c.startsWith(name)) return c.substring(name.length)
+    if (t.startsWith(name)) return t.substring(name.length)
   }
   return ''
 }
@@ -156,7 +156,7 @@ async function submit() {
     <UAlert v-if="error" :title="error" color="error" variant="subtle" class="col-span-2" />
 
     <UFormField label="Item Description" required class="col-span-2">
-      <UInput v-model="item" placeholder="e.g. Dell Monitor 24 inch" />
+      <UInput v-model="item" placeholder="e.g. Dell Monitor 24 inch" class="w-full" />
     </UFormField>
 
     <!-- Multi-batch selector (edit only) -->
@@ -168,6 +168,7 @@ async function submit() {
                   })) || []"
                  value-key="value" label-key="label"
                  placeholder="— Select a batch to edit —"
+                 class="w-full"
                  @update:model-value="selectBatch" />
       </UFormField>
       <div v-if="selectedBatchIdx >= 0 && stock?.batches?.[selectedBatchIdx]"
@@ -188,46 +189,46 @@ async function submit() {
     </div>
 
     <UFormField v-else label="Batch No">
-      <UInput v-model="batch" placeholder="Optional" />
+      <UInput v-model="batch" placeholder="Optional" class="w-full" />
     </UFormField>
 
     <UFormField label="Part No (P/No)">
-      <UInput v-model="pno" />
+      <UInput v-model="pno" class="w-full" />
     </UFormField>
 
     <UFormField label="OEM / Brand">
-      <UInput v-model="oem" />
+      <UInput v-model="oem" class="w-full" />
     </UFormField>
 
     <UFormField label="HSN/SAC Code" required>
-      <UInput v-model="hsn" placeholder="e.g. 8471" />
+      <UInput v-model="hsn" placeholder="e.g. 8471" class="w-full" />
     </UFormField>
 
     <div class="grid grid-cols-2 gap-2">
       <UFormField :label="mode === 'create' ? 'Opening Qty' : 'Qty'" required>
-        <UInput v-model="qty" type="number" step="0.01" placeholder="0.00" />
+        <UInput v-model="qty" type="number" step="0.01" placeholder="0.00" class="w-full" />
       </UFormField>
       <UFormField label="UOM" required>
-        <USelect v-model="uom" :items="UOM_OPTIONS" value-key="value" label-key="label" />
+        <USelect v-model="uom" :items="UOM_OPTIONS" value-key="value" label-key="label" class="w-full" />
       </UFormField>
     </div>
 
     <UFormField label="Selling Rate (₹)" required>
       <UInput v-model="rate" type="number" step="0.01"
-              :leading-icon="() => '₹'" />
+              :leading-icon="() => '₹'" class="w-full" />
     </UFormField>
 
     <div class="grid grid-cols-2 gap-2">
       <UFormField label="GST %" required>
-        <USelect v-model="grate" :items="GST_OPTIONS" value-key="value" label-key="label" />
+        <USelect v-model="grate" :items="GST_OPTIONS" value-key="value" label-key="label" class="w-full" />
       </UFormField>
       <UFormField label="MRP">
-        <UInput v-model="mrp" type="number" step="0.01" />
+        <UInput v-model="mrp" type="number" step="0.01" class="w-full" />
       </UFormField>
     </div>
 
     <UFormField label="Expiry Date">
-      <UInput v-model="expiryDate" type="date" />
+      <UInput v-model="expiryDate" type="date" class="w-full" />
     </UFormField>
   </div>
 

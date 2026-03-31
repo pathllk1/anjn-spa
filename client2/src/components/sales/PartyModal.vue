@@ -26,7 +26,7 @@ const filtered = computed(() => {
     <h3 class="font-bold text-base text-(--ui-text) shrink-0">Select Party</h3>
     <div class="flex items-center gap-2 flex-1 justify-end">
       <UInput v-model="searchTerm" autofocus placeholder="Search firm name or GSTIN…"
-              icon="i-heroicons-magnifying-glass" size="sm" class="flex-1 max-w-sm" />
+              icon="i-heroicons-magnifying-glass" size="sm" class="flex-1" />
       <UButton label="New Party" icon="i-heroicons-plus" color="primary" size="sm" @click="emit('create')" />
       <UButton icon="i-heroicons-x-mark" color="neutral" variant="ghost" size="sm" @click="emit('close')" />
     </div>

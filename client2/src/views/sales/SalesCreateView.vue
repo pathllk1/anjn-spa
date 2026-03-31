@@ -675,33 +675,39 @@ function setConsigneeField(f: keyof Consignee, v: string) {
             </div>
             <UFormField label="Name">
               <UInput :model-value="getConsigneeField('name')" size="sm" placeholder="Consignee name"
+                      class="w-full"
                       @update:model-value="setConsigneeField('name', $event)" />
             </UFormField>
             <UFormField label="Address">
               <UTextarea :model-value="getConsigneeField('address')" :rows="2" size="sm" placeholder="Delivery address"
+                         class="w-full"
                          @update:model-value="setConsigneeField('address', $event)" />
             </UFormField>
             <div class="grid grid-cols-2 gap-2">
               <UFormField label="GSTIN">
                 <UInput :model-value="getConsigneeField('gstin')" size="sm" placeholder="GSTIN" maxlength="15"
-                        class="uppercase" @update:model-value="setConsigneeField('gstin', $event)" />
+                        class="uppercase w-full" @update:model-value="setConsigneeField('gstin', $event)" />
               </UFormField>
               <UFormField label="State">
                 <UInput :model-value="getConsigneeField('state')" size="sm"
+                        class="w-full"
                         @update:model-value="setConsigneeField('state', $event)" />
               </UFormField>
             </div>
             <UFormField label="PIN">
               <UInput :model-value="getConsigneeField('pin')" size="sm" maxlength="6"
+                      class="w-full"
                       @update:model-value="setConsigneeField('pin', $event)" />
             </UFormField>
             <UFormField label="Contact">
               <UInput :model-value="getConsigneeField('contact')" size="sm"
+                      class="w-full"
                       @update:model-value="setConsigneeField('contact', $event)" />
             </UFormField>
             <UFormField label="Delivery Notes">
               <UTextarea :model-value="getConsigneeField('deliveryInstructions')" :rows="2" size="sm"
                          placeholder="Special instructions"
+                         class="w-full"
                          @update:model-value="setConsigneeField('deliveryInstructions', $event)" />
             </UFormField>
           </div>
@@ -709,13 +715,13 @@ function setConsigneeField(f: keyof Consignee, v: string) {
           <!-- Meta fields -->
           <div class="p-3 space-y-2">
             <UFormField label="Reference / PO No">
-              <UInput v-model="meta.referenceNo" size="sm" placeholder="e.g. PO-2025-001" />
+              <UInput v-model="meta.referenceNo" size="sm" placeholder="e.g. PO-2025-001" class="w-full" />
             </UFormField>
             <UFormField label="Vehicle No">
-              <UInput v-model="meta.vehicleNo" size="sm" placeholder="e.g. KA01AB1234" />
+              <UInput v-model="meta.vehicleNo" size="sm" placeholder="e.g. KA01AB1234" class="w-full" />
             </UFormField>
             <UFormField label="Narration">
-              <UTextarea v-model="meta.narration" :rows="3" size="sm" placeholder="Additional notes…" />
+              <UTextarea v-model="meta.narration" :rows="3" size="sm" placeholder="Additional notes…" class="w-full" />
             </UFormField>
           </div>
         </div>
@@ -852,7 +858,7 @@ function setConsigneeField(f: keyof Consignee, v: string) {
               <div class="flex items-start border-b border-(--ui-border) group bg-(--ui-bg) pl-20 pr-2 py-1">
                 <div class="w-28 text-[10px] text-(--ui-text-muted) uppercase tracking-wide pt-1 shrink-0">Narration</div>
                 <UTextarea :model-value="item.narration || ''" :rows="1" size="xs" variant="none"
-                           placeholder="Add narration for this item" class="flex-1"
+                           placeholder="Add narration for this item" class="flex-1 w-full"
                            @update:model-value="updateCartField(idx, 'narration', $event)" />
               </div>
 
@@ -942,7 +948,7 @@ function setConsigneeField(f: keyof Consignee, v: string) {
 
     <!-- Stock modal -->
     <UModal v-model:open="showStockModal"
-            :ui="{ content: 'sm:max-w-5xl max-h-[85vh] flex flex-col overflow-hidden' }"
+            :ui="{ content: 'sm:max-w-5xl max-h-[90vh] flex flex-col overflow-hidden z-[100]', overlay: 'z-[100]' }"
             :close="false">
       <template #content>
         <StockModal :stocks="stocks"
@@ -954,7 +960,7 @@ function setConsigneeField(f: keyof Consignee, v: string) {
 
     <!-- Party modal -->
     <UModal v-model:open="showPartyModal"
-            :ui="{ content: 'sm:max-w-2xl max-h-[85vh] flex flex-col overflow-hidden' }"
+            :ui="{ content: 'sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden z-[100]', overlay: 'z-[100]' }"
             :close="false">
       <template #content>
         <PartyModal :parties="parties"

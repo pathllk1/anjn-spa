@@ -1,0 +1,16 @@
+name: Hourly DB Backup
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch:     # optional manual trigger
+
+jobs:
+  call-backup-api:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Backup API
+        run: |
+          curl -X POST https://anjn-spa.vercel.app/api/cron/backup \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
