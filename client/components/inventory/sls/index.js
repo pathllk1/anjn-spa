@@ -70,19 +70,14 @@ export function initSalesSystem(router) {
     if (isReturnMode) {
         loadExistingBillData(state, returnBillId).then(() => {
             sessionStorage.removeItem('returnFromBillId');
-            // Reset cart - we'll populate it with return quantities
-            state.cart = [];
-            // Load the items from the original bill as returnable items
-            const originalBill = state.currentBill;
-            if (originalBill && originalBill.items && Array.isArray(originalBill.items)) {
-                for (const originalItem of originalBill.items) {
-                    state.cart.push({
-                        ...originalItem,
-                        returnQty: 0, // User will set quantities to return
-                        originalItem: true,
-                    });
-                }
-            }
+            // Keep the normalized cart shape produced by loadExistingBillData().
+            // The raw StockReg rows on currentBill.items use legacy field names
+            // like stock_id, which breaks return-mode payload generation.
+            state.cart = state.cart.map((item) => ({
+                ...item,
+                returnQty: 0,
+                originalItem: true,
+            }));
             fetchData(state).then(() => {
                 renderMainLayout(false, isReturnMode);
             }).catch(err => {
@@ -642,7 +637,7 @@ export function initSalesSystem(router) {
                             returnCart: state.cart
                                 .filter(item => (item.returnQty || 0) > 0)
                                 .map(item => ({
-                                    stockId: item.stockId,
+                                    stockId: item.stockId || item.stock_id || item.id || null,
                                     returnQty: item.returnQty,
                                     rate: item.rate,
                                     grate: item.grate,

@@ -21,6 +21,21 @@ import {
   normalizeLedgerAccountHead,
 } from '../../../utils/mongo/ledgerAccountResolver.js';
 
+function assertBalancedVoucher(docs, voucherType, billNo) {
+  const totals = docs.reduce((acc, doc) => {
+    acc.debit += parseFloat(doc.debit_amount) || 0;
+    acc.credit += parseFloat(doc.credit_amount) || 0;
+    return acc;
+  }, { debit: 0, credit: 0 });
+
+  const diff = Number((totals.debit - totals.credit).toFixed(6));
+  if (Math.abs(diff) >= 0.01) {
+    throw new Error(
+      `Unbalanced ${voucherType} ledger for ${billNo}: debit ${totals.debit.toFixed(2)} vs credit ${totals.credit.toFixed(2)} (diff ${diff.toFixed(2)})`
+    );
+  }
+}
+
 
 /* ─── PURCHASE ─────────────────────────────────────────────────────────────── */
 
@@ -121,6 +136,7 @@ export async function postPurchaseLedger({
     });
   }
 
+  assertBalancedVoucher(docs, 'PURCHASE', billNo);
   await Ledger.insertMany(docs, ...ins);
 }
 
@@ -236,6 +252,7 @@ export async function postSalesLedger({
     }
   }
 
+  assertBalancedVoucher(docs, 'SALES', billNo);
   await Ledger.insertMany(docs, ...ins);
 }
 
@@ -297,6 +314,7 @@ export async function postCreditNoteLedger({
     docs.push({ ...base, account_head: 'COGS', account_type: 'EXPENSE', debit_amount: 0, credit_amount: cl.cogsValue, narration: `COGS reversal: ${cl.item} — Credit Note No: ${billNo}`, party_id: null, stock_id: cl.stockId ?? null, stock_reg_id: cl.stockRegId ?? null });
   }
 
+  assertBalancedVoucher(docs, 'CREDIT_NOTE', billNo);
   await Ledger.insertMany(docs, ...ins);
 }
 
@@ -354,5 +372,6 @@ export async function postDebitNoteLedger({
     docs.push({ ...base, account_head: 'Inventory', account_type: 'ASSET', debit_amount: 0, credit_amount: pi.lineValue, narration: `Goods returned to supplier: ${pi.item} — Debit Note No: ${billNo}`, party_id: null, stock_id: pi.stockId ?? null, stock_reg_id: pi.stockRegId ?? null });
   }
 
+  assertBalancedVoucher(docs, 'DEBIT_NOTE', billNo);
   await Ledger.insertMany(docs, ...ins);
 }

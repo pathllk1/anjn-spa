@@ -205,10 +205,9 @@ function aggregateReturnCart(returnCart) {
     const stockId = item?.stockId ? String(item.stockId) : null;
     const returnQty = toPositiveNumber(item?.returnQty);
     const itemType = String(item?.itemType || item?.item_type || 'GOODS').toUpperCase();
+    
+    // Allow null stockId for SERVICE items, allow any stockId value (including legacy strings like "ITM1") for GOODS items
     if (!stockId && itemType === 'SERVICE') continue;
-    if (!stockId || !mongoose.Types.ObjectId.isValid(stockId)) {
-      throw new Error(`Invalid stockId for return item: ${item?.item ?? '(unknown)'}`);
-    }
     if (!returnQty) {
       throw new Error(`Return quantity must be > 0 for item: ${item?.item ?? '(unknown)'}`);
     }

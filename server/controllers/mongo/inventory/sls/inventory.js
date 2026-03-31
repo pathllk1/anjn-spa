@@ -178,10 +178,9 @@ function aggregateReturnCart(returnCart) {
     const stockId = item?.stockId ? String(item.stockId) : null;
     const returnQty = toPositiveNumber(item?.returnQty);
     const itemType = String(item?.itemType || item?.item_type || 'GOODS').toUpperCase();
+    
+    // Allow null stockId for SERVICE items, allow any stockId value (including legacy strings like "ITM1") for GOODS items
     if (!stockId && itemType === 'SERVICE') continue;
-    if (!stockId || !mongoose.Types.ObjectId.isValid(stockId)) {
-      throw new Error(`Invalid stockId for return item: ${item?.item ?? '(unknown)'}`);
-    }
     if (!returnQty) {
       throw new Error(`Return quantity must be > 0 for item: ${item?.item ?? '(unknown)'}`);
     }
@@ -1028,15 +1027,18 @@ export const createCreditNote = async (req, res) => {
       const originalReg = originalStockRegs.find(r => String(r.stock_id) === String(returnItem.stockId));
       if (!originalReg) continue;
 
+      // Skip items with invalid/legacy stock_id (treat as SERVICE items that don't track stock)
+      const stockId = originalReg.stock_id;
+      if (!stockId || !mongoose.Types.ObjectId.isValid(String(stockId))) {
+        continue;
+      }
+
       // Use original cost_rate for stock restoration
       const costPerUnit = parseFloat(originalReg.cost_rate);
       if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
         throw new Error(`Missing original cost rate for item: ${originalReg.item}`);
       }
       const restoredValue = returnItem.returnQty * costPerUnit;
-
-      // Atomic stock increment (reverse the original decrement)
-      const stockId = originalReg.stock_id;
       const stockRecord = await Stock.findOne({ _id: stockId, firm_id: firmId }).session(session).lean();
       if (!stockRecord) {
         throw new Error(`Stock record not found: ${stockId}`);
@@ -1109,7 +1111,7 @@ export const createCreditNote = async (req, res) => {
       igst: cnIgst,
       rof: cnRof,
       otherCharges: noteOtherCharges,
-      taxableItemsTotal: cnGtot,
+      taxableItemsTotal: returnedGoodsTotal,
       cogsLines,
       actorUsername,
       session,
