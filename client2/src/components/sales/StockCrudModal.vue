@@ -162,13 +162,13 @@ async function submit() {
     <!-- Multi-batch selector (edit only) -->
     <div v-if="isMultiBatch" class="col-span-2 space-y-2">
       <UFormField label="Select Batch to Edit">
-        <USelect :options="stock?.batches?.map((b, i) => ({
+        <USelect :items="stock?.batches?.map((b, i) => ({
                     label: `${b.batch || 'No Batch'} · Qty: ${b.qty} · Exp: ${b.expiry || 'N/A'}`,
                     value: i
                   })) || []"
-                 value-attribute="value" option-attribute="label"
+                 value-key="value" label-key="label"
                  placeholder="— Select a batch to edit —"
-                 @change="selectBatch" />
+                 @update:model-value="selectBatch" />
       </UFormField>
       <div v-if="selectedBatchIdx >= 0 && stock?.batches?.[selectedBatchIdx]"
            class="p-3 bg-(--ui-bg-muted) border border-(--ui-border) rounded-xl grid grid-cols-3 gap-2 text-xs text-(--ui-text-dimmed)">
@@ -208,7 +208,7 @@ async function submit() {
         <UInput v-model="qty" type="number" step="0.01" placeholder="0.00" />
       </UFormField>
       <UFormField label="UOM" required>
-        <USelect v-model="uom" :options="UOM_OPTIONS" value-attribute="value" option-attribute="label" />
+        <USelect v-model="uom" :items="UOM_OPTIONS" value-key="value" label-key="label" />
       </UFormField>
     </div>
 
@@ -219,7 +219,7 @@ async function submit() {
 
     <div class="grid grid-cols-2 gap-2">
       <UFormField label="GST %" required>
-        <USelect v-model="grate" :options="GST_OPTIONS" value-attribute="value" option-attribute="label" />
+        <USelect v-model="grate" :items="GST_OPTIONS" value-key="value" label-key="label" />
       </UFormField>
       <UFormField label="MRP">
         <UInput v-model="mrp" type="number" step="0.01" />

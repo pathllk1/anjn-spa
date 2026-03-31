@@ -580,16 +580,16 @@ function setConsigneeField(f: keyof Consignee, v: string) {
           <!-- Multi-GSTIN selector -->
           <div v-if="firmLocations.length > 1" class="flex flex-col gap-0.5">
             <span class="text-[10px] uppercase text-(--ui-text-muted) font-bold tracking-wider">Billing from GSTIN</span>
-            <USelect v-model="activeFirmGstin" :options="firmGstinOpts"
-                     value-attribute="value" option-attribute="label" size="sm"
+            <USelect v-model="activeFirmGstin" :items="firmGstinOpts"
+                     value-key="value" label-key="label" size="sm"
                      :ui="{ base: 'border-warning-300 bg-warning-50 dark:bg-warning-900/20' }" />
           </div>
 
           <!-- Bill type -->
           <div class="flex flex-col gap-0.5">
             <span class="text-[10px] uppercase text-(--ui-text-muted) font-bold tracking-wider">Transaction Type</span>
-            <USelect v-model="meta.billType" :options="billTypeOpts"
-                     value-attribute="value" option-attribute="label" size="sm" />
+            <USelect v-model="meta.billType" :items="billTypeOpts"
+                     value-key="value" label-key="label" size="sm" />
           </div>
 
           <!-- Reverse charge + GST badge -->

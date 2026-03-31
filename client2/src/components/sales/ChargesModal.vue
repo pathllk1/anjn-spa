@@ -118,7 +118,7 @@ function chargeTotal(c: OtherCharge): number {
         </div>
 
         <UFormField label="Type">
-          <USelect v-model="type" :options="typeOptions" value-attribute="value" option-attribute="label" />
+          <USelect v-model="type" :items="typeOptions" value-key="value" label-key="label" />
         </UFormField>
       </div>
 
@@ -133,7 +133,7 @@ function chargeTotal(c: OtherCharge): number {
 
       <div class="grid grid-cols-2 gap-3">
         <UFormField label="GST %">
-          <USelect v-model="gstRate" :options="gstOptions" value-attribute="value" option-attribute="label" />
+          <USelect v-model="gstRate" :items="gstOptions" value-key="value" label-key="label" />
         </UFormField>
         <div class="flex items-end">
           <UButton label="+ Add Charge" color="primary" block @click="addCharge" />
