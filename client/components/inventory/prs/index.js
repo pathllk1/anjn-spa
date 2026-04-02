@@ -145,11 +145,55 @@ export function initPurchaseSystem(router) {
 
         state.meta.billType = detectedType;
 
+        refreshBillTypeUi();
+    }
+
+    function refreshBillTypeUi() {
+        const detectedType = state.meta.billType;
+
         const sel = document.getElementById('billTypeSelector');
         if (sel) sel.value = detectedType;
 
         const totals = document.getElementById('totals-section');
         if (totals) totals.innerHTML = renderTotals(state);
+
+        const partyContainer = document.getElementById('party-display');
+        if (partyContainer && state.selectedParty) {
+            renderPartyCard(state).then(html => {
+                partyContainer.innerHTML = html;
+
+                const changePartyBtn = document.getElementById('btn-change-party');
+                const editPartyBtn = document.getElementById('btn-edit-party');
+                if (changePartyBtn) changePartyBtn.onclick = () => {
+                    if (isReturnMode) return;
+                    openPartyModal(state, {
+                        onSelectParty: async (party) => {
+                            state.selectedParty = party;
+                            state.historyCache  = {};
+                            autoSetBillType();
+                            renderMainLayout(isEditMode);
+                        },
+                        onCreateParty: () => {
+                            openCreatePartyModal(state, async (newParty) => {
+                                state.parties.push(newParty);
+                                state.selectedParty = newParty;
+                                state.historyCache  = {};
+                                autoSetBillType();
+                                renderMainLayout(isEditMode);
+                            });
+                        },
+                        onPartyCardUpdate: () => renderPartyCard(state),
+                    });
+                };
+                if (editPartyBtn) {
+                    editPartyBtn.onclick = () => {
+                        window.open('/inventory/suppliers', '_blank');
+                    };
+                }
+            }).catch(err => {
+                console.error('Failed to refresh supplier card after GST change:', err);
+            });
+        }
     }
 
     /* ── Firm GSTIN selector ───────────────────────────────────────────────────
@@ -788,8 +832,7 @@ export function initPurchaseSystem(router) {
         if (billTypeSelector) {
             billTypeSelector.onchange = (e) => {
                 state.meta.billType = e.target.value;
-                const totals = document.getElementById('totals-section');
-                if (totals) totals.innerHTML = renderTotals(state);
+                refreshBillTypeUi();
             };
         }
 
