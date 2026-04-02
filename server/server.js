@@ -59,8 +59,12 @@ app.set('trust proxy', 1);
 
 // ── Core middleware ────────────────────────────────────────────────────────
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
-    credentials: true
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://anjn-vue.vercel.app' // 👈 new domain added
+  ],
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
