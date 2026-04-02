@@ -391,8 +391,8 @@ function renderDashboard(model) {
       </section>
 
       <!-- Sub-ledger modal -->
-      <div id="subleder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
-           style="background:rgba(15,23,42,0.55);backdrop-filter:blur(6px)">
+      <div id="subleder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4
+           bg-slate-900/55 backdrop-blur-[6px]">
         <div class="relative flex flex-col w-full max-w-2xl max-h-[88vh] rounded-2xl bg-white shadow-[0_32px_80px_-12px_rgba(15,23,42,0.6)] overflow-hidden">
 
           <!-- Coloured header banner (bg set dynamically) -->
@@ -643,17 +643,10 @@ function bindSubLedgerModal(model, router) {
 
   const allAccounts = model.accounts || [];
 
-  const TYPE_GRADIENT = {
-    ASSET:     'linear-gradient(135deg,#0284c7,#0ea5e9)',
-    DEBTOR:    'linear-gradient(135deg,#2563eb,#3b82f6)',
-    CASH:      'linear-gradient(135deg,#0d9488,#14b8a6)',
-    BANK:      'linear-gradient(135deg,#0891b2,#06b6d4)',
-    LIABILITY: 'linear-gradient(135deg,#be123c,#f43f5e)',
-    CREDITOR:  'linear-gradient(135deg,#c2410c,#f97316)',
-    INCOME:    'linear-gradient(135deg,#059669,#10b981)',
-    EXPENSE:   'linear-gradient(135deg,#b45309,#f59e0b)',
-    GENERAL:   'linear-gradient(135deg,#475569,#64748b)',
-  };
+  const VALID_TYPES = new Set([
+    'ASSET', 'DEBTOR', 'CASH', 'BANK', 'LIABILITY',
+    'CREDITOR', 'INCOME', 'EXPENSE', 'GENERAL',
+  ]);
 
   function openModal(accountType) {
     const heads  = allAccounts.filter(a => a.account_type === accountType);
@@ -667,7 +660,8 @@ function bindSubLedgerModal(model, router) {
 
     /* ── Coloured header ── */
     const headerEl = document.getElementById('subleder-header');
-    headerEl.style.background = TYPE_GRADIENT[accountType] || TYPE_GRADIENT.GENERAL;
+    headerEl.className = headerEl.className.replace(/\bmodal-hdr--\w+\b/g, '');
+    headerEl.classList.add(`modal-hdr--${VALID_TYPES.has(accountType) ? accountType : 'GENERAL'}`);
 
     document.getElementById('subleder-badge').textContent = accountType;
 
@@ -706,12 +700,13 @@ function bindSubLedgerModal(model, router) {
           <tr class="hover:bg-blue-50/50 transition-colors ${rowBg}">
             <td class="px-5 py-3">
               <div class="flex items-center gap-3">
-                <div class="flex-shrink-0 w-1 rounded-full ${barColor}"
-                     style="height:${Math.max(Math.round(barPct * 0.28), 6)}px;min-height:6px;max-height:28px"></div>
+                <div class="flex-shrink-0 w-1 rounded-full js-bar-h ${barColor}"
+                     data-bar-h="${Math.max(Math.round(barPct * 0.28), 6)}"></div>
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(h.account_head)}</p>
                   <div class="mt-1 h-1 w-24 rounded-full bg-slate-100">
-                    <div class="h-1 rounded-full ${barColor} transition-all" style="width:${barPct}%"></div>
+                    <div class="h-1 rounded-full ${barColor} transition-all js-bar-w"
+                         data-bar-w="${barPct}"></div>
                   </div>
                 </div>
               </div>
@@ -740,6 +735,15 @@ function bindSubLedgerModal(model, router) {
             </td>
           </tr>`;
       }).join('');
+
+    /* ── Apply dynamic bar dimensions via JS (CSP: no inline style="" allowed) ── */
+    bodyEl.querySelectorAll('.js-bar-h').forEach(el => {
+      const h = Math.min(Math.max(Number(el.dataset.barH), 6), 28);
+      el.style.setProperty('height', `${h}px`);
+    });
+    bodyEl.querySelectorAll('.js-bar-w').forEach(el => {
+      el.style.setProperty('width', `${Number(el.dataset.barW)}%`);
+    });
     }
 
     /* ── Dark footer ── */
