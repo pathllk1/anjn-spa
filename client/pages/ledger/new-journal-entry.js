@@ -27,19 +27,30 @@ function showToast(message, type = 'success') {
 /* ── Account type auto-detection from name keywords ─────────────── */
 function guessAccountType(name) {
   const n = (name || '').toLowerCase();
-  if (/\bcash\b/.test(n))                                return 'CASH';
-  if (/bank|hdfc|sbi|icici|axis|kotak|yes bank/.test(n)) return 'BANK';
-  if (/debtor|receivable|customer/.test(n))               return 'DEBTOR';
-  if (/creditor|payable|supplier|vendor/.test(n))         return 'CREDITOR';
+  if (/\bcash\b/.test(n))                                              return 'CASH';
+  if (/bank|hdfc|sbi|icici|axis|kotak|yes bank/.test(n))               return 'BANK';
+  if (/debtor|receivable|customer/.test(n))                             return 'DEBTOR';
+  if (/creditor|payable|supplier|vendor/.test(n))                       return 'CREDITOR';
+  if (/cogs|cost of goods/.test(n))                                     return 'COGS';
+  if (/purchase|inventory|stock/.test(n))                               return 'COGS';
+  if (/income|revenue|\bsales\b|turnover|interest received/.test(n))    return 'INCOME';
+  if (/expense|salary|wages|rent|depreciation|\bloss\b|utility/.test(n)) return 'EXPENSE';
+  if (/asset|equipment|furniture|vehicle|prepaid|deposit/.test(n))      return 'ASSET';
+  if (/liability|loan|borrowing|capital|reserve|retained/.test(n))      return 'LIABILITY';
   return 'GENERAL';
 }
 
 const ACCOUNT_TYPES = [
-  { value: 'GENERAL',  label: 'General'  },
-  { value: 'CASH',     label: 'Cash'     },
-  { value: 'BANK',     label: 'Bank'     },
-  { value: 'DEBTOR',   label: 'Debtor'   },
-  { value: 'CREDITOR', label: 'Creditor' },
+  { value: 'INCOME',    label: 'Income'              },
+  { value: 'EXPENSE',   label: 'Expense'             },
+  { value: 'COGS',      label: 'Cost of Goods (COGS)'},
+  { value: 'GENERAL',   label: 'General'             },
+  { value: 'ASSET',     label: 'Asset'               },
+  { value: 'LIABILITY', label: 'Liability'           },
+  { value: 'CASH',      label: 'Cash'                },
+  { value: 'BANK',      label: 'Bank'                },
+  { value: 'DEBTOR',    label: 'Debtor'              },
+  { value: 'CREDITOR',  label: 'Creditor'            },
 ];
 
 /* ── Main render ─────────────────────────────────────────────────── */

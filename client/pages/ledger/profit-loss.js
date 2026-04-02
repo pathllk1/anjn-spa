@@ -34,7 +34,7 @@ function showToast(message, type = 'success') {
   setTimeout(() => el?.remove(), 4000);
 }
 
-const PL_TYPES = new Set(['INCOME', 'EXPENSE', 'GENERAL']);
+const PL_TYPES = new Set(['INCOME', 'EXPENSE', 'COGS', 'GENERAL']);
 const BS_TYPES = new Set(['ASSET', 'LIABILITY', 'DEBTOR', 'CREDITOR', 'CASH', 'BANK']);
 
 const COGS_KW  = ['cogs', 'cost of goods', 'purchase', 'inventory'];
@@ -106,7 +106,7 @@ function normalise(a) {
   };
 }
 
-function isCOGS(a)  { const h = a.head.toLowerCase(); return COGS_KW .some(k => h.includes(k)); }
+function isCOGS(a)  { if (a.type === 'COGS') return true; const h = a.head.toLowerCase(); return COGS_KW .some(k => h.includes(k)); }
 function isStock(a) { const h = a.head.toLowerCase(); return STOCK_KW.some(k => h.includes(k)); }
 function isGSTRec(a){ const h = a.head.toLowerCase(); return GST_KW  .some(k => h.includes(k)); }
 
@@ -115,7 +115,7 @@ function isGSTRec(a){ const h = a.head.toLowerCase(); return GST_KW  .some(k => 
 function buildPLModel(allAccounts, startDate, endDate) {
   const pl      = allAccounts.filter(a => PL_TYPES.has(a.type));
   const income  = pl.filter(a => a.type === 'INCOME');
-  const expense = pl.filter(a => a.type === 'EXPENSE');
+  const expense = pl.filter(a => a.type === 'EXPENSE' || a.type === 'COGS');
   const general = pl.filter(a => a.type === 'GENERAL');
   const cogs    = expense.filter(isCOGS);
   const opex    = expense.filter(a => !isCOGS(a));
@@ -325,7 +325,7 @@ function renderPL(m) {
   const isProfit = m.netProfit >= 0;
   const isGP     = m.grossProfit >= 0;
 
-  if (m.isEmpty) return emptyHTML('No P&L data. Only INCOME, EXPENSE and GENERAL account types appear here.');
+  if (m.isEmpty) return emptyHTML('No P&L data. Only INCOME, EXPENSE, COGS and GENERAL account types appear here.');
 
   return `
     <div class="space-y-3">

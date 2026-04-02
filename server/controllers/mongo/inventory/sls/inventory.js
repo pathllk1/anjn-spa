@@ -12,6 +12,29 @@ import {
 import { postSalesLedger, postCreditNoteLedger } from '../inventoryLedgerHelper.js';
 import { getStateCode } from '../../../../utils/mongo/gstCalculator.js';
 
+/* ── Resolve consignee state code from GSTIN, state name, or explicit value ── */
+function resolveConsigneeStateCode(consignee = {}) {
+  const explicit = normalizeOptionalText(consignee.stateCode, 2);
+  const gstin = normalizeOptionalText(consignee.gstin, 15);
+  const stateName = normalizeOptionalText(consignee.state, 80);
+
+  const derivedFromGstin = gstin && gstin !== 'UNREGISTERED' && /^\d{2}/.test(gstin)
+    ? gstin.substring(0, 2)
+    : null;
+  const derivedFromState = stateName ? getStateCode(stateName) : null;
+  const normalizedExplicit = explicit && /^\d{2}$/.test(explicit) ? explicit : null;
+
+  const resolved = derivedFromGstin || derivedFromState || normalizedExplicit || null;
+
+  if (normalizedExplicit && resolved && normalizedExplicit !== resolved) {
+    throw new Error(
+      `Consignee state code mismatch: provided ${normalizedExplicit} does not match consignee GST/state (${resolved}).`
+    );
+  }
+
+  return resolved;
+}
+
 /* ── Re-export everything shared ─────────────────────────────────────────── */
 export {
   getAllStocks, createStock, getStockById, updateStock, deleteStock,
@@ -373,6 +396,14 @@ export const createBill = async (req, res) => {
   const narration   = normalizeOptionalMultilineText(meta?.narration, 2000);
   const billSubtype = meta?.billType ? String(meta.billType).toUpperCase() : null;
 
+  // FIX Bug #1: Resolve consignee state code from GSTIN or state name
+  let consigneeStateCode = null;
+  try {
+    consigneeStateCode = resolveConsigneeStateCode(consignee || {});
+  } catch (consigneeErr) {
+    return res.status(400).json({ error: consigneeErr.message });
+  }
+
   // Validate cart
   for (const item of cart) {
     const serviceItem = isServiceItem(item);
@@ -418,7 +449,7 @@ export const createBill = async (req, res) => {
       reverse_charge: Boolean(meta.reverseCharge), cgst, sgst, igst,
       consignee_name: consignee?.name || null, consignee_gstin: consignee?.gstin || null,
       consignee_address: consignee?.address || null, consignee_state: consignee?.state || null,
-      consignee_pin: consignee?.pin || null, consignee_state_code: consignee?.stateCode || null,
+      consignee_pin: consignee?.pin || null, consignee_state_code: consigneeStateCode,
     }], { session });
 
     const billId = newBill._id;
@@ -615,6 +646,15 @@ export const updateBill = async (req, res) => {
         return res.status(400).json({ error: `Service cost must be >= 0 for item: ${item.item}` });
     }
 
+    // FIX Bug #1: Resolve consignee state code from GSTIN or state name
+    let consigneeStateCode = null;
+    try {
+      consigneeStateCode = resolveConsigneeStateCode(consignee || {});
+    } catch (consigneeErr) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: consigneeErr.message });
+    }
+
     const existingBill = await Bill.findOne({ _id: billId, firm_id: firmId }).lean();
     if (!existingBill) return res.status(404).json({ error: 'Bill not found' });
     if (existingBill.status === 'CANCELLED') return res.status(400).json({ error: 'Cancelled bills cannot be modified' });
@@ -680,7 +720,7 @@ export const updateBill = async (req, res) => {
           reverse_charge: Boolean(meta.reverseCharge), cgst, sgst, igst,
           consignee_name: consignee?.name || null, consignee_gstin: consignee?.gstin || null,
           consignee_address: consignee?.address || null, consignee_state: consignee?.state || null,
-          consignee_pin: consignee?.pin || null, consignee_state_code: consignee?.stateCode || null,
+          consignee_pin: consignee?.pin || null, consignee_state_code: consigneeStateCode,
       }},
       { session }
     );
