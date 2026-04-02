@@ -5,11 +5,13 @@ import { api }           from '../../utils/api.js';
 /* ── Helpers ────────────────────────────────────────────────────────── */
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-const fmtINR = (n) =>
-  '₹\u202f' + new Intl.NumberFormat('en-IN', { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: Math.abs(Number(n || 0)) >= 100000 ? 0 : 2 
+const fmtINR = (n) => {
+  const frac = Math.abs(Number(n || 0)) >= 100000 ? 0 : 2;
+  return '₹\u202f' + new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: frac,
+    maximumFractionDigits: frac,
   }).format(Number(n || 0));
+};
 
 const fmtDate = (s) => {
   try { return new Date(s + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
