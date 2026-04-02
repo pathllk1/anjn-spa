@@ -121,13 +121,22 @@ export const isPartySelected = (party) => {
 
 export function populateConsigneeFromBillTo(state) {
     if (state.selectedParty) {
+        // FIX: Use selected location data if available, otherwise fall back to primary party data
+        const location = state.selectedPartyLocation || {
+            address: state.selectedParty.addr,
+            gstin: state.selectedParty.gstin,
+            state: state.selectedParty.state,
+            pincode: state.selectedParty.pin,
+            contact: state.selectedParty.contact
+        };
+        
         state.selectedConsignee = {
             name:                 state.selectedParty.firm,
-            address:              state.selectedParty.addr,
-            gstin:                state.selectedParty.gstin,
-            state:                state.selectedParty.state,
-            pin:                  state.selectedParty.pin || '',
-            contact:              state.selectedParty.contact || '',
+            address:              location.address,
+            gstin:                location.gstin,
+            state:                location.state,
+            pin:                  location.pincode || '',
+            contact:              location.contact || '',
             deliveryInstructions: '',
         };
         updateConsigneeDisplay(state);

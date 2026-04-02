@@ -5,6 +5,69 @@
 
 import { escHtml } from './utils.js';
 
+function openGstinSelector(party, onSelect) {
+    const modal = document.getElementById('modal-backdrop');
+    const content = document.getElementById('modal-content');
+    if (!modal || !content) return;
+
+    modal.classList.remove('hidden');
+
+    // Use gstLocations array which should contain all GSTINs
+    let allGstins = Array.isArray(party.gstLocations) ? [...party.gstLocations] : [];
+    
+    // If no gstLocations but party has primary GSTIN, create entry for it
+    if (allGstins.length === 0 && party.gstin && party.gstin !== 'UNREGISTERED') {
+        allGstins.push({
+            gstin: party.gstin,
+            state: party.state,
+            address: party.addr,
+            city: '',
+            pincode: party.pin,
+            contact: party.contact,
+            is_primary: true,
+            state_code: party.state_code,
+            pan: party.pan
+        });
+    }
+
+    content.innerHTML = `
+        <div class="p-3 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex justify-between items-center gap-3">
+            <h3 class="font-bold text-base text-gray-800">Select GST Location (${allGstins.length})</h3>
+            <button id="close-gstin-selector"
+                    class="shrink-0 text-gray-400 hover:text-gray-700 w-8 h-8 flex items-center justify-center rounded hover:bg-gray-200 transition-colors text-xl leading-none">&times;</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-3 grid gap-2 bg-gray-50">
+            ${allGstins.map((loc, idx) => `
+                <div class="gstin-option border border-gray-200 p-3 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer
+                            flex justify-between items-center transition-all bg-white group"
+                     data-gstin="${escHtml(loc.gstin || '')}">
+                    <div class="min-w-0 flex-1">
+                        <div class="font-bold text-blue-900 text-sm group-hover:text-blue-700">${escHtml(loc.gstin)}</div>
+                        <div class="text-[10px] text-gray-500 mt-1">${escHtml(loc.state || '')}</div>
+                        <div class="text-[10px] text-gray-400 mt-1">${escHtml(loc.address || '')}</div>
+                        ${loc.is_primary ? '<span class="text-[9px] font-bold text-green-600 mt-1 inline-block">★ Primary</span>' : ''}
+                    </div>
+                    <span class="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-full
+                                 opacity-0 group-hover:opacity-100 transition-all ml-3">SELECT →</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    document.getElementById('close-gstin-selector').addEventListener('click', () => {
+        modal.classList.add('hidden');
+    });
+
+    document.querySelectorAll('.gstin-option').forEach(div => {
+        div.addEventListener('click', () => {
+            const gstin = div.getAttribute('data-gstin');
+            modal.classList.add('hidden');
+            onSelect(gstin);
+        });
+    });
+}
+
 export function openPartyModal(state, callbacks) {
     const { onSelectParty, onCreateParty, onPartyCardUpdate } = callbacks;
     const modal   = document.getElementById('modal-backdrop');
@@ -57,32 +120,73 @@ export function openPartyModal(state, callbacks) {
         }
 
         // FIX: escHtml applied to all party data (firm, gstin, state, addr)
-        container.innerHTML = data.map(party => `
-            <div class="party-item border border-gray-200 p-3 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer
-                        flex justify-between items-center transition-all bg-white group"
-                 data-id="${escHtml(String(party._id || party.id || ''))}">
-                <div class="min-w-0 flex-1">
-                    <div class="font-bold text-blue-900 text-sm group-hover:text-blue-700 truncate">${escHtml(party.firm)}</div>
-                    <div class="flex items-center flex-wrap gap-1.5 mt-1">
-                        <span class="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">${escHtml(party.gstin)}</span>
-                        <span class="text-[10px] text-gray-400">${escHtml(party.state || '')}</span>
+        container.innerHTML = data.map(party => {
+            // Check if party has multiple GST locations
+            const hasMultiGst = Array.isArray(party.gstLocations) && party.gstLocations.length > 0;
+            const gstinList = hasMultiGst 
+                ? party.gstLocations.map(loc => loc.gstin).join(', ')
+                : party.gstin;
+
+            return `
+                <div class="party-item border border-gray-200 p-3 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer
+                            flex justify-between items-center transition-all bg-white group"
+                     data-id="${escHtml(String(party._id || party.id || ''))}">
+                    <div class="min-w-0 flex-1">
+                        <div class="font-bold text-blue-900 text-sm group-hover:text-blue-700 truncate">${escHtml(party.firm)}</div>
+                        <div class="flex items-center flex-wrap gap-1.5 mt-1">
+                            ${hasMultiGst 
+                                ? `<span class="text-[10px] font-mono bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-blue-600 font-bold">Multi-GST (${party.gstLocations.length})</span>`
+                                : `<span class="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">${escHtml(party.gstin)}</span>`
+                            }
+                            <span class="text-[10px] text-gray-400">${escHtml(party.state || '')}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-400 mt-1 truncate max-w-xs">${escHtml(party.addr || '')}</div>
+                        ${hasMultiGst ? `<div class="text-[9px] text-gray-500 mt-1 font-mono">GSTINs: ${escHtml(gstinList)}</div>` : ''}
                     </div>
-                    <div class="text-[10px] text-gray-400 mt-1 truncate max-w-xs">${escHtml(party.addr || '')}</div>
+                    <span class="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-full
+                                 opacity-0 group-hover:opacity-100 transition-all ml-3">SELECT →</span>
                 </div>
-                <span class="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-full
-                             opacity-0 group-hover:opacity-100 transition-all ml-3">SELECT →</span>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         container.querySelectorAll('.party-item').forEach(div => {
             div.addEventListener('click', () => {
                 const id             = div.getAttribute('data-id');
                 const selectedParty  = state.parties.find(p => (p._id || p.id)?.toString() === id);
                 if (selectedParty) {
-                    state.selectedParty  = selectedParty;
-                    state.historyCache   = {};
-                    modal.classList.add('hidden');
-                    onSelectParty(selectedParty);
+                    // Check if party has multiple GSTINs
+                    const hasMultiGst = Array.isArray(selectedParty.gstLocations) && selectedParty.gstLocations.length > 0;
+                    
+                    if (hasMultiGst) {
+                        // Show GSTIN selector for multi-GST party
+                        openGstinSelector(selectedParty, (selectedGstin) => {
+                            state.selectedParty = selectedParty;
+                            state.selectedPartyGstin = selectedGstin;
+                            // FIX: Store the complete selected location object for use throughout UI
+                            const selectedLoc = selectedParty.gstLocations?.find(l => l.gstin === selectedGstin);
+                            state.selectedPartyLocation = selectedLoc || null;
+                            state.historyCache = {};
+                            modal.classList.add('hidden');
+                            onSelectParty(selectedParty);
+                        });
+                    } else {
+                        // Single GSTIN party - select directly
+                        state.selectedParty = selectedParty;
+                        state.selectedPartyGstin = selectedParty.gstin;
+                        // FIX: For single GSTIN, create location object from primary fields
+                        state.selectedPartyLocation = {
+                            gstin: selectedParty.gstin,
+                            state: selectedParty.state,
+                            state_code: selectedParty.state_code,
+                            address: selectedParty.addr,
+                            pincode: selectedParty.pin,
+                            contact: selectedParty.contact,
+                            is_primary: true
+                        };
+                        state.historyCache = {};
+                        modal.classList.add('hidden');
+                        onSelectParty(selectedParty);
+                    }
                 }
             });
         });

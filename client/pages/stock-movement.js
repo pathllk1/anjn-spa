@@ -153,21 +153,21 @@ export async function renderStockMovement(router) {
               <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Batch</th>
               <th class="px-6 py-3 text-right text-xs font-medium text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600" data-sort="qty" data-col="qty">
                 <div class="flex items-center justify-end">
-                  Quantity
                   <button class="col-filter-btn flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition relative" data-col="qty" title="Filter Quantity" type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="col-filter-icon w-3 h-3 opacity-60"><path fill-rule="evenodd" d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 0 1 .628.74v2.288a2.25 2.25 0 0 1-.659 1.59l-4.682 4.683a2.25 2.25 0 0 0-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 0 1 8 18.25v-5.757a2.25 2.25 0 0 0-.659-1.591L2.659 6.22A2.25 2.25 0 0 1 2 4.629V2.34a.75.75 0 0 1 .628-.74Z" clip-rule="evenodd"/></svg><span class="col-filter-badge hidden absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full text-[8px] font-bold text-gray-900 flex items-center justify-center leading-none">!</span></button>
+                  Quantity
                 </div>
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">UOM</th>
               <th class="px-6 py-3 text-right text-xs font-medium text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600" data-sort="rate" data-col="rate">
                 <div class="flex items-center justify-end">
-                  Rate
                   <button class="col-filter-btn flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition relative" data-col="rate" title="Filter Rate" type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="col-filter-icon w-3 h-3 opacity-60"><path fill-rule="evenodd" d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 0 1 .628.74v2.288a2.25 2.25 0 0 1-.659 1.59l-4.682 4.683a2.25 2.25 0 0 0-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 0 1 8 18.25v-5.757a2.25 2.25 0 0 0-.659-1.591L2.659 6.22A2.25 2.25 0 0 1 2 4.629V2.34a.75.75 0 0 1 .628-.74Z" clip-rule="evenodd"/></svg><span class="col-filter-badge hidden absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full text-[8px] font-bold text-gray-900 flex items-center justify-center leading-none">!</span></button>
+                  Rate
                 </div>
               </th>
               <th class="px-6 py-3 text-right text-xs font-medium text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600" data-sort="total" data-col="total">
                 <div class="flex items-center justify-end">
-                  Total
                   <button class="col-filter-btn flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:bg-white/20 transition relative" data-col="total" title="Filter Total" type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="col-filter-icon w-3 h-3 opacity-60"><path fill-rule="evenodd" d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 0 1 .628.74v2.288a2.25 2.25 0 0 1-.659 1.59l-4.682 4.683a2.25 2.25 0 0 0-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 0 1 8 18.25v-5.757a2.25 2.25 0 0 0-.659-1.591L2.659 6.22A2.25 2.25 0 0 1 2 4.629V2.34a.75.75 0 0 1 .628-.74Z" clip-rule="evenodd"/></svg><span class="col-filter-badge hidden absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full text-[8px] font-bold text-gray-900 flex items-center justify-center leading-none">!</span></button>
+                  Total
                 </div>
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider" data-col="party">

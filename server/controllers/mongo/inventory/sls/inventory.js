@@ -38,7 +38,7 @@ function resolveConsigneeStateCode(consignee = {}) {
 /* ── Re-export everything shared ─────────────────────────────────────────── */
 export {
   getAllStocks, createStock, getStockById, updateStock, deleteStock,
-  getAllParties, createParty,
+  getAllParties, createParty, updateParty, deleteParty,
   getBillById, getAllBills, exportBillsExcel, exportBillsToPdf,
   getStockBatches, getStockMovements, exportStockMovementsToExcel,
   getStockMovementsByStock, createStockMovement,
@@ -371,6 +371,29 @@ export const createBill = async (req, res) => {
     return res.status(404).json({ error: 'Party not found' });
   }
 
+  // FIX: Multi-GST party support — resolve which GSTIN to use
+  let selectedPartyGstin = partyDoc.gstin;
+  let selectedPartyState = partyDoc.state;
+  let selectedPartyStateCode = partyDoc.state_code;
+  let selectedPartyAddr = partyDoc.addr;
+  let selectedPartyPin = partyDoc.pin;
+  let selectedPartyContact = partyDoc.contact;
+  
+  // If party has multiple GST locations and a specific GSTIN is requested, use it
+  if (Array.isArray(partyDoc.gstLocations) && partyDoc.gstLocations.length > 0 && meta?.partyGstin) {
+    const selectedLoc = partyDoc.gstLocations.find(l => l.gstin === meta.partyGstin);
+    if (selectedLoc) {
+      selectedPartyGstin = selectedLoc.gstin;
+      selectedPartyState = selectedLoc.state;
+      selectedPartyStateCode = selectedLoc.state_code;
+      selectedPartyAddr = selectedLoc.address;
+      selectedPartyPin = selectedLoc.pincode;
+      selectedPartyContact = selectedLoc.contact;
+    } else {
+      return res.status(400).json({ error: `Party GSTIN ${meta.partyGstin} not found in party's registered locations` });
+    }
+  }
+
   let firmLoc, firmStateCode;
   try {
     ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
@@ -378,10 +401,10 @@ export const createBill = async (req, res) => {
     return res.status(400).json({ error: locErr.message });
   }
 
-  // FIX Bug #3: Resolve partyStateCode from name if registration info is missing (unregistered parties)
-  const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
-    ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
-    : (partyDoc.state_code || (partyDoc.state ? getStateCode(partyDoc.state) : null));
+  // FIX: Resolve partyStateCode from selected location or derive from GSTIN/state name
+  const partyStateCode = selectedPartyGstin && selectedPartyGstin !== 'UNREGISTERED'
+    ? (selectedPartyStateCode || selectedPartyGstin.substring(0, 2))
+    : (selectedPartyStateCode || (selectedPartyState ? getStateCode(selectedPartyState) : null));
 
   const gstTypeError = validateGstBillType(
     meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
@@ -437,8 +460,8 @@ export const createBill = async (req, res) => {
     const [newBill] = await Bill.create([{
       firm_id: firmId, voucher_id: String(voucherId), bno: billNo,
       bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
-      addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
-      state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
+      addr: selectedPartyAddr || '', gstin: selectedPartyGstin || 'UNREGISTERED',
+      state: selectedPartyState || '', pin: selectedPartyPin || null, state_code: selectedPartyStateCode || null,
       firm_gstin:      firmLoc?.gst_number  || null,
       firm_state:      firmLoc?.state       || null,
       firm_state_code: firmStateCode        || null,
@@ -610,6 +633,30 @@ export const updateBill = async (req, res) => {
       return res.status(404).json({ error: 'Party not found or does not belong to your firm' });
     }
 
+    // FIX: Resolve selected GSTIN from multi-GST locations (same as createBill)
+    let selectedPartyGstin = partyDoc.gstin;
+    let selectedPartyState = partyDoc.state;
+    let selectedPartyStateCode = partyDoc.state_code;
+    let selectedPartyAddr = partyDoc.addr;
+    let selectedPartyPin = partyDoc.pin;
+    let selectedPartyContact = partyDoc.contact;
+    
+    // If party has multiple GST locations and a specific GSTIN is requested, use it
+    if (Array.isArray(partyDoc.gstLocations) && partyDoc.gstLocations.length > 0 && meta?.partyGstin) {
+      const selectedLoc = partyDoc.gstLocations.find(l => l.gstin === meta.partyGstin);
+      if (selectedLoc) {
+        selectedPartyGstin = selectedLoc.gstin;
+        selectedPartyState = selectedLoc.state;
+        selectedPartyStateCode = selectedLoc.state_code;
+        selectedPartyAddr = selectedLoc.address;
+        selectedPartyPin = selectedLoc.pincode;
+        selectedPartyContact = selectedLoc.contact;
+      } else {
+        await session.abortTransaction();
+        return res.status(400).json({ error: `Party GSTIN ${meta.partyGstin} not found in party's registered locations` });
+      }
+    }
+
     let firmLoc, firmStateCode;
     try {
       ({ firmLoc, firmStateCode } = await resolveFirmLocation(firmId, meta?.firmGstin));
@@ -619,9 +666,9 @@ export const updateBill = async (req, res) => {
     }
 
     // FIX Bug #3: Resolve partyStateCode from name for unregistered parties
-    const partyStateCode = partyDoc.gstin && partyDoc.gstin !== 'UNREGISTERED'
-      ? (partyDoc.state_code || partyDoc.gstin.substring(0, 2))
-      : (partyDoc.state_code || (partyDoc.state ? getStateCode(partyDoc.state) : null));
+    const partyStateCode = selectedPartyGstin && selectedPartyGstin !== 'UNREGISTERED'
+      ? (selectedPartyStateCode || selectedPartyGstin.substring(0, 2))
+      : (selectedPartyStateCode || (selectedPartyState ? getStateCode(selectedPartyState) : null));
 
     const gstTypeError = validateGstBillType(
       meta?.billType, firmStateCode, partyStateCode, meta?.reverseCharge
@@ -704,8 +751,8 @@ export const updateBill = async (req, res) => {
       { _id: billId, firm_id: firmId },
       { $set: {
           bdate: meta.billDate, supply: partyDoc.firm || '', firm: firmName,
-          addr: partyDoc.addr || '', gstin: partyDoc.gstin || 'UNREGISTERED',
-          state: partyDoc.state || '', pin: partyDoc.pin || null, state_code: partyDoc.state_code || null,
+          addr: selectedPartyAddr || '', gstin: selectedPartyGstin || 'UNREGISTERED',
+          state: selectedPartyState || '', pin: selectedPartyPin || null, state_code: selectedPartyStateCode || null,
           firm_gstin:      firmLoc?.gst_number  || null,
           firm_state:      firmLoc?.state       || null,
           firm_state_code: firmStateCode        || null,

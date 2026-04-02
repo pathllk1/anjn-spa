@@ -176,6 +176,18 @@ export async function loadExistingBillData(state, billId) {
                 pin:        bill.pin        || null,
                 state_code: bill.state_code || null,
             };
+            // FIX BUG #2: Restore the selected GSTIN so it's sent to server on save
+            state.selectedPartyGstin = bill.gstin;
+            // FIX: Restore the selected location object with all location-specific data
+            state.selectedPartyLocation = {
+                gstin: bill.gstin,
+                state: bill.state,
+                state_code: bill.state_code,
+                address: bill.addr,
+                pincode: bill.pin,
+                contact: bill.contact || '',
+                is_primary: true
+            };
         }
 
         // FIX: Restore the active firm location that was used when this bill was saved.
@@ -350,16 +362,25 @@ export async function fetchData(state) {
  *   - Supplier state == recipient state → CGST + SGST (intra-state)
  *   - Supplier state != recipient state → IGST (inter-state)
  */
-export function determineGstBillType(activeFirmLocation, selectedParty) {
+export function determineGstBillType(activeFirmLocation, selectedParty, selectedPartyLocation) {
     const firmCode  = activeFirmLocation?.state_code ||
                       activeFirmLocation?.gst_number?.substring(0, 2);
 
-    // Priority 1: explicit state_code stored on party document
-    // Priority 2: first 2 digits of GSTIN (registered parties)
-    // Priority 3: state name → code lookup (unregistered parties whose state was entered)
-    const partyCode = selectedParty?.state_code ||
+    // FIX: Use selected location state code if available, otherwise fall back to primary party state code
+    // Priority 1: selected location state_code (for multi-GSTIN parties)
+    // Priority 2: explicit state_code stored on party document
+    // Priority 3: first 2 digits of GSTIN (registered parties)
+    // Priority 4: state name → code lookup (unregistered parties whose state was entered)
+    const partyCode = selectedPartyLocation?.state_code ||
+                      selectedParty?.state_code ||
+                      (selectedPartyLocation?.gstin && selectedPartyLocation.gstin !== 'UNREGISTERED'
+                          ? selectedPartyLocation.gstin.substring(0, 2)
+                          : null) ||
                       (selectedParty?.gstin && selectedParty.gstin !== 'UNREGISTERED'
                           ? selectedParty.gstin.substring(0, 2)
+                          : null) ||
+                      (selectedPartyLocation?.state
+                          ? INDIA_STATE_CODES[selectedPartyLocation.state.trim().toLowerCase()] ?? null
                           : null) ||
                       (selectedParty?.state
                           ? INDIA_STATE_CODES[selectedParty.state.trim().toLowerCase()] ?? null

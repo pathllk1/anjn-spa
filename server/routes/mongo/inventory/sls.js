@@ -20,6 +20,8 @@ router.delete('/stocks/:id', inventoryController.deleteStock);
 // --- PARTIES API ---
 router.get('/parties', inventoryController.getAllParties);
 router.post('/parties', inventoryController.createParty);
+router.put('/parties/:id', inventoryController.updateParty);
+router.delete('/parties/:id', inventoryController.deleteParty);
 
 // --- BILLS API ---
 router.post('/bills', inventoryController.createBill);

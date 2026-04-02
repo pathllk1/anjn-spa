@@ -153,7 +153,7 @@ export function initSalesSystem(router) {
      * update the dropdown. The backend also validates before saving.
      */
     function autoSetBillType() {
-        const detectedType = determineGstBillType(state.activeFirmLocation, state.selectedParty);
+        const detectedType = determineGstBillType(state.activeFirmLocation, state.selectedParty, state.selectedPartyLocation);
         if (!detectedType) return; // can't determine — leave as-is
 
         state.meta.billType = detectedType;
@@ -456,8 +456,14 @@ export function initSalesSystem(router) {
 
                 const selectPartyBtn = document.getElementById('btn-select-party');
                 const changePartyBtn = document.getElementById('btn-change-party');
+                const editPartyBtn = document.getElementById('btn-edit-party');
                 if (selectPartyBtn) selectPartyBtn.onclick = handlePartySelection;
                 if (changePartyBtn) changePartyBtn.onclick = handlePartySelection;
+                if (editPartyBtn) {
+                    editPartyBtn.onclick = () => {
+                        window.open('/inventory/suppliers', '_blank');
+                    };
+                }
             });
         }
 
@@ -658,6 +664,7 @@ export function initSalesSystem(router) {
                             meta: {
                                 ...state.meta,
                                 firmGstin: state.activeFirmLocation?.gst_number || null,
+                                partyGstin: state.selectedPartyGstin || null,
                             },
                             party:        partyId,
                             cart:         state.cart,

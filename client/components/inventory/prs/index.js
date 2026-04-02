@@ -140,7 +140,7 @@ export function initPurchaseSystem(router) {
      * identical to sales — only the ITC implication differs.
      */
     function autoSetBillType() {
-        const detectedType = determineGstBillType(state.activeFirmLocation, state.selectedParty);
+        const detectedType = determineGstBillType(state.activeFirmLocation, state.selectedParty, state.selectedPartyLocation);
         if (!detectedType) return;
 
         state.meta.billType = detectedType;
@@ -493,8 +493,14 @@ export function initPurchaseSystem(router) {
 
                 const selectPartyBtn = document.getElementById('btn-select-party');
                 const changePartyBtn = document.getElementById('btn-change-party');
+                const editPartyBtn = document.getElementById('btn-edit-party');
                 if (selectPartyBtn) selectPartyBtn.onclick = handlePartySelection;
                 if (changePartyBtn) changePartyBtn.onclick = handlePartySelection;
+                if (editPartyBtn) {
+                    editPartyBtn.onclick = () => {
+                        window.open('/inventory/suppliers', '_blank');
+                    };
+                }
             });
         }
 
@@ -690,6 +696,7 @@ export function initPurchaseSystem(router) {
                                 // validate the bill type and record it on the bill document.
                                 // For purchases this is the *receiving* GSTIN — ITC accrues here.
                                 firmGstin: state.activeFirmLocation?.gst_number || null,
+                                partyGstin: state.selectedPartyGstin || null,
                             },
                             party:        partyId,
                             cart:         state.cart,

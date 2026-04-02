@@ -624,9 +624,7 @@ function renderLinkCard(link) {
        class="group relative overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]">
       <!-- gradient header -->
       <div class="relative bg-gradient-to-br ${link.gradient} p-4 text-white">
-        <!-- subtle noise texture overlay -->
-        <div class="absolute inset-0 opacity-10 mix-blend-overlay"
-             style="background-image:url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"></div>
+        <!-- subtle noise texture overlay removed due to CSP restrictions -->
         <div class="relative flex items-start justify-between gap-3">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor"
                class="h-7 w-7 shrink-0 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-[-4deg]">

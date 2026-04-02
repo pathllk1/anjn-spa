@@ -14,6 +14,7 @@ import {
   normalizeOptionalMultilineText,
   escapeRegex,
 } from './billUtils.js';
+import { getStateCode } from '../../../utils/mongo/gstCalculator.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    STOCKS
@@ -245,15 +246,228 @@ export const createParty = async (req, res) => {
     if (!actorUsername) return res.status(401).json({ error: 'Unauthorized' });
     const firmId = getFirmId(req, res, 'CREATE_PARTY');
     if (!firmId) return;
-    const { firm, gstin, contact, state, state_code, addr, pin, pan } = req.body;
+    
+    const { firm, gstin, contact, state, state_code, addr, pin, pan, gstLocations } = req.body;
+    
+    // Determine if this is multi-GST or single-GST
+    const isMultiGst = Array.isArray(gstLocations) && gstLocations.length > 0;
+    
+    let finalGstin = gstin || 'UNREGISTERED';
+    let finalContact = contact || null;
+    let finalState = state || '';
+    let finalStateCode = state_code || null;
+    let finalAddr = addr || null;
+    let finalPin = pin || null;
+    let finalGstLocations = [];
+    let primaryGstinIndex = 0;
+    
+    if (isMultiGst) {
+      // Multi-GST mode: validate and process locations
+      finalGstLocations = gstLocations.map((loc, idx) => {
+        const locGstin = normalizeOptionalText(loc.gstin, 15);
+        const locState = normalizeOptionalText(loc.state, 80);
+        const locStateCode = locGstin && locGstin !== 'UNREGISTERED' && /^\d{2}/.test(locGstin)
+          ? locGstin.substring(0, 2)
+          : (loc.state_code || (locState ? getStateCode(locState) : null));
+        
+        return {
+          gstin: locGstin || 'UNREGISTERED',
+          state_code: locStateCode,
+          state: locState,
+          address: normalizeOptionalText(loc.address, 500) || null,
+          city: normalizeOptionalText(loc.city, 100) || null,
+          pincode: normalizeOptionalText(loc.pincode, 10) || null,
+          contact: normalizeOptionalText(loc.contact, 20) || null,
+          is_primary: loc.is_primary === true,
+        };
+      });
+      
+      // Find primary location (should be exactly one)
+      const primaryIdx = finalGstLocations.findIndex(l => l.is_primary);
+      if (primaryIdx !== -1) {
+        primaryGstinIndex = primaryIdx;
+      } else if (finalGstLocations.length > 0) {
+        // Default to first if none marked as primary
+        finalGstLocations[0].is_primary = true;
+        primaryGstinIndex = 0;
+      }
+      
+      // Sync legacy fields from primary location
+      const primaryLoc = finalGstLocations[primaryGstinIndex];
+      if (primaryLoc) {
+        finalGstin = primaryLoc.gstin;
+        finalState = primaryLoc.state;
+        finalStateCode = primaryLoc.state_code;
+        finalAddr = primaryLoc.address;
+        finalPin = primaryLoc.pincode;
+        finalContact = primaryLoc.contact;
+      }
+    } else {
+      // Single-GST mode (legacy): derive state code from GSTIN or state name
+      if (finalGstin && finalGstin !== 'UNREGISTERED' && /^\d{2}/.test(finalGstin)) {
+        finalStateCode = finalGstin.substring(0, 2);
+      } else if (finalState) {
+        finalStateCode = getStateCode(finalState);
+      }
+    }
+    
     const newParty = await Party.create({
-      firm_id: firmId, firm, gstin: gstin || 'UNREGISTERED',
-      contact: contact || null, state: state || '', state_code: state_code || null,
-      addr: addr || null, pin: pin || null, pan: pan || null, created_by: actorUsername,
+      firm_id: firmId,
+      firm,
+      gstin: finalGstin,
+      contact: finalContact,
+      state: finalState,
+      state_code: finalStateCode,
+      addr: finalAddr,
+      pin: finalPin,
+      pan: pan || null,
+      gstLocations: finalGstLocations,
+      primary_gstin_index: primaryGstinIndex,
+      usern: actorUsername,
+      supply: finalState,
     });
-    res.json({ success: true, id: newParty._id, firm: newParty.firm, gstin: newParty.gstin, contact: newParty.contact, state: newParty.state, state_code: newParty.state_code, addr: newParty.addr, pin: newParty.pin, pan: newParty.pan, message: 'Party created successfully' });
+    
+    res.json({
+      success: true,
+      id: newParty._id,
+      firm: newParty.firm,
+      gstin: newParty.gstin,
+      contact: newParty.contact,
+      state: newParty.state,
+      state_code: newParty.state_code,
+      addr: newParty.addr,
+      pin: newParty.pin,
+      pan: newParty.pan,
+      gstLocations: newParty.gstLocations,
+      primary_gstin_index: newParty.primary_gstin_index,
+      message: isMultiGst ? 'Party with multiple GST registrations created successfully' : 'Party created successfully',
+    });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+export const updateParty = async (req, res) => {
+  try {
+    const actorUsername = getActorUsername(req);
+    if (!actorUsername) return res.status(401).json({ error: 'Unauthorized' });
+    const firmId = getFirmId(req, res, 'UPDATE_PARTY');
+    if (!firmId) return;
+    const partyId = validateObjectId(req.params.id, 'party ID', res);
+    if (!partyId) return;
+    
+    const { firm, gstin, contact, state, state_code, addr, pin, pan, gstLocations, primary_gstin_index } = req.body;
+    
+    const existingParty = await Party.findOne({ _id: partyId, firm_id: firmId }).lean();
+    if (!existingParty) return res.status(404).json({ error: 'Party not found or does not belong to your firm' });
+    
+    // Determine if this is multi-GST or single-GST
+    const isMultiGst = Array.isArray(gstLocations) && gstLocations.length > 0;
+    
+    let finalGstin = gstin || 'UNREGISTERED';
+    let finalContact = contact || null;
+    let finalState = state || '';
+    let finalStateCode = state_code || null;
+    let finalAddr = addr || null;
+    let finalPin = pin || null;
+    let finalGstLocations = [];
+    let finalPrimaryGstinIndex = 0;
+    
+    if (isMultiGst) {
+      // Multi-GST mode: validate and process locations
+      finalGstLocations = gstLocations.map((loc) => {
+        const locGstin = normalizeOptionalText(loc.gstin, 15);
+        const locState = normalizeOptionalText(loc.state, 80);
+        const locStateCode = locGstin && locGstin !== 'UNREGISTERED' && /^\d{2}/.test(locGstin)
+          ? locGstin.substring(0, 2)
+          : (loc.state_code || (locState ? getStateCode(locState) : null));
+        
+        return {
+          gstin: locGstin || 'UNREGISTERED',
+          state_code: locStateCode,
+          state: locState,
+          address: normalizeOptionalText(loc.address, 500) || null,
+          city: normalizeOptionalText(loc.city, 100) || null,
+          pincode: normalizeOptionalText(loc.pincode, 10) || null,
+          contact: normalizeOptionalText(loc.contact, 20) || null,
+          is_primary: loc.is_primary === true,
+        };
+      });
+      
+      // Validate primary index
+      if (typeof primary_gstin_index === 'number' && primary_gstin_index >= 0 && primary_gstin_index < finalGstLocations.length) {
+        finalPrimaryGstinIndex = primary_gstin_index;
+      } else {
+        const primaryIdx = finalGstLocations.findIndex(l => l.is_primary);
+        finalPrimaryGstinIndex = primaryIdx !== -1 ? primaryIdx : 0;
+      }
+      
+      // Ensure exactly one is marked as primary
+      finalGstLocations.forEach((loc, idx) => {
+        loc.is_primary = idx === finalPrimaryGstinIndex;
+      });
+      
+      // Sync legacy fields from primary location
+      const primaryLoc = finalGstLocations[finalPrimaryGstinIndex];
+      if (primaryLoc) {
+        finalGstin = primaryLoc.gstin;
+        finalState = primaryLoc.state;
+        finalStateCode = primaryLoc.state_code;
+        finalAddr = primaryLoc.address;
+        finalPin = primaryLoc.pincode;
+        finalContact = primaryLoc.contact;
+      }
+    } else {
+      // Single-GST mode (legacy)
+      if (finalGstin && finalGstin !== 'UNREGISTERED' && /^\d{2}/.test(finalGstin)) {
+        finalStateCode = finalGstin.substring(0, 2);
+      } else if (finalState) {
+        finalStateCode = getStateCode(finalState);
+      }
+    }
+    
+    await Party.findOneAndUpdate(
+      { _id: partyId, firm_id: firmId },
+      {
+        $set: {
+          firm: firm || existingParty.firm,
+          gstin: finalGstin,
+          contact: finalContact,
+          state: finalState,
+          state_code: finalStateCode,
+          addr: finalAddr,
+          pin: finalPin,
+          pan: pan || existingParty.pan || null,
+          gstLocations: finalGstLocations,
+          primary_gstin_index: finalPrimaryGstinIndex,
+          supply: finalState,
+        },
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: isMultiGst ? 'Party with multiple GST registrations updated successfully' : 'Party updated successfully',
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const deleteParty = async (req, res) => {
+  try {
+    const firmId = getFirmId(req, res, 'DELETE_PARTY');
+    if (!firmId) return;
+    const partyId = validateObjectId(req.params.id, 'party ID', res);
+    if (!partyId) return;
+    
+    const existingParty = await Party.findOne({ _id: partyId, firm_id: firmId }).lean();
+    if (!existingParty) return res.status(404).json({ error: 'Party not found or does not belong to your firm' });
+    
+    await Party.deleteOne({ _id: partyId, firm_id: firmId });
+    res.json({ success: true, message: 'Party deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
 

@@ -232,19 +232,29 @@ export async function renderPartyCard(state) {
                 <div class="flex justify-between items-start">
                     <h3 class="font-bold text-sm text-blue-900 truncate flex-1"
                         title="${escHtml(state.selectedParty.firm)}">${escHtml(state.selectedParty.firm)}</h3>
-                    <button id="btn-change-party"
-                            class="text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-white p-1.5 rounded shadow-sm border border-gray-200 hover:border-blue-300 whitespace-nowrap ml-2"
-                            title="Change Party" ${state.isReturnMode ? 'disabled style="display:none"' : ''}>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                        </svg>
-                    </button>
+                    <div class="flex gap-1.5 ml-2 flex-shrink-0">
+                        <button id="btn-edit-party"
+                                class="text-[10px] text-green-600 hover:text-green-800 font-bold bg-white p-1.5 rounded shadow-sm border border-gray-200 hover:border-green-300 whitespace-nowrap"
+                                title="Edit Party" ${state.isReturnMode ? 'disabled style="display:none"' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                        </button>
+                        <button id="btn-change-party"
+                                class="text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-white p-1.5 rounded shadow-sm border border-gray-200 hover:border-blue-300 whitespace-nowrap"
+                                title="Change Party" ${state.isReturnMode ? 'disabled style="display:none"' : ''}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <p class="text-[11px] text-gray-600 truncate mt-1">${escHtml(state.selectedParty.addr || '')}</p>
+                <p class="text-[11px] text-gray-600 truncate mt-1">${escHtml(state.selectedPartyLocation?.address || state.selectedParty.addr || '')}</p>
                 <div class="flex items-center gap-2 mt-2">
                     <span class="bg-blue-100 text-blue-800 text-[10px] font-mono px-2 py-0.5 rounded border border-blue-200">
-                        GST: ${escHtml(state.selectedParty.gstin || '')}
+                        GST: ${escHtml(state.selectedPartyGstin || state.selectedParty.gstin || '')}
                     </span>
                     ${billTypeBadge}
                 </div>

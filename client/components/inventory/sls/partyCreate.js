@@ -85,6 +85,17 @@ export function openCreatePartyModal(state, onPartySaved) {
                        class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 outline-none">
             </div>
 
+            <div class="col-span-2 pt-4 border-t border-gray-100">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">Additional GST Locations</label>
+                    <button type="button" id="btn-add-gst-location"
+                            class="text-xs bg-green-500 hover:bg-green-600 text-white px-2.5 py-1 rounded font-bold transition-colors">
+                        + Add Location
+                    </button>
+                </div>
+                <div id="gst-locations-container" class="space-y-3 mb-4 max-h-48 overflow-y-auto"></div>
+            </div>
+
             <div class="col-span-2 pt-4 border-t border-gray-100 flex justify-end gap-2 mt-1">
                 <button type="button" id="cancel-create-party"
                         class="px-4 py-1.5 text-sm text-gray-600 hover:text-gray-900 font-medium hover:bg-gray-100 rounded-lg transition-colors">
@@ -133,6 +144,203 @@ export function openCreatePartyModal(state, onPartySaved) {
         fetchPartyByGST(this);
     });
 
+    // Multi-GSTIN Location Management
+    let gstLocations = [];
+
+    const renderGstLocations = () => {
+        const container = document.getElementById('gst-locations-container');
+        if (!container) return;
+
+        if (gstLocations.length === 0) {
+            container.innerHTML = '<p class="text-[10px] text-gray-400 italic">No additional locations added yet</p>';
+            return;
+        }
+
+        container.innerHTML = gstLocations.map((loc, idx) => `
+            <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50 space-y-2">
+                <div class="flex justify-between items-start gap-2">
+                    <div class="flex-1 grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[9px] font-bold text-gray-500 uppercase">GSTIN</label>
+                            <div class="flex gap-1">
+                                <input type="text" value="${escHtml(loc.gstin || '')}" maxlength="15"
+                                       class="flex-1 border border-gray-300 rounded px-2 py-1 text-xs font-mono uppercase"
+                                       data-loc-idx="${idx}" data-loc-field="gstin">
+                                <button type="button" class="btn-fetch-location-gst text-xs bg-orange-500 hover:bg-orange-600 text-white px-1.5 rounded font-bold transition-colors"
+                                        data-loc-idx="${idx}" title="Fetch GST details">F</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-bold text-gray-500 uppercase">State</label>
+                            <input type="text" value="${escHtml(loc.state || '')}"
+                                   class="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                                   data-loc-idx="${idx}" data-loc-field="state">
+                        </div>
+                    </div>
+                    <button type="button" class="btn-remove-location text-red-500 hover:text-red-700 font-bold text-lg leading-none"
+                            data-loc-idx="${idx}">×</button>
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold text-gray-500 uppercase">Address</label>
+                    <input type="text" value="${escHtml(loc.address || '')}"
+                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                           data-loc-idx="${idx}" data-loc-field="address">
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label class="text-[9px] font-bold text-gray-500 uppercase">City</label>
+                        <input type="text" value="${escHtml(loc.city || '')}"
+                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                               data-loc-idx="${idx}" data-loc-field="city">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-bold text-gray-500 uppercase">Pincode</label>
+                        <input type="text" value="${escHtml(loc.pincode || '')}"
+                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                               data-loc-idx="${idx}" data-loc-field="pincode">
+                    </div>
+                    <div>
+                        <label class="text-[9px] font-bold text-gray-500 uppercase">Contact</label>
+                        <input type="text" value="${escHtml(loc.contact || '')}"
+                               class="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                               data-loc-idx="${idx}" data-loc-field="contact">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[9px] font-bold text-gray-500 uppercase">PAN</label>
+                    <input type="text" value="${escHtml(loc.pan || '')}" maxlength="10"
+                           class="w-full border border-gray-300 rounded px-2 py-1 text-xs uppercase font-mono"
+                           data-loc-idx="${idx}" data-loc-field="pan">
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" ${loc.is_primary ? 'checked' : ''} class="location-primary-checkbox"
+                           data-loc-idx="${idx}">
+                    <span class="text-[9px] font-bold text-gray-600">Mark as Primary</span>
+                </label>
+            </div>
+        `).join('');
+
+        // Attach event listeners for location fields
+        container.querySelectorAll('[data-loc-field]').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const idx = parseInt(e.target.dataset.locIdx);
+                const field = e.target.dataset.locField;
+                gstLocations[idx][field] = e.target.value;
+            });
+        });
+
+        // Use event delegation for GST fetch buttons
+        container.addEventListener('click', async (e) => {
+            if (!e.target.classList.contains('btn-fetch-location-gst')) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const btn = e.target;
+            const idx = parseInt(btn.dataset.locIdx);
+            const gstinInput = container.querySelector(`input[data-loc-idx="${idx}"][data-loc-field="gstin"]`);
+            const gstin = gstinInput?.value?.trim();
+
+            if (!gstin || gstin.length !== 15) {
+                showToast('Please enter a valid 15-character GSTIN', 'error');
+                return;
+            }
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳';
+            btn.disabled = true;
+
+            try {
+                const response = await fetchWithCSRF('/api/inventory/sales/gst-lookup', {
+                    method: 'POST',
+                    body: JSON.stringify({ gstin }),
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    showToast(error.error || `Failed (${response.status})`, 'error');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
+                const data = await response.json();
+                if (!data.success) {
+                    showToast(data.error || 'Failed to fetch GST details', 'error');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
+                const partyData = data.data || data;
+                const displayName = partyData.trade_name || partyData.legal_name || '';
+                const addr = partyData.place_of_business_principal?.address || {};
+                const address = [addr.door_num, addr.building_name, addr.floor_num, addr.street, addr.location, addr.city, addr.district]
+                    .filter(p => p && String(p).trim())
+                    .join(', ');
+                const pinCode = addr.pin_code ? String(addr.pin_code).trim() : '';
+                let stateName = partyData.place_of_business_principal?.address?.state || partyData.state_jurisdiction || '';
+                stateName = String(stateName).trim();
+                if (stateName.includes(' - ')) stateName = stateName.split(' - ')[0].trim();
+
+                gstLocations[idx].state = stateName;
+                gstLocations[idx].address = address;
+                gstLocations[idx].pincode = pinCode;
+                gstLocations[idx].state_code = gstin.substring(0, 2);
+                if (gstin.length >= 12) {
+                    gstLocations[idx].pan = gstin.substring(2, 12);
+                }
+
+                renderGstLocations();
+                btn.innerHTML = '✔';
+                setTimeout(() => { btn.innerHTML = originalText; }, 1500);
+
+            } catch (error) {
+                console.error('GST Lookup Error:', error);
+                showToast('Failed to fetch details. ' + (error.message || 'Server error'), 'error');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Attach event listeners for primary checkbox
+        container.querySelectorAll('.location-primary-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const idx = parseInt(e.target.dataset.locIdx);
+                gstLocations.forEach((loc, i) => {
+                    loc.is_primary = (i === idx);
+                });
+                renderGstLocations();
+            });
+        });
+
+        // Attach event listeners for remove buttons
+        container.querySelectorAll('.btn-remove-location').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.locIdx);
+                gstLocations.splice(idx, 1);
+                renderGstLocations();
+            });
+        });
+    };
+
+    document.getElementById('btn-add-gst-location').addEventListener('click', (e) => {
+        e.preventDefault();
+        gstLocations.push({
+            gstin: '',
+            state_code: '',
+            state: '',
+            address: '',
+            city: '',
+            pincode: '',
+            contact: '',
+            is_primary: gstLocations.length === 0,
+        });
+        renderGstLocations();
+    });
+
+    renderGstLocations();
+
     document.getElementById('create-party-form').addEventListener('submit', async e => {
         e.preventDefault();
         const formData = new FormData(e.target);
@@ -149,6 +357,19 @@ export function openCreatePartyModal(state, onPartySaved) {
         data.addr       = data.addr    || null;
         data.pin        = data.pin     || null;
         data.pan        = data.pan     || null;
+
+        // Include multi-GSTIN locations if any
+        if (gstLocations.length > 0) {
+            data.gstLocations = gstLocations.map(loc => ({
+                gstin: loc.gstin || '',
+                state: loc.state || '',
+                address: loc.address || '',
+                city: loc.city || '',
+                pincode: loc.pincode || '',
+                contact: loc.contact || '',
+                is_primary: loc.is_primary || false,
+            }));
+        }
 
         try {
             const response = await fetchWithCSRF('/api/inventory/sales/parties', {
