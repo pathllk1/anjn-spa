@@ -16,6 +16,7 @@ export async function renderHome(router) {
           <p class="text-lg text-gray-600 max-w-2xl mx-auto">
             ${response.data.description}
           </p>
+          
 
           <div class="pt-4">
             <a href="/login" data-navigo
