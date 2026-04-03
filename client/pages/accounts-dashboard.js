@@ -16,24 +16,6 @@ const QUICK_ACTIONS = [
     `,
   },
   {
-    href: '/ledger/closing-balances',
-    title: 'Closing Balances',
-    subtitle: 'Period-end balance summaries',
-    tone: 'from-teal-600 to-cyan-500',
-    icon: `
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-    `,
-  },
-  {
-    href: '/ledger/manual-ledger',
-    title: 'Manual Ledger',
-    subtitle: 'Create arbitrary ledger entries',
-    tone: 'from-cyan-600 to-teal-500',
-    icon: `
-      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    `,
-  },
-  {
     href: '/ledger/journal-entries',
     title: 'Journal Entries',
     subtitle: 'Manual accounting adjustments',
@@ -96,15 +78,8 @@ export async function renderAccountsDashboard(router) {
   destroyAccountsCharts();
 
   const content = `
-    <div id="accounts-dashboard-page" class="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.12),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.12),_transparent_22%),linear-gradient(180deg,_#f8fbff_0%,_#eef3ff_100%)]">
-      <div class="pointer-events-none absolute inset-0 opacity-60">
-        <div class="absolute -left-16 top-8 h-56 w-56 rounded-full bg-emerald-300/20 blur-3xl"></div>
-        <div class="absolute right-0 top-0 h-64 w-64 rounded-full bg-sky-300/15 blur-3xl"></div>
-        <div class="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-fuchsia-200/10 blur-3xl"></div>
-      </div>
-      <div class="relative p-4 md:p-5">
-        <div id="accounts-dashboard-content">${renderLoadingState()}</div>
-      </div>
+    <div id="accounts-dashboard-page" class="min-h-[calc(100vh-6rem)] bg-slate-100">
+      <div id="accounts-dashboard-content">${renderLoadingState()}</div>
     </div>
   `;
 
@@ -277,244 +252,258 @@ function buildAccountsModel({ accounts, accountTypes, vouchersSummary, journalSu
 
 function renderDashboard(model) {
   return `
-    <section class="space-y-4">
-      <header class="rounded-[22px] border border-slate-200/80 bg-white/85 shadow-[0_12px_32px_-20px_rgba(15,23,42,0.35)] backdrop-blur">
-        <div class="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="space-y-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                Accounts Overview
-              </span>
-            </div>
-            <div>
-              <p class="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-400">Accounts Dashboard</p>
-              <h1 class="mt-0.5 text-lg font-black tracking-tight text-slate-900 md:text-xl">Ledger, vouchers, balances, and account-type visibility</h1>
-            </div>
-          </div>
+    <section>
 
-          <div class="grid grid-cols-2 gap-2 self-stretch lg:w-[280px]">
-            <button id="accounts-dashboard-refresh" type="button" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-3.5 w-3.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-              </svg>
-              Refresh
-            </button>
-            <a href="/ledger/general-ledger" data-navigo class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-3.5 w-3.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006.175 4.5M12 6.042A8.967 8.967 0 0118.825 4.5M12 6.042a8.968 8.968 0 016.175 1.542m-6.175-1.542a8.968 8.968 0 00-6.175 1.542m0 0A9 9 0 0112 3m0 0a9 9 0 019 9m-9 9a9 9 0 01-9-9m9 9a9 9 0 019-9" />
-              </svg>
-              General Ledger
-            </a>
-            <div class="col-span-2 grid grid-cols-3 gap-1.5 rounded-[18px] border border-slate-200 bg-slate-50 p-1.5">
-              <a href="/ledger/journal-entries/new" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-violet-700 shadow-sm transition hover:bg-violet-50 whitespace-nowrap">New Journal</a>
-              <a href="/ledger/vouchers/new" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50 whitespace-nowrap">New Voucher</a>
-              <a href="/ledger/profit-loss" data-navigo class="rounded-xl bg-white px-2 py-2 text-center text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50">P&amp;L</a>
-            </div>
+      <!-- ══ TOP COMMAND BAR ══ -->
+      <header class="bg-white border-b border-slate-200 px-4 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+            <span class="text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-600">Live</span>
           </div>
+          <div class="w-px h-5 bg-slate-700"></div>
+          <h1 class="text-sm font-bold text-slate-900 tracking-tight truncate">Accounts &amp; Ledger Dashboard</h1>
+          <div class="hidden md:flex items-center gap-1 ml-1">
+            <span class="rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">DR</span>
+            <span class="text-xs font-black text-emerald-600 font-mono">${formatCurrency(model.totalDebit)}</span>
+            <span class="mx-1 text-slate-700">·</span>
+            <span class="rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">CR</span>
+            <span class="text-xs font-black text-rose-600 font-mono">${formatCurrency(model.totalCredit)}</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <a href="/ledger/journal-entries/new" data-navigo class="inline-flex items-center gap-1 rounded-lg bg-violet-600 hover:bg-violet-500 px-2.5 py-1.5 text-[11px] font-bold text-white transition">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            Journal
+          </a>
+          <a href="/ledger/vouchers/new" data-navigo class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1.5 text-[11px] font-bold text-white transition">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            Voucher
+          </a>
+          <a href="/ledger/profit-loss" data-navigo class="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 hover:border-slate-400 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition">P&amp;L</a>
+          <a href="/ledger/general-ledger" data-navigo class="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 hover:border-slate-400 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition">Ledger</a>
+          <button id="accounts-dashboard-refresh" type="button" class="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 hover:border-slate-400 px-2.5 py-1.5 text-[11px] font-bold text-slate-600 transition">
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"/></svg>
+            Refresh
+          </button>
         </div>
       </header>
 
-      <section class="grid gap-2.5 md:grid-cols-3 xl:grid-cols-6">
-        ${model.compactStats.map(renderStatCard).join('')}
-      </section>
+      <!-- ══ KPI TICKER STRIP ══ -->
+      <div class="flex divide-x divide-slate-200 border-b border-slate-200 bg-white shadow-sm overflow-x-auto">
+        ${model.compactStats.map((stat, i) => renderStatCard(stat, i)).join('')}
+      </div>
 
-      <section class="grid gap-3 xl:grid-cols-[1.25fr_0.95fr]">
-        <div class="space-y-3">
-          <div class="rounded-[20px] border border-slate-200 bg-white/90 p-4 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.4)] backdrop-blur">
-            <div class="mb-3">
-              <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Account Type Mix</p>
-              <h2 class="mt-0.5 text-sm font-bold text-slate-900">Debit and credit by account type</h2>
+      <!-- ══ MAIN 3-COLUMN GRID ══ -->
+      <div class="grid gap-px bg-slate-200 xl:grid-cols-[2fr_1.5fr_1.1fr]">
+
+        <!-- COL 1: Charts -->
+        <div class="bg-white space-y-px">
+
+          <!-- Account-type bar chart -->
+          <div class="bg-white p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Account Type Mix</p>
+                <h2 class="text-xs font-bold text-slate-800 mt-0.5">Debit &amp; Credit by Type</h2>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="flex items-center gap-1 text-[10px] font-semibold text-emerald-400"><span class="h-2 w-2 rounded-sm bg-emerald-400 inline-block"></span>DR</span>
+                <span class="flex items-center gap-1 text-[10px] font-semibold text-rose-500"><span class="h-2 w-2 rounded-sm bg-rose-400 inline-block"></span>CR</span>
+              </div>
             </div>
-            <div class="h-[220px]">
+            <div class="h-[180px]">
               <canvas id="accounts-type-chart" class="h-full w-full"></canvas>
             </div>
           </div>
 
-          <div class="rounded-[20px] border border-slate-200 bg-white/90 p-4 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.4)] backdrop-blur">
+          <!-- Balance leaders chart -->
+          <div class="bg-white p-4">
             <div class="mb-3">
-              <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Largest Balances</p>
-              <h2 class="mt-0.5 text-sm font-bold text-slate-900">Top account exposure</h2>
+              <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Balance Leaders</p>
+              <h2 class="text-xs font-bold text-slate-800 mt-0.5">Top account exposure</h2>
             </div>
-            <div class="h-[240px]">
+            <div class="h-[200px]">
               <canvas id="accounts-balance-chart" class="h-full w-full"></canvas>
             </div>
           </div>
         </div>
 
-        <div class="space-y-3">
-          <section class="rounded-[20px] border border-slate-200 bg-slate-900 p-4 text-white shadow-[0_12px_30px_-20px_rgba(2,6,23,0.6)]">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Voucher Pulse</p>
-                <h2 class="mt-0.5 text-sm font-bold text-white">Recent transaction signals</h2>
-              </div>
-              <div class="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-right text-xs text-slate-300">
-                <div class="text-[10px]">Net position</div>
-                <div class="font-semibold text-white">${formatCurrency(model.vouchersSummary.net_position || 0)}</div>
-              </div>
-            </div>
-            <div class="mt-3 grid grid-cols-2 gap-2">
-              ${renderSignalCard('Receipts', formatCurrency(model.vouchersSummary.total_receipts || 0), 'Voucher summary', 'emerald')}
-              ${renderSignalCard('Payments', formatCurrency(model.vouchersSummary.total_payments || 0), 'Voucher summary', 'rose')}
-              ${renderSignalCard('Recent Vouchers', formatCompactNumber(model.vouchersSummary.recent_transactions_count || 0), 'Last 30 days', 'sky')}
-              ${renderSignalCard('Recent Journals', formatCompactNumber(model.journalSummary.recent_journal_entries_count || 0), 'Last 30 days', 'amber')}
-            </div>
-          </section>
+        <!-- COL 2: Voucher Pulse + Quick Actions -->
+        <div class="bg-white space-y-px">
 
-          <section class="rounded-[20px] border border-slate-200 bg-white/90 p-4 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.4)] backdrop-blur">
-            <div class="mb-2.5 flex items-start justify-between gap-3">
+          <!-- Voucher Pulse -->
+          <div class="bg-white p-4">
+            <div class="flex items-center justify-between mb-3">
               <div>
-                <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Account Types</p>
-                <h2 class="mt-0.5 text-sm font-bold text-slate-900">Highest impact groups</h2>
+                <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Voucher Pulse</p>
+                <h2 class="text-xs font-bold text-slate-800 mt-0.5">Transaction signals</h2>
               </div>
-              <a href="/ledger/trial-balance" data-navigo class="text-xs font-semibold text-sky-700 hover:text-sky-900">Trial balance</a>
+              <div class="rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1 text-right">
+                <div class="text-[9px] text-slate-400 uppercase tracking-wide">Net</div>
+                <div class="text-xs font-black text-slate-900 font-mono leading-tight">${formatCurrency(model.vouchersSummary.net_position || 0)}</div>
+              </div>
             </div>
-            ${renderAccountTypes(model.typeLeaderboard)}
-          </section>
+            <div class="grid grid-cols-2 gap-1.5">
+              ${renderSignalCard('Receipts', formatCurrency(model.vouchersSummary.total_receipts || 0), 'Total in', 'emerald')}
+              ${renderSignalCard('Payments', formatCurrency(model.vouchersSummary.total_payments || 0), 'Total out', 'rose')}
+              ${renderSignalCard('Vouchers', formatCompactNumber(model.vouchersSummary.recent_transactions_count || 0), 'Last 30 days', 'sky')}
+              ${renderSignalCard('Journals', formatCompactNumber(model.journalSummary.recent_journal_entries_count || 0), 'Last 30 days', 'amber')}
+            </div>
+          </div>
 
-          <section class="rounded-[20px] border border-slate-200 bg-white/90 p-4 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.4)] backdrop-blur">
-            <div class="mb-2.5">
-              <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Quick Actions</p>
-              <h2 class="mt-0.5 text-sm font-bold text-slate-900">Accounting workflow</h2>
+          <!-- Quick Actions -->
+          <div class="bg-white p-4 flex-1">
+            <div class="mb-3">
+              <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Quick Actions</p>
+              <h2 class="text-xs font-bold text-slate-800 mt-0.5">Accounting workflow</h2>
             </div>
-            <div class="grid gap-2 sm:grid-cols-2">
+            <div class="space-y-1">
               ${QUICK_ACTIONS.map(renderQuickAction).join('')}
             </div>
-          </section>
-        </div>
-      </section>
-
-      <section class="rounded-[20px] border border-slate-200 bg-white/90 p-4 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.4)] backdrop-blur">
-        <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400">Ledger Tables</p>
-            <h2 class="mt-0.5 text-sm font-bold text-slate-900">Account heads and account types</h2>
           </div>
-          <a href="/ledger/general-ledger" data-navigo class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-200">Open full ledger</a>
         </div>
-        <div class="mb-3 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-          <button
-            type="button"
-            data-accounts-tab-button="account-heads"
-            class="accounts-table-tab-button rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
-          >
-            Account Heads
-          </button>
-          <button
-            type="button"
-            data-accounts-tab-button="account-types"
-            class="accounts-table-tab-button rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition"
-          >
-            Account Types
-          </button>
+
+        <!-- COL 3: Account Type Leaderboard -->
+        <div class="bg-white p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Type Leaderboard</p>
+              <h2 class="text-xs font-bold text-slate-800 mt-0.5">By net balance</h2>
+            </div>
+            <a href="/ledger/trial-balance" data-navigo class="text-[10px] font-bold text-sky-600 hover:text-sky-700 transition">Trial →</a>
+          </div>
+          ${renderAccountTypes(model.typeLeaderboard)}
         </div>
+      </div>
+
+      <!-- ══ LEDGER TABLES ══ -->
+      <div class="bg-white border-t border-slate-200">
+        <div class="flex items-center justify-between px-4 pt-3 pb-2 flex-wrap gap-2">
+          <div>
+            <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-slate-400">Ledger Tables</p>
+            <h2 class="text-xs font-bold text-slate-800 mt-0.5">Account heads &amp; account types</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              <button type="button" data-accounts-tab-button="account-heads"
+                class="accounts-table-tab-button rounded-md px-3 py-1 text-[11px] font-semibold text-slate-500 transition hover:text-slate-700">
+                Account Heads
+              </button>
+              <button type="button" data-accounts-tab-button="account-types"
+                class="accounts-table-tab-button rounded-md bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition">
+                Account Types
+              </button>
+            </div>
+            <a href="/ledger/general-ledger" data-navigo class="text-[10px] font-bold text-sky-600 hover:text-sky-700 transition">Full Ledger →</a>
+          </div>
+        </div>
+
         <div data-accounts-tab-panel="account-heads" class="hidden">
           ${renderAccountsTable(model.accountRows)}
         </div>
         <div data-accounts-tab-panel="account-types">
           ${renderAccountTypesTable(model.accountTypes)}
         </div>
-      </section>
+      </div>
 
-      <!-- Sub-ledger modal -->
-      <div id="subleder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4
-           bg-slate-900/55 backdrop-blur-[6px]">
-        <div class="relative flex flex-col w-full max-w-2xl max-h-[88vh] rounded-2xl bg-white shadow-[0_32px_80px_-12px_rgba(15,23,42,0.6)] overflow-hidden">
-
-          <!-- Coloured header banner (bg set dynamically) -->
-          <div id="subleder-header" class="flex-shrink-0 px-5 pt-5 pb-4">
+      <!-- ══ SUB-LEDGER MODAL ══ -->
+      <div id="subleder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/80 backdrop-blur-[6px]">
+        <div class="relative flex flex-col w-full max-w-2xl max-h-[88vh] rounded-2xl bg-white border border-slate-200 shadow-[0_32px_80px_-12px_rgba(15,23,42,0.25)] overflow-hidden">
+          <div id="subleder-header" class="flex-shrink-0 px-5 pt-5 pb-4 border-b border-slate-200">
             <div class="flex items-start justify-between gap-3">
               <div class="space-y-1">
-                <div id="subleder-badge" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em]"></div>
-                <h2 id="subleder-title" class="text-xl font-black tracking-tight text-white leading-tight">—</h2>
+                <div id="subleder-badge" class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] bg-slate-100 text-slate-600"></div>
+                <h2 id="subleder-title" class="text-lg font-black tracking-tight text-slate-900 leading-tight">—</h2>
               </div>
               <button id="subleder-close"
-                      class="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-white hover:bg-white/25 transition text-lg leading-none mt-0.5">
+                      class="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-400 transition text-lg leading-none mt-0.5">
                 &times;
               </button>
             </div>
           </div>
-
-          <!-- Summary chips -->
-          <div id="subleder-summary"
-               class="flex-shrink-0 grid grid-cols-3 gap-2 bg-white px-5 py-3 border-b border-slate-100">
+          <div id="subleder-summary" class="flex-shrink-0 grid grid-cols-3 gap-px bg-slate-200 border-b border-slate-200">
           </div>
-
-          <!-- Table -->
           <div class="overflow-y-auto flex-1">
             <table class="w-full text-sm">
               <thead class="sticky top-0 z-10">
                 <tr class="bg-slate-50 border-b border-slate-200">
-                  <th class="px-5 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Account Head</th>
-                  <th class="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Debits</th>
-                  <th class="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Credits</th>
-                  <th class="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Balance</th>
-                  <th class="px-4 py-2.5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Detail</th>
+                  <th class="px-5 py-2.5 text-left text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Account Head</th>
+                  <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Debits</th>
+                  <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Credits</th>
+                  <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Balance</th>
+                  <th class="px-4 py-2.5 text-center text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Detail</th>
                 </tr>
               </thead>
-              <tbody id="subleder-body" class="divide-y divide-slate-100 bg-white"></tbody>
+              <tbody id="subleder-body" class="divide-y divide-slate-200 bg-white"></tbody>
             </table>
           </div>
-
-          <!-- Footer totals bar -->
-          <div id="subleder-footer"
-               class="flex-shrink-0 rounded-b-2xl bg-slate-900 px-5 py-3">
-          </div>
-
+          <div id="subleder-footer" class="flex-shrink-0 rounded-b-2xl bg-slate-50 border-t border-slate-200 px-5 py-3"></div>
         </div>
       </div>
     </section>
   `;
 }
 
-function renderStatCard(stat) {
+function renderStatCard(stat, i) {
+  const leftColors = [
+    'border-sky-500', 'border-emerald-500', 'border-rose-500',
+    'border-violet-500', 'border-teal-500', 'border-amber-500',
+  ];
+  const valColors = [
+    'text-sky-300', 'text-emerald-300', 'text-rose-300',
+    'text-violet-300', 'text-teal-300', 'text-amber-300',
+  ];
+  const border = leftColors[i % leftColors.length];
+  const valColor = valColors[i % valColors.length];
   return `
-    <article class="overflow-hidden rounded-[18px] border border-white/70 bg-white/90 shadow-[0_10px_28px_-20px_rgba(15,23,42,0.5)] backdrop-blur">
-      <div class="h-1 bg-gradient-to-r ${stat.tone}"></div>
-      <div class="p-3">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">${escapeHtml(stat.label)}</p>
-        <div class="mt-1 text-base font-black tracking-tight text-slate-900">${escapeHtml(stat.value)}</div>
-        <div class="mt-0.5 text-[10px] font-semibold text-slate-400">${escapeHtml(stat.meta)}</div>
-      </div>
-    </article>
+    <div class="flex-1 min-w-[140px] bg-white border-l-2 ${border} px-3 py-2.5">
+      <p class="text-[9px] font-bold uppercase tracking-[0.28em] text-slate-400">${escapeHtml(stat.label)}</p>
+      <div class="mt-1 text-sm font-black tracking-tight font-mono ${valColor} leading-tight">${escapeHtml(stat.value)}</div>
+      <div class="mt-0.5 text-[9px] font-semibold text-slate-400 truncate">${escapeHtml(stat.meta)}</div>
+    </div>
   `;
 }
 
 function renderSignalCard(title, value, subtitle, tone) {
   const toneMap = {
-    emerald: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100',
-    rose: 'border-rose-400/30 bg-rose-500/10 text-rose-100',
-    sky: 'border-sky-400/30 bg-sky-500/10 text-sky-100',
-    amber: 'border-amber-400/30 bg-amber-500/10 text-amber-100',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700 val-color:text-emerald-200',
+    rose:    'border-rose-200 bg-rose-50 text-rose-700',
+    sky:     'border-sky-200 bg-sky-50 text-sky-700',
+    amber:   'border-amber-200 bg-amber-50 text-amber-700',
   };
-
+  const valColors = { emerald: 'text-emerald-700', rose: 'text-rose-700', sky: 'text-sky-700', amber: 'text-amber-700' };
+  const classes = toneMap[tone] || toneMap.sky;
+  const valClass = valColors[tone] || 'text-slate-900';
   return `
-    <div class="rounded-[22px] border ${toneMap[tone] || toneMap.sky} p-3">
-      <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">${escapeHtml(title)}</div>
-      <div class="mt-2 text-xl font-black tracking-tight text-white">${escapeHtml(value)}</div>
-      <div class="mt-1 text-xs text-slate-300">${escapeHtml(subtitle)}</div>
+    <div class="rounded-xl border ${classes} p-2.5">
+      <div class="text-[9px] font-bold uppercase tracking-[0.25em] opacity-70">${escapeHtml(title)}</div>
+      <div class="mt-1.5 text-sm font-black tracking-tight font-mono ${valClass} leading-tight">${escapeHtml(value)}</div>
+      <div class="mt-0.5 text-[9px] text-slate-400">${escapeHtml(subtitle)}</div>
     </div>
   `;
 }
 
 function renderAccountTypes(types) {
   if (!types.length) {
-    return renderInlineEmpty('No account type summaries', 'Account-type analysis will populate as ledger activity grows.');
+    return `<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center">
+      <div class="text-xs font-semibold text-slate-600">No account type summaries</div>
+      <div class="mt-1 text-[10px] text-slate-600">Populate as ledger activity grows.</div>
+    </div>`;
   }
 
   return `
-    <div class="space-y-2">
+    <div class="space-y-1">
       ${types.map((summary) => `
-        <div class="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
-          <div class="flex items-center justify-between gap-3">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2 transition">
+          <div class="flex items-center justify-between gap-2">
             <div class="min-w-0">
-              <div class="truncate text-sm font-semibold text-slate-800">${escapeHtml(summary.account_type)}</div>
-              <div class="mt-1 text-xs text-slate-500">${escapeHtml(formatCompactNumber(summary.account_count))} accounts</div>
+              <div class="truncate text-[11px] font-bold text-slate-700">${escapeHtml(summary.account_type)}</div>
+              <div class="text-[9px] text-slate-400">${escapeHtml(formatCompactNumber(summary.account_count))} accounts</div>
             </div>
-            <div class="text-right">
-              <div class="text-sm font-bold text-slate-900">${escapeHtml(formatCurrency(Math.abs(summary.total_balance)))}</div>
-              <div class="text-[11px] ${summary.total_balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${summary.total_balance >= 0 ? 'Net DR' : 'Net CR'}</div>
+            <div class="text-right shrink-0">
+              <div class="text-xs font-black font-mono ${summary.total_balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${escapeHtml(formatCurrency(Math.abs(summary.total_balance)))}</div>
+              <div class="text-[9px] font-bold ${summary.total_balance >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${summary.total_balance >= 0 ? 'Net DR' : 'Net CR'}</div>
             </div>
           </div>
         </div>
@@ -524,60 +513,66 @@ function renderAccountTypes(types) {
 }
 
 function renderQuickAction(action) {
+  const borderColors = {
+    'from-indigo-600 to-blue-500':    'border-indigo-200 bg-indigo-50/50 hover:border-indigo-400 text-indigo-600 hover:text-indigo-700',
+    'from-violet-600 to-purple-500':  'border-violet-200 bg-violet-50/50 hover:border-violet-400 text-violet-600 hover:text-violet-700',
+    'from-emerald-600 to-green-500':  'border-emerald-200 bg-emerald-50/50 hover:border-emerald-400 text-emerald-600 hover:text-emerald-700',
+    'from-cyan-600 to-sky-500':       'border-sky-200 bg-sky-50/50 hover:border-sky-400 text-sky-600 hover:text-sky-700',
+    'from-amber-500 to-orange-500':   'border-amber-200 bg-amber-50/50 hover:border-amber-400 text-amber-600 hover:text-amber-700',
+    'from-rose-600 to-pink-500':      'border-rose-200 bg-rose-50/50 hover:border-rose-400 text-rose-600 hover:text-rose-700',
+    'from-violet-600 to-indigo-600':  'border-violet-200 bg-violet-50/50 hover:border-violet-400 text-violet-600 hover:text-violet-700',
+  };
+  const classes = borderColors[action.tone] || 'border-slate-200 hover:border-slate-400 text-slate-500 hover:text-slate-700';
   return `
-    <a href="${action.href}" data-navigo class="group overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-[0_16px_35px_-30px_rgba(15,23,42,0.5)] transition hover:-translate-y-0.5 hover:border-slate-300">
-      <div class="bg-gradient-to-br ${action.tone} p-4 text-white">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="text-sm font-bold">${escapeHtml(action.title)}</div>
-            <div class="mt-1 text-xs text-white/80">${escapeHtml(action.subtitle)}</div>
-          </div>
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="h-6 w-6 transition group-hover:scale-110">
-            ${action.icon}
-          </svg>
-        </div>
+    <a href="${action.href}" data-navigo
+       class="group flex items-center gap-3 rounded-xl border ${classes} bg-white hover:bg-slate-50 px-3 py-2 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4 shrink-0 opacity-70">
+        ${action.icon}
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-[11px] font-bold truncate">${escapeHtml(action.title)}</div>
+        <div class="text-[9px] text-slate-400 truncate">${escapeHtml(action.subtitle)}</div>
       </div>
-      <div class="flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700">
-        <span>Open</span>
-        <span class="text-slate-400 transition group-hover:text-slate-700">&rarr;</span>
-      </div>
+      <span class="text-slate-400 group-hover:text-slate-600 transition text-xs shrink-0">→</span>
     </a>
   `;
 }
 
 function renderAccountsTable(accounts) {
   if (!accounts.length) {
-    return renderInlineEmpty('No ledger accounts found', 'Create journal entries or vouchers to populate the dashboard.');
+    return `<div class="px-4 py-8 text-center text-xs font-semibold text-slate-600">No ledger accounts found. Create journal entries or vouchers to populate.</div>`;
   }
 
   return `
-    <div class="overflow-x-auto rounded-[22px] border border-slate-100">
-      <table class="min-w-full divide-y divide-slate-200">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Account Head</th>
-            <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Type</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Debit</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Credit</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Balance</th>
-            <th class="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Action</th>
+    <div class="overflow-x-auto">
+      <table class="min-w-full">
+        <thead>
+          <tr class="border-b border-slate-200">
+            <th class="px-4 py-2.5 text-left text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Account Head</th>
+            <th class="px-4 py-2.5 text-left text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Type</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Debit</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Credit</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Balance</th>
+            <th class="px-4 py-2.5 text-center text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Action</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100 bg-white">
+        <tbody class="divide-y divide-slate-200">
           ${accounts.map((account) => `
-            <tr class="hover:bg-slate-50">
-              <td class="px-4 py-3 text-sm font-semibold text-slate-800">${escapeHtml(account.account_head)}</td>
-              <td class="px-4 py-3 text-sm text-slate-600">
-                <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">${escapeHtml(account.account_type)}</span>
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-4 py-2.5 text-xs font-semibold text-slate-800">${escapeHtml(account.account_head)}</td>
+              <td class="px-4 py-2.5">
+                <span class="inline-flex rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">${escapeHtml(account.account_type)}</span>
               </td>
-              <td class="px-4 py-3 text-right text-sm font-semibold text-emerald-600">${escapeHtml(formatCurrency(account.total_debit))}</td>
-              <td class="px-4 py-3 text-right text-sm font-semibold text-rose-600">${escapeHtml(formatCurrency(account.total_credit))}</td>
-              <td class="px-4 py-3 text-right text-sm font-bold ${account.balance >= 0 ? 'text-emerald-700' : 'text-rose-700'}">
-                ${escapeHtml(formatCurrency(account.absoluteBalance))} ${escapeHtml(account.balanceLabel)}
+              <td class="px-4 py-2.5 text-right text-xs font-semibold text-emerald-600 font-mono">${escapeHtml(formatCurrency(account.total_debit))}</td>
+              <td class="px-4 py-2.5 text-right text-xs font-semibold text-rose-600 font-mono">${escapeHtml(formatCurrency(account.total_credit))}</td>
+              <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                <span class="text-xs font-black font-mono ${account.balance >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${escapeHtml(formatCurrency(account.absoluteBalance))}</span>
+                <span class="ml-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase ${account.balance >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">${escapeHtml(account.balanceLabel)}</span>
               </td>
-              <td class="px-4 py-3 text-center">
-                <a href="/ledger/account/${encodeURIComponent(account.account_head)}" data-navigo class="inline-flex rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800">
-                  View
+              <td class="px-4 py-2.5 text-center">
+                <a href="/ledger/account/${encodeURIComponent(account.account_head)}" data-navigo
+                   class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 hover:border-sky-500 hover:text-sky-600 transition">
+                  View →
                 </a>
               </td>
             </tr>
@@ -590,35 +585,36 @@ function renderAccountsTable(accounts) {
 
 function renderAccountTypesTable(types) {
   if (!types.length) {
-    return renderInlineEmpty('No account type summaries', 'Create journal entries or vouchers to populate the account-type table.');
+    return `<div class="px-4 py-8 text-center text-xs font-semibold text-slate-600">No account type summaries. Create journal entries or vouchers to populate.</div>`;
   }
 
   return `
-    <div class="overflow-x-auto rounded-[22px] border border-slate-100">
-      <table class="min-w-full divide-y divide-slate-200">
-        <thead class="bg-slate-50">
-          <tr>
-            <th class="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Account Type</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Accounts</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Debit</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Credit</th>
-            <th class="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Net Balance</th>
-            <th class="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Sub-Ledger</th>
+    <div class="overflow-x-auto">
+      <table class="min-w-full">
+        <thead>
+          <tr class="border-b border-slate-200">
+            <th class="px-4 py-2.5 text-left text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Account Type</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Accounts</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Total Debit</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Total Credit</th>
+            <th class="px-4 py-2.5 text-right text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Net Balance</th>
+            <th class="px-4 py-2.5 text-center text-[9px] font-bold uppercase tracking-[0.25em] text-slate-400">Sub-Ledger</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100 bg-white">
+        <tbody class="divide-y divide-slate-200">
           ${types.map((summary) => `
-            <tr class="hover:bg-slate-50 cursor-pointer open-subleder-btn" data-type="${escapeHtml(summary.account_type)}">
-              <td class="px-4 py-2.5 text-sm font-semibold text-slate-800">${escapeHtml(summary.account_type)}</td>
-              <td class="px-4 py-2.5 text-right text-sm font-semibold text-slate-700">${escapeHtml(formatCompactNumber(summary.account_count))}</td>
-              <td class="px-4 py-2.5 text-right text-sm font-semibold text-emerald-600">${escapeHtml(formatCurrency(summary.total_debit))}</td>
-              <td class="px-4 py-2.5 text-right text-sm font-semibold text-rose-600">${escapeHtml(formatCurrency(summary.total_credit))}</td>
-              <td class="px-4 py-2.5 text-right text-sm font-bold ${summary.total_balance >= 0 ? 'text-emerald-700' : 'text-rose-700'}">
-                ${escapeHtml(formatCurrency(Math.abs(summary.total_balance)))} ${summary.total_balance >= 0 ? 'DR' : 'CR'}
+            <tr class="hover:bg-slate-50 transition-colors cursor-pointer open-subleder-btn" data-type="${escapeHtml(summary.account_type)}">
+              <td class="px-4 py-2.5 text-xs font-bold text-slate-800">${escapeHtml(summary.account_type)}</td>
+              <td class="px-4 py-2.5 text-right text-xs font-semibold text-slate-500 font-mono">${escapeHtml(formatCompactNumber(summary.account_count))}</td>
+              <td class="px-4 py-2.5 text-right text-xs font-semibold text-emerald-600 font-mono">${escapeHtml(formatCurrency(summary.total_debit))}</td>
+              <td class="px-4 py-2.5 text-right text-xs font-semibold text-rose-600 font-mono">${escapeHtml(formatCurrency(summary.total_credit))}</td>
+              <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                <span class="text-xs font-black font-mono ${summary.total_balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${escapeHtml(formatCurrency(Math.abs(summary.total_balance)))}</span>
+                <span class="ml-1 text-[9px] font-bold ${summary.total_balance >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${summary.total_balance >= 0 ? 'DR' : 'CR'}</span>
               </td>
               <td class="px-4 py-2.5 text-center">
-                <span class="inline-flex rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition">
-                  View →
+                <span class="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-sky-600 hover:border-sky-500 hover:bg-sky-50 transition">
+                  Drill →
                 </span>
               </td>
             </tr>
@@ -696,68 +692,64 @@ function bindSubLedgerModal(model, router) {
 
     /* ── Summary chips ── */
     summaryEl.innerHTML = `
-      <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-center">
-        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Accounts</p>
-        <p class="mt-1 text-2xl font-black text-slate-900">${heads.length}</p>
+      <div class="bg-white px-4 py-3 text-center">
+        <p class="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Accounts</p>
+        <p class="mt-1 text-xl font-black text-slate-900">${heads.length}</p>
       </div>
-      <div class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-500">Total Debits</p>
-        <p class="mt-1 text-base font-black text-emerald-700 truncate">${formatCurrency(totDr)}</p>
-        <p class="text-[10px] text-slate-400 mt-0.5">Credits: ${formatCurrency(totCr)}</p>
+      <div class="bg-emerald-50 px-4 py-3">
+        <p class="text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-600">Total Debits</p>
+        <p class="mt-1 text-sm font-black text-emerald-600 font-mono truncate">${formatCurrency(totDr)}</p>
+        <p class="text-[9px] text-slate-400 mt-0.5">Credits: ${formatCurrency(totCr)}</p>
       </div>
-      <div class="rounded-xl border px-3 py-2 ${netBal >= 0 ? 'border-emerald-100 bg-emerald-50' : 'border-rose-100 bg-rose-50'}">
-        <p class="text-[10px] font-bold uppercase tracking-[0.18em] ${netBal >= 0 ? 'text-emerald-500' : 'text-rose-400'}">Net Balance</p>
-        <p class="mt-1 text-base font-black truncate ${netBal >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${formatCurrency(Math.abs(netBal))}</p>
-        <p class="text-[10px] font-bold mt-0.5 ${netBal >= 0 ? 'text-emerald-500' : 'text-rose-400'}">${netLabel}</p>
+      <div class="bg-white px-4 py-3">
+        <p class="text-[9px] font-bold uppercase tracking-[0.2em] ${netBal >= 0 ? 'text-emerald-500' : 'text-rose-500'}">Net Balance</p>
+        <p class="mt-1 text-sm font-black font-mono truncate ${netBal >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${formatCurrency(Math.abs(netBal))}</p>
+        <p class="text-[9px] mt-0.5 font-bold ${netBal >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${netLabel}</p>
       </div>
     `;
 
     /* ── Table body ── */
     if (!sorted.length) {
       bodyEl.innerHTML = `
-        <tr><td colspan="5" class="px-5 py-12 text-center text-sm font-semibold text-slate-400">No accounts in this type.</td></tr>`;
+        <tr><td colspan="5" class="px-5 py-12 text-center text-sm font-semibold text-slate-500">No accounts in this type.</td></tr>`;
     } else {
       bodyEl.innerHTML = sorted.map((h, i) => {
-        const balClass = h.balance >= 0 ? 'text-emerald-700' : 'text-rose-700';
         const barColor = h.balance >= 0 ? 'bg-emerald-400' : 'bg-rose-400';
         const barPct   = maxAbs > 0 ? Math.round((h.absoluteBalance / maxAbs) * 100) : 0;
-        const rowBg    = i % 2 !== 0 ? 'bg-slate-50/60' : '';
+        const rowBg    = i % 2 !== 0 ? 'bg-slate-50/50' : '';
 
         return `
-          <tr class="hover:bg-blue-50/50 transition-colors ${rowBg}">
-            <td class="px-5 py-3">
+          <tr class="hover:bg-slate-50 transition-colors ${rowBg}">
+            <td class="px-5 py-2.5">
               <div class="flex items-center gap-3">
                 <div class="flex-shrink-0 w-1 rounded-full js-bar-h ${barColor}"
                      data-bar-h="${Math.max(Math.round(barPct * 0.28), 6)}"></div>
                 <div class="min-w-0">
-                  <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(h.account_head)}</p>
-                  <div class="mt-1 h-1 w-24 rounded-full bg-slate-100">
+                  <p class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(h.account_head)}</p>
+                  <div class="mt-1 h-1 w-24 rounded-full bg-slate-200">
                     <div class="h-1 rounded-full ${barColor} transition-all js-bar-w"
                          data-bar-w="${barPct}"></div>
                   </div>
                 </div>
               </div>
             </td>
-            <td class="px-4 py-3 text-right text-sm font-semibold text-emerald-600 whitespace-nowrap">
+            <td class="px-4 py-2.5 text-right text-xs font-semibold text-emerald-600 font-mono whitespace-nowrap">
               ${escapeHtml(formatCurrency(h.total_debit))}
             </td>
-            <td class="px-4 py-3 text-right text-sm font-semibold text-rose-500 whitespace-nowrap">
+            <td class="px-4 py-2.5 text-right text-xs font-semibold text-rose-600 font-mono whitespace-nowrap">
               ${escapeHtml(formatCurrency(h.total_credit))}
             </td>
-            <td class="px-4 py-3 text-right whitespace-nowrap">
-              <span class="text-sm font-black ${balClass}">${escapeHtml(formatCurrency(h.absoluteBalance))}</span>
-              <span class="ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase
+            <td class="px-4 py-2.5 text-right whitespace-nowrap">
+              <span class="text-xs font-black font-mono ${h.balance >= 0 ? 'text-emerald-700' : 'text-rose-700'}">${escapeHtml(formatCurrency(h.absoluteBalance))}</span>
+              <span class="ml-1 rounded px-1 py-0.5 text-[8px] font-bold uppercase
                            ${h.balance >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">
                 ${escapeHtml(h.balanceLabel)}
               </span>
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-4 py-2.5 text-center">
               <a href="/ledger/account/${encodeURIComponent(h.account_head)}" data-navigo
-                 class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100 transition">
-                Detail
-                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
-                </svg>
+                 class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-sky-600 hover:border-sky-500 hover:bg-sky-50 transition">
+                Detail →
               </a>
             </td>
           </tr>`;
@@ -782,20 +774,20 @@ function bindSubLedgerModal(model, router) {
         <div class="flex items-center gap-3">
           <div class="text-right">
             <p class="text-[10px] text-slate-500 uppercase tracking-wide">Debits</p>
-            <p class="text-sm font-black text-emerald-400">${formatCurrency(totDr)}</p>
+            <p class="text-sm font-black text-emerald-600">${formatCurrency(totDr)}</p>
           </div>
           <div class="w-px h-8 bg-white/10 self-center"></div>
           <div class="text-right">
             <p class="text-[10px] text-slate-500 uppercase tracking-wide">Credits</p>
-            <p class="text-sm font-black text-rose-400">${formatCurrency(totCr)}</p>
+            <p class="text-sm font-black text-rose-600">${formatCurrency(totCr)}</p>
           </div>
           <div class="w-px h-8 bg-white/10 self-center"></div>
           <div class="rounded-xl px-3 py-1.5 text-right
-                      ${netBal >= 0 ? 'bg-emerald-500/15' : 'bg-rose-500/15'}">
-            <p class="text-[10px] uppercase tracking-wide ${netBal >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+                      ${netBal >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}">
+            <p class="text-[10px] uppercase tracking-wide ${netBal >= 0 ? 'text-emerald-600' : 'text-rose-600'}">
               Net ${netLabel}
             </p>
-            <p class="text-sm font-black ${netBal >= 0 ? 'text-emerald-300' : 'text-rose-300'}">
+            <p class="text-sm font-black ${netBal >= 0 ? 'text-emerald-700' : 'text-rose-700'}">
               ${formatCurrency(Math.abs(netBal))}
             </p>
           </div>
@@ -831,27 +823,29 @@ function bindSubLedgerModal(model, router) {
 
 function renderLoadingState() {
   return `
-    <div class="space-y-4">
-      <div class="rounded-[26px] border border-slate-200 bg-white/80 p-5 shadow-sm">
-        <div class="h-5 w-40 animate-pulse rounded-full bg-slate-200"></div>
-        <div class="mt-3 h-8 w-3/4 animate-pulse rounded-full bg-slate-200"></div>
-        <div class="mt-3 h-4 w-2/3 animate-pulse rounded-full bg-slate-100"></div>
+    <div class="space-y-px">
+      <div class="bg-white border-b border-slate-200 px-4 py-3">
+        <div class="h-4 w-48 animate-pulse rounded bg-slate-200"></div>
+        <div class="mt-2 h-6 w-72 animate-pulse rounded bg-slate-100"></div>
       </div>
-      <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div class="flex gap-px overflow-hidden">
         ${Array.from({ length: 6 }).map(() => `
-          <div class="rounded-[24px] border border-slate-200 bg-white/80 p-4 shadow-sm">
-            <div class="h-3 w-20 animate-pulse rounded-full bg-slate-200"></div>
-            <div class="mt-4 h-8 w-28 animate-pulse rounded-full bg-slate-300"></div>
-            <div class="mt-3 h-3 w-24 animate-pulse rounded-full bg-slate-100"></div>
+          <div class="flex-1 bg-white border-b border-slate-200 p-3">
+            <div class="h-2.5 w-16 animate-pulse rounded bg-slate-200"></div>
+            <div class="mt-2 h-5 w-20 animate-pulse rounded bg-slate-100"></div>
+            <div class="mt-1.5 h-2 w-14 animate-pulse rounded bg-slate-200/50"></div>
           </div>
         `).join('')}
       </div>
-      <div class="grid gap-4 xl:grid-cols-[1.25fr_0.95fr]">
-        <div class="rounded-[26px] border border-slate-200 bg-white/80 p-4 shadow-sm">
-          <div class="h-[280px] animate-pulse rounded-[22px] bg-slate-100"></div>
+      <div class="grid gap-px xl:grid-cols-[2fr_1.4fr_1.2fr]">
+        <div class="bg-white p-4">
+          <div class="h-[260px] animate-pulse rounded-xl bg-slate-100"></div>
         </div>
-        <div class="rounded-[26px] border border-slate-200 bg-white/80 p-4 shadow-sm">
-          <div class="h-[280px] animate-pulse rounded-[22px] bg-slate-100"></div>
+        <div class="bg-white p-4">
+          <div class="h-[260px] animate-pulse rounded-xl bg-slate-100"></div>
+        </div>
+        <div class="bg-white p-4">
+          <div class="h-[260px] animate-pulse rounded-xl bg-slate-100"></div>
         </div>
       </div>
     </div>
@@ -860,17 +854,26 @@ function renderLoadingState() {
 
 function renderErrorState(message) {
   return `
-    <div class="rounded-[26px] border border-rose-200 bg-white/90 p-6 shadow-sm">
-      <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-rose-500">Accounts Dashboard</p>
-      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-900">Unable to load ledger data</h2>
-      <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">${escapeHtml(message || 'Unexpected dashboard failure.')}</p>
-      <div class="mt-5 flex flex-wrap gap-3">
-        <button id="accounts-dashboard-refresh" type="button" class="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800">
-          Retry
-        </button>
-        <a href="/ledger/general-ledger" data-navigo class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-          Open General Ledger
-        </a>
+    <div class="bg-white border-b border-rose-200 px-4 py-6">
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 border border-rose-200">
+          <svg class="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-rose-500">Dashboard Error</p>
+          <h2 class="mt-1 text-sm font-bold text-slate-900">Unable to load ledger data</h2>
+          <p class="mt-1 text-xs text-slate-500">${escapeHtml(message || 'Unexpected dashboard failure.')}</p>
+          <div class="mt-3 flex gap-2">
+            <button id="accounts-dashboard-refresh" type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 px-3 py-1.5 text-xs font-bold text-white transition">
+              Retry
+            </button>
+            <a href="/ledger/general-ledger" data-navigo class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 hover:border-slate-400 px-3 py-1.5 text-xs font-semibold text-slate-600 transition">
+              Open General Ledger
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -878,9 +881,9 @@ function renderErrorState(message) {
 
 function renderInlineEmpty(title, description) {
   return `
-    <div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
-      <div class="text-sm font-semibold text-slate-700">${escapeHtml(title)}</div>
-      <div class="mt-1 text-xs text-slate-500">${escapeHtml(description)}</div>
+    <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+      <div class="text-xs font-semibold text-slate-600">${escapeHtml(title)}</div>
+      <div class="mt-1 text-[10px] text-slate-500">${escapeHtml(description)}</div>
     </div>
   `;
 }
@@ -904,14 +907,16 @@ async function renderDashboardCharts(model) {
         {
           label: 'Debit',
           data: types.map((entry) => entry.total_debit),
-          backgroundColor: '#10b981',
-          borderRadius: 8,
+          backgroundColor: 'rgba(16,185,129,0.75)',
+          borderRadius: 5,
+          borderSkipped: false,
         },
         {
           label: 'Credit',
           data: types.map((entry) => entry.total_credit),
-          backgroundColor: '#f43f5e',
-          borderRadius: 8,
+          backgroundColor: 'rgba(244,63,94,0.75)',
+          borderRadius: 5,
+          borderSkipped: false,
         },
       ],
     },
@@ -919,11 +924,14 @@ async function renderDashboardCharts(model) {
       maintainAspectRatio: false,
       scales: {
         y: {
-          ticks: { callback: (value) => formatAxisCurrency(value) },
-          grid: { color: 'rgba(148,163,184,0.12)' },
+          ticks: { callback: (value) => formatAxisCurrency(value), color: '#475569', font: { size: 10 } },
+          grid: { color: 'rgba(15,23,42,0.07)' },
+          border: { color: 'transparent' },
         },
         x: {
+          ticks: { color: '#475569', font: { size: 10 } },
           grid: { display: false },
+          border: { display: false },
         },
       },
     }),
@@ -944,8 +952,8 @@ async function renderDashboardCharts(model) {
       datasets: [{
         label: 'Absolute Balance',
         data: chartAccounts.map((entry) => entry.absoluteBalance),
-        backgroundColor: chartAccounts.map((entry) => entry.balance >= 0 ? '#2563eb' : '#db2777'),
-        borderRadius: 10,
+        backgroundColor: chartAccounts.map((entry) => entry.balance >= 0 ? 'rgba(37,99,235,0.8)' : 'rgba(219,39,119,0.8)'),
+        borderRadius: 6,
         borderSkipped: false,
       }],
     },
@@ -957,11 +965,14 @@ async function renderDashboardCharts(model) {
       },
       scales: {
         x: {
-          ticks: { callback: (value) => formatAxisCurrency(value) },
-          grid: { color: 'rgba(148,163,184,0.12)' },
+          ticks: { callback: (value) => formatAxisCurrency(value), color: '#475569', font: { size: 10 } },
+          grid: { color: 'rgba(15,23,42,0.07)' },
+          border: { color: 'transparent' },
         },
         y: {
+          ticks: { color: '#475569', font: { size: 10 } },
           grid: { display: false },
+          border: { display: false },
         },
       },
     }),
@@ -989,18 +1000,20 @@ function buildChartOptions(overrides = {}) {
     plugins: {
       legend: {
         labels: {
-          color: '#475569',
+          color: '#64748b',
           usePointStyle: true,
           pointStyle: 'circle',
-          padding: 18,
-          font: { size: 11, weight: '600' },
+          padding: 14,
+          font: { size: 10, weight: '600' },
         },
       },
       tooltip: {
-        backgroundColor: 'rgba(15, 23, 42, 0.92)',
-        titleColor: '#f8fafc',
-        bodyColor: '#e2e8f0',
-        padding: 12,
+        backgroundColor: 'rgba(2,6,23,0.96)',
+        titleColor: '#f1f5f9',
+        bodyColor: '#94a3b8',
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 1,
+        padding: 10,
         displayColors: true,
       },
     },
