@@ -339,6 +339,10 @@ function renderTable(entries) {
                class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition">
               View
             </a>
+            <a href="/ledger/journal-entries/${id}/edit" data-navigo
+               class="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-bold text-amber-600 hover:bg-amber-50 hover:border-amber-300 transition">
+              Edit
+            </a>
             <button class="delete-entry inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition"
                     data-id="${id}" data-no="${esc(entry.voucher_no || String(id))}">
               Delete

@@ -29,8 +29,9 @@ export const getLedgerAccounts = async (req, res) => {
       if (end_date)   matchStage.transaction_date.$lte = end_date;
     }
 
-    const accounts = await Ledger.aggregate([
-      { $match: matchStage },
+    // Get ledger accounts (exclude opening balances)
+    const ledgerAccounts = await Ledger.aggregate([
+      { $match: { ...matchStage, ref_type: { $ne: 'OPENING_BALANCE' } } },
       {
         $group: {
           _id: {
@@ -78,6 +79,72 @@ export const getLedgerAccounts = async (req, res) => {
       },
       { $sort: { account_head: 1 } },
     ]);
+
+    // Get opening balances (if start_date is provided)
+    const openingBalanceMatch = { firm_id: fid, ref_type: 'OPENING_BALANCE' };
+    if (start_date) {
+      openingBalanceMatch.transaction_date = { $lt: start_date };
+    }
+
+    const openingBalances = await Ledger.aggregate([
+      { $match: openingBalanceMatch },
+      {
+        $group: {
+          _id: {
+            account_head: '$account_head',
+            account_type: '$account_type',
+          },
+          total_debit:  { $sum: '$debit_amount'  },
+          total_credit: { $sum: '$credit_amount' },
+        },
+      },
+      {
+        $project: {
+          _id:          0,
+          account_head: '$_id.account_head',
+          account_type: '$_id.account_type',
+          total_debit:  1,
+          total_credit: 1,
+          balance:      { $subtract: ['$total_debit', '$total_credit'] },
+        },
+      },
+    ]);
+
+    // Merge opening balances with ledger accounts
+    const accountMap = new Map();
+    
+    // Add opening balances first
+    openingBalances.forEach(ob => {
+      const key = `${ob.account_head}|${ob.account_type}`;
+      accountMap.set(key, {
+        account_head: ob.account_head,
+        account_type: ob.account_type,
+        total_debit: ob.total_debit,
+        total_credit: ob.total_credit,
+        balance: ob.balance,
+      });
+    });
+
+    // Add/merge ledger accounts
+    ledgerAccounts.forEach(la => {
+      const key = `${la.account_head}|${la.account_type}`;
+      if (accountMap.has(key)) {
+        const existing = accountMap.get(key);
+        accountMap.set(key, {
+          account_head: la.account_head,
+          account_type: la.account_type,
+          total_debit: existing.total_debit + la.total_debit,
+          total_credit: existing.total_credit + la.total_credit,
+          balance: (existing.total_debit + la.total_debit) - (existing.total_credit + la.total_credit),
+        });
+      } else {
+        accountMap.set(key, la);
+      }
+    });
+
+    const accounts = Array.from(accountMap.values()).sort((a, b) => 
+      a.account_head.localeCompare(b.account_head)
+    );
 
     res.json(accounts);
   } catch (err) {

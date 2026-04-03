@@ -7,6 +7,33 @@ let chartScriptPromise = null;
 
 const QUICK_ACTIONS = [
   {
+    href: '/ledger/opening-balances',
+    title: 'Opening Balances',
+    subtitle: 'Set up initial account balances',
+    tone: 'from-indigo-600 to-blue-500',
+    icon: `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    `,
+  },
+  {
+    href: '/ledger/closing-balances',
+    title: 'Closing Balances',
+    subtitle: 'Period-end balance summaries',
+    tone: 'from-teal-600 to-cyan-500',
+    icon: `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    `,
+  },
+  {
+    href: '/ledger/manual-ledger',
+    title: 'Manual Ledger',
+    subtitle: 'Create arbitrary ledger entries',
+    tone: 'from-cyan-600 to-teal-500',
+    icon: `
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    `,
+  },
+  {
     href: '/ledger/journal-entries',
     title: 'Journal Entries',
     subtitle: 'Manual accounting adjustments',

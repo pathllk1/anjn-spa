@@ -27,9 +27,14 @@ const loadTrialBalance = () => import('./pages/ledger/trial-balance.js').then(m 
 const loadGeneralLedger = () => import('./pages/ledger/general-ledger.js').then(m => m.renderGeneralLedger);
 const loadAccountDetails = () => import('./pages/ledger/account-details.js').then(m => m.renderAccountDetails);
 const loadNewJournalEntry = () => import('./pages/ledger/new-journal-entry.js').then(m => m.renderNewJournalEntry);
+const loadEditJournalEntry = () => import('./pages/ledger/edit-journal-entry.js').then(m => m.renderEditJournalEntry);
 const loadNewVoucher = () => import('./pages/ledger/new-voucher.js').then(m => m.renderNewVoucher);
 const loadBankAccounts = () => import('./pages/ledger/bank-accounts.js').then(m => m.renderBankAccounts);
 const loadProfitLoss = () => import('./pages/ledger/profit-loss.js').then(m => m.renderProfitLoss);
+const loadOpeningBalances = () => import('./pages/ledger/opening-balances.js').then(m => m.renderOpeningBalances);
+const loadClosingBalances = () => import('./pages/ledger/closing-balances.js').then(m => m.renderClosingBalances);
+const loadManualLedger = () => import('./pages/ledger/manual-ledger.js').then(m => m.renderManualLedger);
+const loadNewManualLedger = () => import('./pages/ledger/new-manual-ledger.js').then(m => m.renderNewManualLedger);
 
 // ─────────────────────────────────────────────
 //  Loading spinner
@@ -134,9 +139,14 @@ router
   // Ledger
   .on('/ledger/journal-entries',    navigate(loadJournalEntries))
   .on('/ledger/journal-entries/new', navigate(loadNewJournalEntry))
+  .on('/ledger/journal-entries/:id/edit', navigate(loadEditJournalEntry))
   .on('/ledger/vouchers',           navigate(loadVouchers))
   .on('/ledger/vouchers/new',       navigate(loadNewVoucher))
   .on('/ledger/bank-accounts',      navigate(loadBankAccounts))
+  .on('/ledger/opening-balances',   navigate(loadOpeningBalances))
+  .on('/ledger/closing-balances',   navigate(loadClosingBalances))
+  .on('/ledger/manual-ledger',      navigate(loadManualLedger))
+  .on('/ledger/manual-ledger/new',  navigate(loadNewManualLedger))
   .on('/ledger/profit-loss',        navigate(loadProfitLoss))
   .on('/ledger/trial-balance',      navigate(loadTrialBalance))
   .on('/ledger/general-ledger',     navigate(loadGeneralLedger))

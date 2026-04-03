@@ -13,6 +13,7 @@ export { default as Party }                from './Party.model.js';
 export { default as Bill }                 from './Bill.model.js';
 export { default as StockReg }             from './StockReg.model.js';
 export { default as Ledger }               from './Ledger.model.js';
+export { default as OpeningBalance }       from './OpeningBalance.model.js';
 export { default as BankAccount }          from './BankAccount.model.js';
 export { default as BillSequence }         from './BillSequence.model.js';
 export { default as VoucherSequence }      from './VoucherSequence.model.js';

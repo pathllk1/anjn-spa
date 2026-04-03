@@ -4,8 +4,38 @@ import * as ledgerController from '../../controllers/mongo/ledger/ledgerControll
 import * as journalEntryController from '../../controllers/mongo/ledger/journalEntryController.js';
 import * as voucherController from '../../controllers/mongo/ledger/voucherController.js';
 import * as bankAccountController from '../../controllers/mongo/ledger/bankAccountController.js';
+import * as manualLedgerController from '../../controllers/mongo/ledger/manualLedgerController.js';
+import * as openingBalanceController from '../../controllers/mongo/ledger/openingBalanceController.js';
+import * as closingBalanceController from '../../controllers/mongo/ledger/closingBalanceController.js';
 
 const router = express.Router();
+
+// ── Manual Ledger Entries ─────────────────────────────────────────────────
+router.post  ('/manual-ledger',             authMiddleware, manualLedgerController.createManualLedgerEntry);
+router.get   ('/manual-ledger',             authMiddleware, manualLedgerController.getManualLedgerEntries);
+router.get   ('/manual-ledger/:voucherId',  authMiddleware, manualLedgerController.getManualLedgerEntryById);
+router.put   ('/manual-ledger/:voucherId',  authMiddleware, manualLedgerController.updateManualLedgerEntry);
+router.patch ('/manual-ledger/:voucherId',  authMiddleware, manualLedgerController.updateManualLedgerEntry);
+router.delete('/manual-ledger/:voucherId',  authMiddleware, manualLedgerController.deleteManualLedgerEntry);
+router.post  ('/manual-ledger/:voucherId/lock', authMiddleware, manualLedgerController.lockManualLedgerEntry);
+
+// ── Opening Balances ──────────────────────────────────────────────────────
+router.post  ('/opening-balances',             authMiddleware, openingBalanceController.createOpeningBalance);
+router.get   ('/opening-balances',             authMiddleware, openingBalanceController.getOpeningBalances);
+router.get   ('/opening-balances/:id',         authMiddleware, openingBalanceController.getOpeningBalanceById);
+router.put   ('/opening-balances/:id',         authMiddleware, openingBalanceController.updateOpeningBalance);
+router.patch ('/opening-balances/:id',         authMiddleware, openingBalanceController.updateOpeningBalance);
+router.delete('/opening-balances/:id',         authMiddleware, openingBalanceController.deleteOpeningBalance);
+router.post  ('/opening-balances/lock',        authMiddleware, openingBalanceController.lockOpeningBalances);
+router.get   ('/opening-balances-summary',     authMiddleware, openingBalanceController.getOpeningBalanceSummary);
+
+// ── Closing Balances ──────────────────────────────────────────────────────
+router.post  ('/closing-balances',             authMiddleware, closingBalanceController.createClosingBalance);
+router.post  ('/closing-balances/bulk',        authMiddleware, closingBalanceController.bulkCreateClosingBalances);
+router.get   ('/closing-balances',             authMiddleware, closingBalanceController.getClosingBalances);
+router.get   ('/closing-balances/:id',         authMiddleware, closingBalanceController.getClosingBalanceById);
+router.delete('/closing-balances/:id',         authMiddleware, closingBalanceController.deleteClosingBalance);
+router.get   ('/closing-balances-summary',     authMiddleware, closingBalanceController.getClosingBalanceSummary);
 
 // ── Ledger accounts ───────────────────────────────────────────────────────────
 router.get('/accounts',      authMiddleware, ledgerController.getLedgerAccounts);

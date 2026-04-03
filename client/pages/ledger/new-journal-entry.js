@@ -41,16 +41,24 @@ function guessAccountType(name) {
 }
 
 const ACCOUNT_TYPES = [
-  { value: 'INCOME',    label: 'Income'              },
-  { value: 'EXPENSE',   label: 'Expense'             },
-  { value: 'COGS',      label: 'Cost of Goods (COGS)'},
-  { value: 'GENERAL',   label: 'General'             },
-  { value: 'ASSET',     label: 'Asset'               },
-  { value: 'LIABILITY', label: 'Liability'           },
-  { value: 'CASH',      label: 'Cash'                },
-  { value: 'BANK',      label: 'Bank'                },
-  { value: 'DEBTOR',    label: 'Debtor'              },
-  { value: 'CREDITOR',  label: 'Creditor'            },
+  { value: 'INCOME',                        label: 'Income'                        },
+  { value: 'EXPENSE',                       label: 'Expense'                       },
+  { value: 'COGS',                          label: 'Cost of Goods (COGS)'          },
+  { value: 'GENERAL',                       label: 'General'                       },
+  { value: 'ASSET',                         label: 'Asset'                         },
+  { value: 'LIABILITY',                     label: 'Liability'                     },
+  { value: 'CASH',                          label: 'Cash'                          },
+  { value: 'BANK',                          label: 'Bank'                          },
+  { value: 'DEBTOR',                        label: 'Debtor'                        },
+  { value: 'CREDITOR',                      label: 'Creditor'                      },
+  { value: 'CAPITAL',                       label: 'Capital'                       },
+  { value: 'RETAINED_EARNINGS',             label: 'Retained Earnings'             },
+  { value: 'LOAN',                          label: 'Loan'                          },
+  { value: 'PREPAID_EXPENSE',               label: 'Prepaid Expense'               },
+  { value: 'ACCUMULATED_DEPRECIATION',      label: 'Accumulated Depreciation'      },
+  { value: 'ALLOWANCE_FOR_DOUBTFUL_DEBTS',  label: 'Allowance for Doubtful Debts'  },
+  { value: 'DISCOUNT_RECEIVED',             label: 'Discount Received'             },
+  { value: 'DISCOUNT_GIVEN',                label: 'Discount Given'                },
 ];
 
 /* ── Main render ─────────────────────────────────────────────────── */
