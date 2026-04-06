@@ -68,14 +68,27 @@ export function openOtherChargesModal(state, callbacks) {
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wide">Type</label>
-                        <select id="charge-type"
-                                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 outline-none bg-white">
-                            <option value="freight">Freight</option>
-                            <option value="packing">Packing</option>
-                            <option value="insurance">Insurance</option>
-                            <option value="handling">Handling</option>
-                            <option value="other">Other</option>
-                        </select>
+                        <div class="relative">
+                            <input type="text" id="charge-type" autocomplete="off"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:border-blue-500 outline-none bg-white"
+                                   placeholder="Select or type custom type"
+                                   list="charge-type-list">
+                            <datalist id="charge-type-list">
+                                <option value="Freight">
+                                <option value="Packing">
+                                <option value="Insurance">
+                                <option value="Handling">
+                                <option value="Labour">
+                                <option value="Commission">
+                                <option value="Discount">
+                                <option value="Other">
+                            </datalist>
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -194,7 +207,7 @@ export function openOtherChargesModal(state, callbacks) {
         suggestionsContainer.querySelectorAll('.charge-suggestion-item').forEach(item => {
             item.addEventListener('click', function () {
                 document.getElementById('charge-name').value   = this.dataset.name    || '';
-                document.getElementById('charge-type').value   = this.dataset.type    || 'other';
+                document.getElementById('charge-type').value   = this.dataset.type    || 'Other';
                 document.getElementById('charge-hsn').value    = this.dataset.hsnsac  || '';
                 document.getElementById('charge-gst').value    = this.dataset.gstrate || '0';
                 suggestionsContainer.classList.add('hidden');
@@ -243,8 +256,7 @@ export function openOtherChargesModal(state, callbacks) {
         document.getElementById('charge-name').value   = '';
         document.getElementById('charge-hsn').value    = '';
         document.getElementById('charge-amount').value = '';
-        // FIX: setting .value = '' on a <select> does NOT reset it.
-        // Use selectedIndex = 0 to reliably go back to the first option (0%).
+        document.getElementById('charge-type').value   = '';
         document.getElementById('charge-gst').selectedIndex = 0;
 
         refreshList();
