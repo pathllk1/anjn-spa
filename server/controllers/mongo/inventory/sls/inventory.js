@@ -438,8 +438,6 @@ export const createBill = async (req, res) => {
       return res.status(400).json({ error: `Quantity must be > 0 for item: ${item.item}` });
     if (item.rate === undefined || item.rate === null || parseFloat(item.rate) < 0)
       return res.status(400).json({ error: `Rate must be >= 0 for item: ${item.item}` });
-    if (serviceItem && item.costRate !== undefined && item.costRate !== null && parseFloat(item.costRate) < 0)
-      return res.status(400).json({ error: `Service cost must be >= 0 for item: ${item.item}` });
   }
 
   const session = await mongoose.startSession();
@@ -479,7 +477,6 @@ export const createBill = async (req, res) => {
 
     const stockRegDocs      = [];
     const cogsLines         = [];
-    const serviceCostLines  = [];
 
     for (const item of cart) {
       const serviceItem  = isServiceItem(item);
@@ -488,8 +485,6 @@ export const createBill = async (req, res) => {
 
       if (serviceItem) {
         const stockRegId = new mongoose.Types.ObjectId();
-        const serviceCostRate = Math.max(0, parseFloat(item.costRate) || 0);
-        const serviceCogsValue = effectiveQty * serviceCostRate;
         stockRegDocs.push({
           _id: stockRegId, firm_id: firmId, type: 'SALE', bno: billNo,
           bdate: meta.billDate, supply: partyDoc.firm,
@@ -499,15 +494,8 @@ export const createBill = async (req, res) => {
           batch: null, hsn: normalizeOptionalText(item.hsn, 40),
           qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
           rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
-          cost_rate: serviceCostRate, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
+          cost_rate: 0, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
         });
-        if (serviceCogsValue > 0) {
-          serviceCostLines.push({
-            stockRegId,
-            item: normalizeOptionalText(item.item, 200),
-            cogsValue: serviceCogsValue,
-          });
-        }
         continue;
       }
 
@@ -589,7 +577,7 @@ export const createBill = async (req, res) => {
     await postSalesLedger({
       firmId, billId, voucherId, billNo, billDate: meta.billDate,
       party: partyDoc, ntot, cgst, sgst, igst, rof,
-      otherCharges, taxableItemsTotal, cogsLines, serviceCostLines, actorUsername, session,
+      otherCharges, taxableItemsTotal, cogsLines, actorUsername, session,
     });
 
     await session.commitTransaction();
@@ -778,7 +766,6 @@ export const updateBill = async (req, res) => {
     // Step 5: Process new cart — deduct stock atomically
     const stockRegDocs      = [];
     const cogsLines         = [];
-    const serviceCostLines  = [];
 
     for (const item of cart) {
       const serviceItem  = isServiceItem(item);
@@ -787,8 +774,6 @@ export const updateBill = async (req, res) => {
 
       if (serviceItem) {
         const stockRegId = new mongoose.Types.ObjectId();
-        const serviceCostRate = Math.max(0, parseFloat(item.costRate) || 0);
-        const serviceCogsValue = effectiveQty * serviceCostRate;
         stockRegDocs.push({
           _id: stockRegId, firm_id: firmId, type: 'SALE', bno: existingBill.bno,
           bdate: meta.billDate, supply: partyDoc.firm,
@@ -798,15 +783,8 @@ export const updateBill = async (req, res) => {
           batch: null, hsn: normalizeOptionalText(item.hsn, 40),
           qty: effectiveQty, uom: normalizeOptionalText(item.uom, 20),
           rate: item.rate, grate: item.grate, disc: item.disc || 0, total: lineTotal,
-          cost_rate: serviceCostRate, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
+          cost_rate: 0, stock_id: null, bill_id: billId, user: actorUsername, qtyh: 0,
         });
-        if (serviceCogsValue > 0) {
-          serviceCostLines.push({
-            stockRegId,
-            item: normalizeOptionalText(item.item, 200),
-            cogsValue: serviceCogsValue,
-          });
-        }
         continue;
       }
 
@@ -863,7 +841,7 @@ export const updateBill = async (req, res) => {
     await postSalesLedger({
       firmId, billId, voucherId: existingBill.voucher_id, billNo: existingBill.bno,
       billDate: meta.billDate, party: partyDoc, ntot, cgst, sgst, igst, rof,
-      otherCharges, taxableItemsTotal, cogsLines, serviceCostLines, actorUsername, session,
+      otherCharges, taxableItemsTotal, cogsLines, actorUsername, session,
     });
 
     await session.commitTransaction();

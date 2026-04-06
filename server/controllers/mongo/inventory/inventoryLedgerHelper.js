@@ -148,15 +148,11 @@ export async function postPurchaseLedger({
  * @param {Array}  p.cogsLines          [{ stockId, stockRegId, item, cogsValue }]
  *                                      cogsValue = qty × WAC at moment of sale.
  *                                      Empty / omitted for service-only bills.
- * @param {Array}  p.serviceCostLines   [{ stockRegId, item, cogsValue }]
- *                                      Optional direct-cost lines for services.
- *                                      Posted as COGS DR against Service Cost Payable CR
- *                                      because service lines have no inventory asset to credit.
  */
 export async function postSalesLedger({
   firmId, billId, voucherId, billNo, billDate, party,
   ntot, cgst, sgst, igst, rof, otherCharges,
-  taxableItemsTotal, cogsLines = [], serviceCostLines = [], actorUsername, session = null,
+  taxableItemsTotal, cogsLines = [], actorUsername, session = null,
 }) {
   const base = {
     firm_id: firmId, voucher_id: voucherId, voucher_type: 'SALES',
@@ -212,44 +208,6 @@ export async function postSalesLedger({
     if (!cl.stockId || !(cl.cogsValue > 0)) continue;
     docs.push({ ...base, account_head: 'COGS', account_type: 'EXPENSE', debit_amount: cl.cogsValue, credit_amount: 0, narration: `Cost of goods: ${cl.item} — Bill No: ${billNo}`, party_id: null, stock_id: cl.stockId ?? null, stock_reg_id: cl.stockRegId ?? null });
     docs.push({ ...base, account_head: 'Inventory', account_type: 'ASSET', debit_amount: 0, credit_amount: cl.cogsValue, narration: `Inventory out: ${cl.item} — Bill No: ${billNo}`, party_id: null, stock_id: cl.stockId ?? null, stock_reg_id: cl.stockRegId ?? null });
-  }
-
-  // 7. Optional direct service cost DR + accrued payable CR.
-  // Services do not consume inventory, so we balance the cost against a
-  // liability-clearing account that can later be settled through AP/payment flows.
-  if (serviceCostLines.length > 0) {
-    const serviceCostPayableLedger = await resolveLedgerPostingAccount({
-      firmId,
-      accountHead: 'Service Cost Payable',
-      fallbackType: 'LIABILITY',
-      session,
-    });
-
-    for (const scl of serviceCostLines) {
-      if (!(scl.cogsValue > 0)) continue;
-      docs.push({
-        ...base,
-        account_head: 'COGS',
-        account_type: 'EXPENSE',
-        debit_amount: scl.cogsValue,
-        credit_amount: 0,
-        narration: `Service cost: ${scl.item} — Bill No: ${billNo}`,
-        party_id: null,
-        stock_id: null,
-        stock_reg_id: scl.stockRegId ?? null,
-      });
-      docs.push({
-        ...base,
-        account_head: serviceCostPayableLedger.accountHead,
-        account_type: serviceCostPayableLedger.accountType,
-        debit_amount: 0,
-        credit_amount: scl.cogsValue,
-        narration: `Accrued service cost: ${scl.item} — Bill No: ${billNo}`,
-        party_id: null,
-        stock_id: null,
-        stock_reg_id: scl.stockRegId ?? null,
-      });
-    }
   }
 
   assertBalancedVoucher(docs, 'SALES', billNo);

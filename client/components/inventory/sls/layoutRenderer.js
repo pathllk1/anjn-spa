@@ -147,20 +147,6 @@ export function renderItemsList(state) {
                        placeholder="Add narration for this item">${escHtml(item.narration || '')}</textarea>
             </div>
         </div>`;
-    }).map((rowHtml, index) => {
-        const item = state.cart[index];
-        if (!isServiceItem(item)) return rowHtml;
-        return `${rowHtml}
-        <div class="flex items-center border-b border-gray-100 text-xs text-gray-700 group bg-white pl-20 pr-2 py-1">
-            <div class="flex-1 text-[10px] text-gray-500 uppercase tracking-wide">Service Cost</div>
-            <div class="w-36 p-1 border-l border-transparent group-hover:border-blue-100">
-                <input type="number" min="0" step="0.01" data-idx="${index}" data-field="costRate"
-                       value="${Number(item.costRate || 0)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-amber-700 font-semibold"
-                       placeholder="0.00" ${isReturnMode ? 'readonly' : ''}>
-            </div>
-            <div class="flex-1 text-[10px] text-gray-400 pl-3">Optional per-unit cost for service COGS posting</div>
-        </div>`;
     }).join('');
 }
 

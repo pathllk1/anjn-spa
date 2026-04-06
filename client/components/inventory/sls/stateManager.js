@@ -228,7 +228,6 @@ export async function loadExistingBillData(state, billId) {
                 showQty:   item.show_qty !== false,
                 uom:       item.uom || (item.stock_id ? 'PCS' : ''),
                 rate:      parseFloat(item.rate)  || 0,
-                costRate:  parseFloat(item.cost_rate) || 0,
                 grate:     parseFloat(item.grate) || 0,
                 disc:      parseFloat(item.disc)  || 0,
             };
