@@ -185,18 +185,45 @@ function initForm(router) {
   async function getAccounts() {
     if (accountsCache !== null) return accountsCache;
     try {
-      const res = await api.get('/api/ledger/accounts');
-      if (Array.isArray(res)) {
-        accountsCache = res;
-      } else if (res && typeof res === 'object') {
-        accountsCache = res.accounts || res.data || res.result || res.ledgerAccounts || res.items || [];
-        if (!Array.isArray(accountsCache)) {
-          const firstArray = Object.values(res).find(v => Array.isArray(v));
-          accountsCache = firstArray || [];
+      // Fetch account heads from ledger
+      const accountsRes = await api.get('/api/ledger/accounts');
+      let accounts = Array.isArray(accountsRes) ? accountsRes : (accountsRes.data || accountsRes.accounts || []);
+      
+      // Fetch parties from inventory
+      const partiesRes = await api.get('/api/inventory/purchase/parties');
+      let parties = Array.isArray(partiesRes) ? partiesRes : (partiesRes.data || []);
+      
+      // Combine with duplicate prevention
+      const uniqueHeads = new Map();
+      
+      // Add account heads first
+      accounts.forEach(account => {
+        if (account.account_head) {
+          const key = account.account_head.toLowerCase().trim();
+          if (!uniqueHeads.has(key)) {
+            uniqueHeads.set(key, account);
+          }
         }
-      } else {
-        accountsCache = [];
-      }
+      });
+      
+      // Add parties (skip if already exists as account head)
+      parties.forEach(party => {
+        if (party.firm) {
+          const key = party.firm.toLowerCase().trim();
+          if (!uniqueHeads.has(key)) {
+            uniqueHeads.set(key, {
+              account_head: party.firm,
+              account_type: 'DEBTOR',
+              total_debit: 0,
+              total_credit: 0
+            });
+          }
+        }
+      });
+      
+      accountsCache = Array.from(uniqueHeads.values()).sort((a, b) => 
+        (a.account_head || '').localeCompare(b.account_head || '')
+      );
     } catch {
       accountsCache = [];
     }
@@ -260,6 +287,13 @@ function initForm(router) {
         const matched = accounts.find((account) => String(account?.account_head || '').trim().toLowerCase() === typedHead);
         const resolvedType = matched?.account_type || guessAccountType(e.target.value);
         setAccountTypeValue(typeInput, resolvedType);
+        
+        // Display account balance
+        if (matched) {
+          displayAccountBalance(row, matched);
+        } else {
+          hideAccountBalance(row);
+        }
       });
     }
     if (e.target.classList.contains('amount-input')) {
@@ -323,6 +357,12 @@ function initForm(router) {
                      placeholder="Start typing account name…" autocomplete="off" list="${id}-datalist" required>
               <datalist id="${id}-datalist"></datalist>
             </div>
+            <div class="account-balance-display hidden mt-2 rounded-lg bg-indigo-50 border border-indigo-200 p-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Balance:</span>
+                <span class="account-balance-value text-xs font-bold text-indigo-700">₹0.00</span>
+              </div>
+            </div>
           </div>
           <div class="w-32 flex-shrink-0">
             <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Acct Type</label>
@@ -384,6 +424,27 @@ function initForm(router) {
       const numEl = row.querySelector('.line-num');
       if (numEl) numEl.textContent = i + 1;
     });
+  }
+
+  function displayAccountBalance(row, accountData) {
+    const balanceDisplay = row.querySelector('.account-balance-display');
+    if (!balanceDisplay) return;
+    
+    const balance = (accountData.total_debit || 0) - (accountData.total_credit || 0);
+    const status = balance >= 0 ? 'DR' : 'CR';
+    const balanceValue = row.querySelector('.account-balance-value');
+    
+    if (balanceValue) {
+      balanceValue.textContent = fmtINR(Math.abs(balance)) + ` ${status}`;
+    }
+    balanceDisplay.classList.remove('hidden');
+  }
+
+  function hideAccountBalance(row) {
+    const balanceDisplay = row.querySelector('.account-balance-display');
+    if (balanceDisplay) {
+      balanceDisplay.classList.add('hidden');
+    }
   }
 
   function updateBalance() {

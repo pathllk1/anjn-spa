@@ -29,9 +29,9 @@ export const getLedgerAccounts = async (req, res) => {
       if (end_date)   matchStage.transaction_date.$lte = end_date;
     }
 
-    // Get ledger accounts (exclude opening balances)
+    // Get ledger accounts (include all transactions including opening balances)
     const ledgerAccounts = await Ledger.aggregate([
-      { $match: { ...matchStage, ref_type: { $ne: 'OPENING_BALANCE' } } },
+      { $match: matchStage },
       {
         $group: {
           _id: {
@@ -80,69 +80,13 @@ export const getLedgerAccounts = async (req, res) => {
       { $sort: { account_head: 1 } },
     ]);
 
-    // Get opening balances (if start_date is provided)
-    const openingBalanceMatch = { firm_id: fid, ref_type: 'OPENING_BALANCE' };
-    if (start_date) {
-      openingBalanceMatch.transaction_date = { $lt: start_date };
-    }
+    // FIX: Opening balances are now included in the main query above.
+    // When start_date is provided, the balance calculation automatically includes
+    // all transactions from the beginning (including opening balance entries),
+    // so the balance before start_date is naturally represented.
+    // No separate merge logic needed.
 
-    const openingBalances = await Ledger.aggregate([
-      { $match: openingBalanceMatch },
-      {
-        $group: {
-          _id: {
-            account_head: '$account_head',
-            account_type: '$account_type',
-          },
-          total_debit:  { $sum: '$debit_amount'  },
-          total_credit: { $sum: '$credit_amount' },
-        },
-      },
-      {
-        $project: {
-          _id:          0,
-          account_head: '$_id.account_head',
-          account_type: '$_id.account_type',
-          total_debit:  1,
-          total_credit: 1,
-          balance:      { $subtract: ['$total_debit', '$total_credit'] },
-        },
-      },
-    ]);
-
-    // Merge opening balances with ledger accounts
-    const accountMap = new Map();
-    
-    // Add opening balances first
-    openingBalances.forEach(ob => {
-      const key = `${ob.account_head}|${ob.account_type}`;
-      accountMap.set(key, {
-        account_head: ob.account_head,
-        account_type: ob.account_type,
-        total_debit: ob.total_debit,
-        total_credit: ob.total_credit,
-        balance: ob.balance,
-      });
-    });
-
-    // Add/merge ledger accounts
-    ledgerAccounts.forEach(la => {
-      const key = `${la.account_head}|${la.account_type}`;
-      if (accountMap.has(key)) {
-        const existing = accountMap.get(key);
-        accountMap.set(key, {
-          account_head: la.account_head,
-          account_type: la.account_type,
-          total_debit: existing.total_debit + la.total_debit,
-          total_credit: existing.total_credit + la.total_credit,
-          balance: (existing.total_debit + la.total_debit) - (existing.total_credit + la.total_credit),
-        });
-      } else {
-        accountMap.set(key, la);
-      }
-    });
-
-    const accounts = Array.from(accountMap.values()).sort((a, b) => 
+    const accounts = ledgerAccounts.sort((a, b) => 
       a.account_head.localeCompare(b.account_head)
     );
 
@@ -163,7 +107,24 @@ export const getAccountDetails = async (req, res) => {
       return res.status(403).json({ error: 'User is not associated with any firm' });
     }
 
-    const filter = { firm_id: req.user.firm_id, account_head };
+    const firmId = req.user.firm_id;
+
+    // FIX: Calculate opening balance (all transactions before start_date)
+    let openingBalance = 0;
+    if (start_date) {
+      const openingFilter = { 
+        firm_id: firmId, 
+        account_head,
+        transaction_date: { $lt: start_date }
+      };
+      const openingRecords = await Ledger.find(openingFilter).lean();
+      openingBalance = openingRecords.reduce((sum, r) => {
+        return sum + (r.debit_amount || 0) - (r.credit_amount || 0);
+      }, 0);
+    }
+
+    // Get transactions within the period (or all if no start_date)
+    const filter = { firm_id: firmId, account_head };
     if (start_date) filter.transaction_date = { ...filter.transaction_date, $gte: start_date };
     if (end_date)   filter.transaction_date = { ...filter.transaction_date, $lte: end_date };
 
@@ -171,7 +132,11 @@ export const getAccountDetails = async (req, res) => {
       .sort({ transaction_date: 1, createdAt: 1 })
       .lean();
 
-    res.json(records);
+    // FIX: Return both records and opening balance for client-side calculation
+    res.json({
+      opening_balance: openingBalance,
+      records: records
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -72,10 +72,10 @@ export async function renderNewVoucher(router) {
             <input type="date" id="transaction-date" name="transaction_date" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium">
           </div>
           <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">Party *</label>
+            <label class="block text-sm font-bold text-gray-700 mb-2">Account Head *</label>
             <div class="relative">
               <select id="party-select" name="party_id" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium appearance-none">
-                <option value="">Loading parties...</option>
+                <option value="">Select Account Head</option>
               </select>
               <div id="party-loading-spinner" class="absolute right-4 top-1/2 -translate-y-1/2">
                 <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -85,77 +85,6 @@ export async function renderNewVoucher(router) {
               </div>
             </div>
           </div>
-        </div>
-
-        <div id="opening-balance-section" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-5 space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h4 class="text-xs font-black uppercase tracking-widest text-blue-600 mb-1">Account Opening Balance</h4>
-              <p id="ob-account-head" class="text-sm font-bold text-blue-900">-</p>
-            </div>
-            <div class="flex gap-2">
-              <button type="button" id="view-ob-btn" class="px-3 py-2 rounded-lg bg-blue-100 text-xs font-bold text-blue-700 hover:bg-blue-200 transition">View Details</button>
-              <button type="button" id="edit-ob-btn" class="px-3 py-2 rounded-lg bg-blue-600 text-xs font-bold text-white hover:bg-blue-700 transition">Edit</button>
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-3">
-            <div class="bg-white rounded-lg p-3 border border-blue-100">
-              <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Type</span>
-              <p id="ob-type" class="text-sm font-bold text-gray-900 mt-1">-</p>
-            </div>
-            <div class="bg-white rounded-lg p-3 border border-blue-100">
-              <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Debit</span>
-              <p id="ob-debit" class="text-sm font-bold text-emerald-600 mt-1">₹0.00</p>
-            </div>
-            <div class="bg-white rounded-lg p-3 border border-blue-100">
-              <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Credit</span>
-              <p id="ob-credit" class="text-sm font-bold text-rose-600 mt-1">₹0.00</p>
-            </div>
-          </div>
-        </div>
-
-        <div id="no-opening-balance-section" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h4 class="text-xs font-black uppercase tracking-widest text-amber-600 mb-1">No Opening Balance Found</h4>
-              <p id="nob-account-head" class="text-sm font-bold text-amber-900">-</p>
-            </div>
-            <button type="button" id="create-ob-btn" class="px-4 py-2 rounded-lg bg-amber-600 text-xs font-bold text-white hover:bg-amber-700 transition">Create Opening Balance</button>
-          </div>
-          <p class="text-xs text-amber-700">This account doesn't have an opening balance yet. Create one to track initial balances.</p>
-        </div>
-
-        <div id="closing-balance-section" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h4 class="text-xs font-black uppercase tracking-widest text-emerald-600 mb-1">Account Current Status</h4>
-              <p id="cb-account-head" class="text-sm font-bold text-emerald-900">-</p>
-              <p id="cb-update-date" class="text-xs text-emerald-600 mt-1">Updated: -</p>
-            </div>
-            <button type="button" id="view-cb-btn" class="px-3 py-2 rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700 hover:bg-emerald-200 transition">View Ledger</button>
-          </div>
-          <div class="grid grid-cols-3 gap-3">
-            <div class="bg-white rounded-lg p-3 border border-emerald-100">
-              <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Current Debit</span>
-              <p id="cb-debit" class="text-sm font-bold text-emerald-600 mt-1">₹0.00</p>
-            </div>
-            <div class="bg-white rounded-lg p-3 border border-emerald-100">
-              <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Current Credit</span>
-              <p id="cb-credit" class="text-sm font-bold text-rose-600 mt-1">₹0.00</p>
-            </div>
-            <div class="bg-white rounded-lg p-3 border border-emerald-100">
-              <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Net Balance</span>
-              <p id="cb-balance" class="text-sm font-bold text-indigo-600 mt-1">₹0.00</p>
-            </div>
-          </div>
-        </div>
-
-        <div id="no-transaction-section" class="hidden bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-3">
-          <div>
-            <h4 class="text-xs font-black uppercase tracking-widest text-gray-600 mb-1">No Transaction History</h4>
-            <p id="nt-account-head" class="text-sm font-bold text-gray-900">-</p>
-          </div>
-          <p class="text-xs text-gray-600">This account has no transactions yet. The opening balance will be the starting point.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -185,6 +114,48 @@ export async function renderNewVoucher(router) {
           <select id="bank-account-select" name="bank_account_id" class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium">
             <option value="">Select Bank Account</option>
           </select>
+        </div>
+
+        <div id="account-balance-section" class="hidden bg-indigo-50 border border-indigo-200 rounded-2xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-black uppercase tracking-widest text-indigo-600">Account Balance</h4>
+            <p id="account-balance-head" class="text-xs font-bold text-indigo-900">-</p>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="bg-white rounded-lg p-2 border border-indigo-100">
+              <span class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Type</span>
+              <p id="account-balance-type" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-indigo-100">
+              <span class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Balance</span>
+              <p id="account-balance-amount" class="text-xs font-bold text-indigo-600 mt-0.5">₹0.00</p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-indigo-100">
+              <span class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Status</span>
+              <p id="account-balance-status" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="bank-account-balance-section" class="hidden bg-purple-50 border border-purple-200 rounded-2xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-black uppercase tracking-widest text-purple-600">Bank Balance</h4>
+            <p id="bank-account-balance-name" class="text-xs font-bold text-purple-900">-</p>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="bg-white rounded-lg p-2 border border-purple-100">
+              <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider">Bank</span>
+              <p id="bank-account-balance-bank" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-purple-100">
+              <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider">Balance</span>
+              <p id="bank-account-balance-amount" class="text-xs font-bold text-purple-600 mt-0.5">₹0.00</p>
+            </div>
+            <div class="bg-white rounded-lg p-2 border border-purple-100">
+              <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider">Status</span>
+              <p id="bank-account-balance-status" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
+            </div>
+          </div>
         </div>
 
         <div>
@@ -237,22 +208,19 @@ function initVoucherForm(router) {
   const bankAccountSelect = document.getElementById('bank-account-select');
   const narrationInput = document.getElementById('narration');
   const saveBtn = document.getElementById('save-btn');
-  const openingBalanceSection = document.getElementById('opening-balance-section');
-  const noOpeningBalanceSection = document.getElementById('no-opening-balance-section');
-  const closingBalanceSection = document.getElementById('closing-balance-section');
   const noTransactionSection = document.getElementById('no-transaction-section');
-  const editObBtn = document.getElementById('edit-ob-btn');
-  const viewObBtn = document.getElementById('view-ob-btn');
-  const createObBtn = document.getElementById('create-ob-btn');
-  const viewCbBtn = document.getElementById('view-cb-btn');
+  const accountBalanceSection = document.getElementById('account-balance-section');
+  const bankAccountBalanceSection = document.getElementById('bank-account-balance-section');
 
   let allParties = [];
+  let allAccountHeads = [];
+  let allBankAccounts = [];
   let currentOpeningBalance = null;
 
   const today = new Date().toISOString().split('T')[0];
   transactionDateInput.value = today;
 
-  loadParties();
+  loadAccountHeads();
   loadBankAccounts();
 
   const handleKeydown = (e) => {
@@ -275,8 +243,12 @@ function initVoucherForm(router) {
 
   partySelect.addEventListener('change', async () => {
     partySelect.classList.remove('border-red-500', 'ring-red-100');
-    await loadOpeningBalance();
-    await loadClosingBalance();
+    const selectedAccountHead = partySelect.value;
+    if (selectedAccountHead) {
+      await loadAccountBalance();
+    } else {
+      accountBalanceSection.classList.add('hidden');
+    }
     updateSummary();
   });
   
@@ -290,42 +262,71 @@ function initVoucherForm(router) {
     handlePaymentModeChange();
   });
 
-  editObBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (currentOpeningBalance) openEditObModal(currentOpeningBalance);
-  });
-
-  viewObBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (currentOpeningBalance) openViewObModal(currentOpeningBalance);
-  });
-
-  createObBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    const partyId = partySelect.value;
-    const party = allParties.find(p => p._id === partyId);
-    if (party) openCreateObModal(party);
+  bankAccountSelect.addEventListener('change', async () => {
+    await loadBankAccountBalance();
   });
 
   form.addEventListener('submit', handleSubmit);
 
-  async function loadParties() {
+  async function loadAccountHeads() {
     try {
-      const response = await api.get('/api/inventory/sales/parties');
-      allParties = response.data || [];
+      // Fetch account heads from ledger
+      const accountsResponse = await api.get('/api/ledger/accounts');
+      const accounts = Array.isArray(accountsResponse) ? accountsResponse : (accountsResponse.data || []);
+      
+      // Fetch parties from inventory
+      const partiesResponse = await api.get('/api/inventory/purchase/parties');
+      const parties = Array.isArray(partiesResponse) ? partiesResponse : (partiesResponse.data || []);
+      
+      // Combine account heads and parties with duplicate prevention
+      const uniqueHeads = new Map();
+      
+      // Add account heads first
+      accounts.forEach(account => {
+        if (account.account_head) {
+          const key = account.account_head.toLowerCase().trim();
+          if (!uniqueHeads.has(key)) {
+            uniqueHeads.set(key, {
+              account_head: account.account_head,
+              account_type: account.account_type,
+              source: 'ledger'
+            });
+          }
+        }
+      });
+      
+      // Add parties (will skip if already exists as account head)
+      parties.forEach(party => {
+        if (party.firm) {
+          const key = party.firm.toLowerCase().trim();
+          if (!uniqueHeads.has(key)) {
+            uniqueHeads.set(key, {
+              account_head: party.firm,
+              account_type: 'DEBTOR', // Default type for parties
+              source: 'party'
+            });
+          }
+        }
+      });
+      
+      allAccountHeads = Array.from(uniqueHeads.values()).sort((a, b) => 
+        a.account_head.localeCompare(b.account_head)
+      );
+      
       partySpinner?.classList.add('hidden');
-      partySelect.innerHTML = '<option value="">Select Party</option>' +
-        allParties.map(party => `<option value="${party._id}">${esc(party.firm)} (${esc(party.contact_person || 'N/A')})</option>`).join('');
+      partySelect.innerHTML = '<option value="">Select Account Head</option>' +
+        allAccountHeads.map(account => `<option value="${esc(account.account_head)}">${esc(account.account_head)} (${esc(account.account_type)})</option>`).join('');
     } catch (error) {
-      console.error('Failed to load parties:', error);
+      console.error('Failed to load account heads:', error);
       partySpinner?.classList.add('hidden');
-      partySelect.innerHTML = '<option value="">Failed to load parties</option>';
+      partySelect.innerHTML = '<option value="">Failed to load account heads</option>';
     }
   }
 
   async function loadBankAccounts() {
     try {
       const accounts = await fetchBankAccounts(true);
+      allBankAccounts = accounts;
       const defaultAccount = accounts.find((account) => account.is_default) || accounts[0] || null;
       populateBankAccountSelect(bankAccountSelect, accounts, defaultAccount?._id || '');
     } catch (error) {
@@ -334,370 +335,99 @@ function initVoucherForm(router) {
     }
   }
 
-  async function loadOpeningBalance() {
-    const partyId = partySelect.value;
-    if (!partyId) {
-      openingBalanceSection.classList.add('hidden');
-      noOpeningBalanceSection.classList.add('hidden');
-      currentOpeningBalance = null;
+  async function loadAccountBalance() {
+    const accountHead = partySelect.value;
+    if (!accountHead) {
+      accountBalanceSection.classList.add('hidden');
       return;
     }
 
     try {
-      const party = allParties.find(p => p._id === partyId);
-      if (!party || !party.firm) {
-        openingBalanceSection.classList.add('hidden');
-        noOpeningBalanceSection.classList.add('hidden');
-        currentOpeningBalance = null;
-        return;
-      }
-
-      const response = await api.get(`/api/ledger/opening-balances?search=${encodeURIComponent(party.firm)}`);
+      const response = await api.get(`/api/ledger/accounts`);
+      const accounts = Array.isArray(response) ? response : (response.data || []);
       
-      // Validate response structure
-      if (!response || typeof response !== 'object') {
-        throw new Error('Invalid response format from server');
-      }
-
-      const records = Array.isArray(response.records) ? response.records : [];
-      
-      // Case-insensitive search for matching account head
-      const ob = records.find(r => 
-        r && 
-        r.account_head && 
-        r.account_head.toLowerCase().trim() === party.firm.toLowerCase().trim()
+      const accountData = accounts.find(a => 
+        a.account_head && 
+        a.account_head.toLowerCase().trim() === accountHead.toLowerCase().trim()
       );
 
-      if (ob && ob._id && ob.account_type && ob.opening_date !== undefined) {
-        // Validate opening balance has required fields
-        currentOpeningBalance = ob;
-        displayOpeningBalance(ob);
-        openingBalanceSection.classList.remove('hidden');
-        noOpeningBalanceSection.classList.add('hidden');
+      if (accountData) {
+        displayAccountBalance(accountData);
+        accountBalanceSection.classList.remove('hidden');
       } else {
-        // No valid opening balance found
-        currentOpeningBalance = null;
-        displayNoOpeningBalance(party);
-        openingBalanceSection.classList.add('hidden');
-        noOpeningBalanceSection.classList.remove('hidden');
+        accountBalanceSection.classList.add('hidden');
       }
     } catch (error) {
-      console.error('Failed to load opening balance:', error);
-      openingBalanceSection.classList.add('hidden');
-      noOpeningBalanceSection.classList.add('hidden');
-      currentOpeningBalance = null;
-      showToast('Warning: Could not load opening balance info', 'info');
+      console.error('Failed to load account balance:', error);
+      accountBalanceSection.classList.add('hidden');
     }
   }
 
-  function displayOpeningBalance(ob) {
-    const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
-    document.getElementById('ob-account-head').textContent = esc(ob.account_head);
-    document.getElementById('ob-type').textContent = esc(ob.account_type);
-    document.getElementById('ob-debit').textContent = fmtINR(ob.debit_amount || 0);
-    document.getElementById('ob-credit').textContent = fmtINR(ob.credit_amount || 0);
+  function displayAccountBalance(account) {
+    const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(n || 0)));
+    const balance = (account.total_debit || 0) - (account.total_credit || 0);
+    const status = balance >= 0 ? 'DR' : 'CR';
+    
+    document.getElementById('account-balance-head').textContent = esc(account.account_head);
+    document.getElementById('account-balance-type').textContent = esc(account.account_type || '-');
+    document.getElementById('account-balance-amount').textContent = fmtINR(balance);
+    document.getElementById('account-balance-status').textContent = status;
   }
 
-  function displayNoOpeningBalance(party) {
-    document.getElementById('nob-account-head').textContent = esc(party.firm);
-  }
-
-  async function loadClosingBalance() {
-    const partyId = partySelect.value;
-    if (!partyId) {
-      closingBalanceSection.classList.add('hidden');
-      noTransactionSection.classList.add('hidden');
+  async function loadBankAccountBalance() {
+    const bankAccountId = bankAccountSelect.value;
+    if (!bankAccountId) {
+      bankAccountBalanceSection.classList.add('hidden');
       return;
     }
 
     try {
-      const party = allParties.find(p => p._id === partyId);
-      if (!party || !party.firm) {
-        closingBalanceSection.classList.add('hidden');
-        noTransactionSection.classList.add('hidden');
+      const bankAccount = allBankAccounts.find(b => b._id === bankAccountId);
+      if (!bankAccount) {
+        bankAccountBalanceSection.classList.add('hidden');
         return;
       }
 
-      // Get ledger account details (current balance as of today)
-      const response = await api.get(`/api/ledger/account/${encodeURIComponent(party.firm)}`);
+      const response = await api.get(`/api/ledger/accounts`);
+      const accounts = Array.isArray(response) ? response : (response.data || []);
       
-      // Calculate current balance from all transactions
-      if (!response || typeof response !== 'object') {
-        noTransactionSection.classList.remove('hidden');
-        closingBalanceSection.classList.add('hidden');
-        return;
+      // Try to find account by account_name first
+      let accountData = accounts.find(a => 
+        a.account_head && 
+        a.account_head.toLowerCase().trim() === (bankAccount.account_name || '').toLowerCase().trim()
+      );
+
+      // If not found, try by bank_name
+      if (!accountData) {
+        accountData = accounts.find(a => 
+          a.account_head && 
+          a.account_head.toLowerCase().trim() === (bankAccount.bank_name || '').toLowerCase().trim()
+        );
       }
 
-      const records = Array.isArray(response) ? response : [];
-      
-      if (records.length === 0) {
-        // No transactions yet
-        noTransactionSection.classList.remove('hidden');
-        closingBalanceSection.classList.add('hidden');
-        document.getElementById('nt-account-head').textContent = esc(party.firm);
-        return;
+      // If still not found, try to find any BANK type account
+      if (!accountData) {
+        accountData = accounts.find(a => a.account_type === 'BANK');
       }
 
-      // Calculate running balance from records
-      let total_debit = 0;
-      let total_credit = 0;
-      let latest_date = null;
-
-      records.forEach(trx => {
-        if (trx.debit_amount && trx.debit_amount > 0) total_debit += trx.debit_amount;
-        if (trx.credit_amount && trx.credit_amount > 0) total_credit += trx.credit_amount;
-        if (trx.transaction_date && (!latest_date || trx.transaction_date > latest_date)) {
-          latest_date = trx.transaction_date;
-        }
-      });
-
-      const net_balance = total_debit - total_credit;
-
-      displayClosingBalance({
-        account_head: party.firm,
-        debit_amount: total_debit,
-        credit_amount: total_credit,
-        balance: net_balance,
-        latest_date: latest_date,
-      });
-
-      noTransactionSection.classList.add('hidden');
-      closingBalanceSection.classList.remove('hidden');
+      // Display bank account balance (with or without matching ledger account)
+      displayBankAccountBalance(bankAccount, accountData);
+      bankAccountBalanceSection.classList.remove('hidden');
     } catch (error) {
-      console.error('Failed to load closing balance:', error);
-      closingBalanceSection.classList.add('hidden');
-      noTransactionSection.classList.add('hidden');
+      console.error('Failed to load bank account balance:', error);
+      bankAccountBalanceSection.classList.add('hidden');
     }
   }
 
-  function displayClosingBalance(cb) {
+  function displayBankAccountBalance(bankAccount, accountData) {
     const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(n || 0)));
+    const balance = accountData ? ((accountData.total_debit || 0) - (accountData.total_credit || 0)) : 0;
+    const status = bankAccount.status === 'ACTIVE' ? 'Active' : 'Inactive';
     
-    document.getElementById('cb-account-head').textContent = esc(cb.account_head);
-    document.getElementById('cb-debit').textContent = fmtINR(cb.debit_amount || 0);
-    document.getElementById('cb-credit').textContent = fmtINR(cb.credit_amount || 0);
-    
-    // Display net balance with color coding
-    const balanceElement = document.getElementById('cb-balance');
-    const absBalance = Math.abs(cb.balance || 0);
-    balanceElement.textContent = fmtINR(absBalance);
-    
-    if (cb.balance > 0) {
-      balanceElement.className = 'text-sm font-bold text-emerald-600 mt-1';
-    } else if (cb.balance < 0) {
-      balanceElement.className = 'text-sm font-bold text-rose-600 mt-1';
-    } else {
-      balanceElement.className = 'text-sm font-bold text-gray-600 mt-1';
-    }
-    
-    // Update date
-    const dateStr = cb.latest_date ? new Date(cb.latest_date).toLocaleDateString('en-IN') : 'Today';
-    document.getElementById('cb-update-date').textContent = `Updated: ${dateStr}`;
-  }
-
-  viewCbBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    const partyId = partySelect.value;
-    const party = allParties.find(p => p._id === partyId);
-    if (party) {
-      router.navigate(`/ledger/account/${encodeURIComponent(party.firm)}`);
-    }
-  });
-
-  function openViewObModal(ob) {
-    const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
-    const modal = document.createElement('div');
-    modal.id = 'view-ob-modal';
-    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 space-y-4">
-        <h2 class="text-lg font-black text-gray-900">Opening Balance Details</h2>
-        <div class="space-y-3 bg-slate-50 rounded-lg p-4">
-          <div class="flex justify-between items-center">
-            <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Account Head</span>
-            <span class="text-sm font-bold text-gray-900">${esc(ob.account_head)}</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Account Type</span>
-            <span class="text-sm font-bold text-blue-600">${esc(ob.account_type)}</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Opening Date</span>
-            <span class="text-sm font-bold text-gray-900">${esc(ob.opening_date)}</span>
-          </div>
-          <div class="border-t border-gray-200 pt-3 mt-3">
-            <div class="flex justify-between items-center mb-2">
-              <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Debit</span>
-              <span class="text-sm font-bold text-emerald-600">${fmtINR(ob.debit_amount || 0)}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Credit</span>
-              <span class="text-sm font-bold text-rose-600">${fmtINR(ob.credit_amount || 0)}</span>
-            </div>
-          </div>
-          <div class="border-t border-gray-200 pt-3 mt-3">
-            <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Narration</span>
-            <p class="text-sm text-gray-700 mt-1">${esc(ob.narration)}</p>
-          </div>
-          <div class="border-t border-gray-200 pt-3 mt-3">
-            <span class="text-xs font-bold uppercase tracking-wide text-gray-600">Status</span>
-            <p class="text-sm font-bold mt-1">
-              <span class="rounded-lg ${ob.is_locked ? 'bg-red-50 border border-red-100 text-red-700' : 'bg-green-50 border border-green-100 text-green-700'} px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
-                ${ob.is_locked ? 'Locked' : 'Editable'}
-              </span>
-            </p>
-          </div>
-        </div>
-        <div class="flex gap-3 pt-4">
-          <button id="view-ob-close" class="flex-1 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 transition">Close</button>
-          <button id="view-ob-edit" class="flex-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition">Edit</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    document.getElementById('view-ob-close').addEventListener('click', () => modal.remove());
-    document.getElementById('view-ob-edit').addEventListener('click', () => {
-      modal.remove();
-      openEditObModal(ob);
-    });
-  }
-
-  function openCreateObModal(party) {
-    const today = new Date().toISOString().split('T')[0];
-    const modal = document.createElement('div');
-    modal.id = 'create-ob-modal';
-    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 space-y-4">
-        <h2 class="text-lg font-black text-gray-900">Create Opening Balance</h2>
-        <p class="text-sm text-gray-600">Set up the opening balance for <strong>${esc(party.firm)}</strong></p>
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Account Type</label>
-          <select id="create-ob-type" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-            <option value="">Select Type</option>
-            ${ACCOUNT_TYPES.map(t => `<option value="${t}">${t}</option>`).join('')}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Opening Date</label>
-          <input id="create-ob-date" type="date" value="${today}" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Debit</label>
-            <input id="create-ob-debit" type="number" placeholder="0.00" step="0.01" min="0" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-          </div>
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Credit</label>
-            <input id="create-ob-credit" type="number" placeholder="0.00" step="0.01" min="0" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Narration</label>
-          <input id="create-ob-narration" type="text" placeholder="Opening Balance" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-        </div>
-        <div class="flex gap-3 pt-4">
-          <button id="create-ob-cancel" class="flex-1 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 transition">Cancel</button>
-          <button id="create-ob-save" class="flex-1 rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-700 transition">Create</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    document.getElementById('create-ob-cancel').addEventListener('click', () => modal.remove());
-    document.getElementById('create-ob-save').addEventListener('click', async () => {
-      const accountType = document.getElementById('create-ob-type').value.trim();
-      const openingDate = document.getElementById('create-ob-date').value.trim();
-      const debit = parseFloat(document.getElementById('create-ob-debit').value) || 0;
-      const credit = parseFloat(document.getElementById('create-ob-credit').value) || 0;
-      const narration = document.getElementById('create-ob-narration').value.trim();
-
-      if (!accountType) return showToast('Account type is required', 'error');
-      if (!openingDate) return showToast('Opening date is required', 'error');
-      if (debit === 0 && credit === 0) return showToast('Either debit or credit is required', 'error');
-      if (debit > 0 && credit > 0) return showToast('Cannot have both debit and credit', 'error');
-
-      try {
-        await api.post('/api/ledger/opening-balances', {
-          account_head: party.firm,
-          account_type: accountType,
-          opening_date: openingDate,
-          debit_amount: debit,
-          credit_amount: credit,
-          narration: narration || 'Opening Balance',
-        });
-        modal.remove();
-        showToast('Opening balance created successfully', 'success');
-        await loadOpeningBalance();
-      } catch (err) {
-        showToast('Error: ' + err.message, 'error');
-      }
-    });
-  }
-
-  function openEditObModal(ob) {
-    const modal = document.createElement('div');
-    modal.id = 'edit-ob-modal';
-    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50';
-    modal.innerHTML = `
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 space-y-4">
-        <h2 class="text-lg font-black text-gray-900">Edit Opening Balance</h2>
-        <p class="text-sm text-gray-600">Update the opening balance for <strong>${esc(ob.account_head)}</strong></p>
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Account Type</label>
-          <input type="text" value="${esc(ob.account_type)}" disabled class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm bg-gray-50 text-gray-600">
-        </div>
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Opening Date</label>
-          <input id="edit-ob-date" type="date" value="${esc(ob.opening_date)}" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Debit</label>
-            <input id="edit-ob-debit" type="number" value="${ob.debit_amount || 0}" step="0.01" min="0" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-          </div>
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Credit</label>
-            <input id="edit-ob-credit" type="number" value="${ob.credit_amount || 0}" step="0.01" min="0" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-bold uppercase tracking-wide text-gray-600 mb-2">Narration</label>
-          <input id="edit-ob-narration" type="text" value="${esc(ob.narration)}" class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition">
-        </div>
-        <div class="flex gap-3 pt-4">
-          <button id="edit-ob-cancel" class="flex-1 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-200 transition">Cancel</button>
-          <button id="edit-ob-save" class="flex-1 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition">Save</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    document.getElementById('edit-ob-cancel').addEventListener('click', () => modal.remove());
-    document.getElementById('edit-ob-save').addEventListener('click', async () => {
-      const openingDate = document.getElementById('edit-ob-date').value.trim();
-      const debit = parseFloat(document.getElementById('edit-ob-debit').value) || 0;
-      const credit = parseFloat(document.getElementById('edit-ob-credit').value) || 0;
-      const narration = document.getElementById('edit-ob-narration').value.trim();
-
-      if (!openingDate) return showToast('Opening date is required', 'error');
-      if (debit === 0 && credit === 0) return showToast('Either debit or credit is required', 'error');
-      if (debit > 0 && credit > 0) return showToast('Cannot have both debit and credit', 'error');
-
-      try {
-        await api.put(`/api/ledger/opening-balances/${ob._id}`, {
-          account_head: ob.account_head,
-          account_type: ob.account_type,
-          opening_date: openingDate,
-          debit_amount: debit,
-          credit_amount: credit,
-          narration,
-        });
-        modal.remove();
-        showToast('Opening balance updated successfully', 'success');
-        await loadOpeningBalance();
-      } catch (err) {
-        showToast('Error: ' + err.message, 'error');
-      }
-    });
+    document.getElementById('bank-account-balance-name').textContent = esc(bankAccount.account_name || bankAccount.bank_name || '-');
+    document.getElementById('bank-account-balance-bank').textContent = esc(bankAccount.bank_name || '-');
+    document.getElementById('bank-account-balance-amount').textContent = fmtINR(balance);
+    document.getElementById('bank-account-balance-status').textContent = status;
   }
 
   function handlePaymentModeChange() {
@@ -706,8 +436,11 @@ function initVoucherForm(router) {
     if (isBankMode) {
       bankAccountSection.classList.remove('hidden');
       bankAccountSelect.required = true;
+      // Load balance for the currently selected (default) bank account
+      loadBankAccountBalance();
     } else {
       bankAccountSection.classList.add('hidden');
+      bankAccountBalanceSection.classList.add('hidden');
       bankAccountSelect.required = false;
       bankAccountSelect.value = '';
     }
@@ -716,13 +449,12 @@ function initVoucherForm(router) {
 
   function updateSummary() {
     const voucherType = document.querySelector('input[name="voucher_type"]:checked')?.value || '';
-    const partyOption = partySelect.options[partySelect.selectedIndex];
-    const partyText = partyOption && partyOption.value ? partyOption.textContent.split(' (')[0] : '';
+    const accountHead = partySelect.value || '';
     const amount = parseFloat(amountInput.value) || 0;
     const paymentMode = paymentModeSelect.value;
 
     document.getElementById('summary-type').textContent = voucherType ? voucherType.charAt(0).toUpperCase() + voucherType.slice(1).toLowerCase() : '-';
-    document.getElementById('summary-party').textContent = partyText || '-';
+    document.getElementById('summary-party').textContent = accountHead || '-';
     document.getElementById('summary-amount').textContent = amount > 0 ? `₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '-';
     document.getElementById('summary-mode').textContent = paymentMode || '-';
   }
@@ -765,9 +497,16 @@ function initVoucherForm(router) {
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
 
+      // Convert party_id (account head) to account_head for API
+      const submitData = {
+        ...voucherData,
+        account_head: voucherData.party_id,
+      };
+      delete submitData.party_id;
+
       const response = await fetchWithCSRF('/api/ledger/vouchers', {
         method: 'POST',
-        body: JSON.stringify(voucherData),
+        body: JSON.stringify(submitData),
       });
       const result = await response.json();
 

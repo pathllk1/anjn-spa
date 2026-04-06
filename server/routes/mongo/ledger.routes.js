@@ -6,7 +6,6 @@ import * as voucherController from '../../controllers/mongo/ledger/voucherContro
 import * as bankAccountController from '../../controllers/mongo/ledger/bankAccountController.js';
 import * as manualLedgerController from '../../controllers/mongo/ledger/manualLedgerController.js';
 import * as openingBalanceController from '../../controllers/mongo/ledger/openingBalanceController.js';
-import * as closingBalanceController from '../../controllers/mongo/ledger/closingBalanceController.js';
 
 const router = express.Router();
 
@@ -28,14 +27,6 @@ router.patch ('/opening-balances/:id',         authMiddleware, openingBalanceCon
 router.delete('/opening-balances/:id',         authMiddleware, openingBalanceController.deleteOpeningBalance);
 router.post  ('/opening-balances/lock',        authMiddleware, openingBalanceController.lockOpeningBalances);
 router.get   ('/opening-balances-summary',     authMiddleware, openingBalanceController.getOpeningBalanceSummary);
-
-// ── Closing Balances ──────────────────────────────────────────────────────
-router.post  ('/closing-balances',             authMiddleware, closingBalanceController.createClosingBalance);
-router.post  ('/closing-balances/bulk',        authMiddleware, closingBalanceController.bulkCreateClosingBalances);
-router.get   ('/closing-balances',             authMiddleware, closingBalanceController.getClosingBalances);
-router.get   ('/closing-balances/:id',         authMiddleware, closingBalanceController.getClosingBalanceById);
-router.delete('/closing-balances/:id',         authMiddleware, closingBalanceController.deleteClosingBalance);
-router.get   ('/closing-balances-summary',     authMiddleware, closingBalanceController.getClosingBalanceSummary);
 
 // ── Ledger accounts ───────────────────────────────────────────────────────────
 router.get('/accounts',      authMiddleware, ledgerController.getLedgerAccounts);

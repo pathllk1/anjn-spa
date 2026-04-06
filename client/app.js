@@ -32,7 +32,6 @@ const loadNewVoucher = () => import('./pages/ledger/new-voucher.js').then(m => m
 const loadBankAccounts = () => import('./pages/ledger/bank-accounts.js').then(m => m.renderBankAccounts);
 const loadProfitLoss = () => import('./pages/ledger/profit-loss.js').then(m => m.renderProfitLoss);
 const loadOpeningBalances = () => import('./pages/ledger/opening-balances.js').then(m => m.renderOpeningBalances);
-const loadClosingBalances = () => import('./pages/ledger/closing-balances.js').then(m => m.renderClosingBalances);
 const loadManualLedger = () => import('./pages/ledger/manual-ledger.js').then(m => m.renderManualLedger);
 const loadNewManualLedger = () => import('./pages/ledger/new-manual-ledger.js').then(m => m.renderNewManualLedger);
 
@@ -144,7 +143,6 @@ router
   .on('/ledger/vouchers/new',       navigate(loadNewVoucher))
   .on('/ledger/bank-accounts',      navigate(loadBankAccounts))
   .on('/ledger/opening-balances',   navigate(loadOpeningBalances))
-  .on('/ledger/closing-balances',   navigate(loadClosingBalances))
   .on('/ledger/manual-ledger',      navigate(loadManualLedger))
   .on('/ledger/manual-ledger/new',  navigate(loadNewManualLedger))
   .on('/ledger/profit-loss',        navigate(loadProfitLoss))

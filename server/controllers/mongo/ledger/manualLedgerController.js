@@ -31,8 +31,11 @@ function validateLines(entries) {
     totalDebits += dr;
     totalCredits += cr;
   }
+  // FIX: Provide more detailed error message when entry is unbalanced
   if (Math.abs(totalDebits - totalCredits) > 0.01) {
-    return `Entry must be balanced — Debits: ${totalDebits.toFixed(2)}, Credits: ${totalCredits.toFixed(2)}`;
+    const difference = Math.abs(totalDebits - totalCredits).toFixed(2);
+    const side = totalDebits > totalCredits ? 'Debits' : 'Credits';
+    return `Entry must be balanced — Debits: ${totalDebits.toFixed(2)}, Credits: ${totalCredits.toFixed(2)} (Difference: ${difference} on ${side} side)`;
   }
   return null;
 }

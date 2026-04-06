@@ -34,8 +34,8 @@ function showToast(message, type = 'success') {
   setTimeout(() => el?.remove(), 4000);
 }
 
-const PL_TYPES = new Set(['INCOME', 'EXPENSE', 'COGS', 'GENERAL']);
-const BS_TYPES = new Set(['ASSET', 'LIABILITY', 'DEBTOR', 'CREDITOR', 'CASH', 'BANK']);
+const PL_TYPES = new Set(['INCOME', 'EXPENSE', 'COGS', 'GENERAL', 'DISCOUNT_GIVEN', 'DISCOUNT_RECEIVED']);
+const BS_TYPES = new Set(['ASSET', 'LIABILITY', 'DEBTOR', 'CREDITOR', 'CASH', 'BANK', 'PREPAID_EXPENSE', 'ACCUMULATED_DEPRECIATION', 'ALLOWANCE_FOR_DOUBTFUL_DEBTS', 'PROVISION']);
 
 const COGS_KW  = ['cogs', 'cost of goods', 'purchase', 'inventory'];
 const STOCK_KW = ['inventory', 'stock'];

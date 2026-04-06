@@ -102,14 +102,18 @@ export async function renderAccountDetails(router, params) {
     const url = `/api/ledger/account/${encodeURIComponent(accountHead)}${qs.toString() ? '?' + qs : ''}`;
 
     try {
-      const records = (await api.get(url)) || [];
+      const response = (await api.get(url)) || {};
+      
+      // FIX: API now returns { opening_balance, records } structure
+      const openingBalance = response.opening_balance || 0;
+      const records = Array.isArray(response.records) ? response.records : (Array.isArray(response) ? response : []);
 
-      let runningBalance = 0;
+      // Calculate running balance starting from opening balance
+      let runningBalance = openingBalance;
       const processed = records.map(r => {
         runningBalance += (r.debit_amount || 0) - (r.credit_amount || 0);
         return { ...r, running_balance: runningBalance };
       });
-      processed.reverse();
 
       const totalDebits  = records.reduce((s, r) => s + (r.debit_amount  || 0), 0);
       const totalCredits = records.reduce((s, r) => s + (r.credit_amount || 0), 0);
@@ -117,8 +121,10 @@ export async function renderAccountDetails(router, params) {
 
       document.getElementById('summary-cards').innerHTML = `
         <div class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-          <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Debits</p>
-          <p class="mt-2 text-2xl font-black text-emerald-600 tracking-tight">${fmtINR(totalDebits)}</p>
+          <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">${startDate ? 'Opening Balance' : 'Total Debits'}</p>
+          <p class="mt-2 text-2xl font-black ${startDate ? (openingBalance >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-emerald-600'} tracking-tight">
+            ${startDate ? `${fmtINR(Math.abs(openingBalance))} <span class="text-xs font-bold opacity-60 ml-1">${openingBalance >= 0 ? 'DR' : 'CR'}</span>` : fmtINR(totalDebits)}
+          </p>
         </div>
         <div class="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md">
           <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Credits</p>

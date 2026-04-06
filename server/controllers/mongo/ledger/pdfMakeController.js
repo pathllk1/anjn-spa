@@ -671,6 +671,20 @@ export const exportAccountLedgerPdf = async (req, res) => {
     const firm     = await Firm.findById(firmId).select('name').lean();
     const firmName = firm?.name ?? 'Unknown Firm';
 
+    // FIX: Calculate opening balance (all transactions before start_date)
+    let openingBalance = 0;
+    if (start_date) {
+      const openingFilter = { 
+        firm_id: firmId, 
+        account_head,
+        transaction_date: { $lt: start_date }
+      };
+      const openingRecords = await Ledger.find(openingFilter).lean();
+      openingBalance = openingRecords.reduce((sum, r) => {
+        return sum + (r.debit_amount || 0) - (r.credit_amount || 0);
+      }, 0);
+    }
+
     const filter = { firm_id: firmId, account_head };
     if (start_date) filter.transaction_date = { ...filter.transaction_date, $gte: start_date };
     if (end_date)   filter.transaction_date = { ...filter.transaction_date, $lte: end_date };
@@ -678,7 +692,7 @@ export const exportAccountLedgerPdf = async (req, res) => {
     const rawRecords = await Ledger.find(filter).sort({ transaction_date: 1, createdAt: 1 }).lean();
     if (!rawRecords.length) return res.status(404).json({ error: 'No ledger records found for this account' });
 
-    let runningBalance = 0;
+    let runningBalance = openingBalance;
     const records = rawRecords.map(r => {
       runningBalance += (r.debit_amount || 0) - (r.credit_amount || 0);
       return { ...r, balance_after: runningBalance };

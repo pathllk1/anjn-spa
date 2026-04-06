@@ -58,6 +58,8 @@ async function ensureFirmHasDefaultBankAccount(firmId, preferredId = null) {
   if (!fallback) {
     fallback = await BankAccount.findOne({ firm_id: firmId, status: 'ACTIVE' }).sort({ createdAt: 1 });
   }
+  // FIX: If no active accounts exist, pick the oldest inactive account as fallback
+  // (instead of silently returning null, which leaves the firm without a default)
   if (!fallback) {
     fallback = await BankAccount.findOne({ firm_id: firmId }).sort({ createdAt: 1 });
   }
