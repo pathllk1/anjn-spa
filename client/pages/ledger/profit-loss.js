@@ -306,8 +306,10 @@ function renderPage(pl, bs) {
             PDF
           </button>
           <a href="/accounts-dashboard" data-navigo
-             class="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold
-                    text-slate-500 transition hover:bg-slate-50">← Back</a>
+             class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:shadow-md">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+            Dashboard
+          </a>
         </div>
       </div>
 

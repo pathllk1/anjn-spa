@@ -56,8 +56,9 @@ async function renderPage(router) {
             <p class="mt-2 text-sm text-slate-500">Manage firm bank accounts for vouchers and invoice printing. One account stays default for each firm.</p>
           </div>
           <div class="flex gap-3">
-            <a href="/accounts-dashboard" data-navigo class="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition">
-              Back
+            <a href="/accounts-dashboard" data-navigo class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md transition">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/></svg>
+              Dashboard
             </a>
             <button id="create-bank-account-btn" class="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 transition">
               Add Bank Account
