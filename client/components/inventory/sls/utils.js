@@ -29,6 +29,13 @@ export const getItemLineTotal = (item) => {
     const qty  = getItemEffectiveQty(item);
     const rate = Number(item?.rate) || 0;
     const disc = Number(item?.disc) || 0;
+    
+    // For services with qty=0 (flat-rate services), line total is just rate * (1 - disc/100)
+    // For all other items, line total is qty * rate * (1 - disc/100)
+    if (isServiceItem(item) && qty === 0) {
+        return rate * (1 - disc / 100);
+    }
+    
     return qty * rate * (1 - disc / 100);
 };
 

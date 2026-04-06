@@ -481,7 +481,15 @@ export const createBill = async (req, res) => {
     for (const item of cart) {
       const serviceItem  = isServiceItem(item);
       const effectiveQty = getEffectiveItemQty(item);
-      const lineTotal    = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+      
+      // For services with qty=0 (flat-rate services), line total is just rate * (1 - disc/100)
+      // For all other items, line total is qty * rate * (1 - disc/100)
+      let lineTotal;
+      if (serviceItem && effectiveQty === 0) {
+        lineTotal = item.rate * (1 - (item.disc || 0) / 100);
+      } else {
+        lineTotal = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+      }
 
       if (serviceItem) {
         const stockRegId = new mongoose.Types.ObjectId();
@@ -570,9 +578,21 @@ export const createBill = async (req, res) => {
 
     await StockReg.insertMany(stockRegDocs, { session });
 
-    const taxableItemsTotal = cart.reduce(
-      (sum, item) => sum + (getEffectiveItemQty(item) * item.rate * (1 - (item.disc || 0) / 100)), 0
-    );
+    const taxableItemsTotal = cart.reduce((sum, item) => {
+      const effectiveQty = getEffectiveItemQty(item);
+      const serviceItem = isServiceItem(item);
+      
+      // For services with qty=0 (flat-rate services), line total is just rate * (1 - disc/100)
+      // For all other items, line total is qty * rate * (1 - disc/100)
+      let lineTotal;
+      if (serviceItem && effectiveQty === 0) {
+        lineTotal = item.rate * (1 - (item.disc || 0) / 100);
+      } else {
+        lineTotal = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+      }
+      
+      return sum + lineTotal;
+    }, 0);
 
     await postSalesLedger({
       firmId, billId, voucherId, billNo, billDate: meta.billDate,
@@ -677,8 +697,6 @@ export const updateBill = async (req, res) => {
         return res.status(400).json({ error: `Quantity must be > 0 for item: ${item.item}` });
       if (item.rate === undefined || item.rate === null || parseFloat(item.rate) < 0)
         return res.status(400).json({ error: `Rate must be >= 0 for item: ${item.item}` });
-      if (serviceItem && item.costRate !== undefined && item.costRate !== null && parseFloat(item.costRate) < 0)
-        return res.status(400).json({ error: `Service cost must be >= 0 for item: ${item.item}` });
     }
 
     // FIX Bug #1: Resolve consignee state code from GSTIN or state name
@@ -770,7 +788,15 @@ export const updateBill = async (req, res) => {
     for (const item of cart) {
       const serviceItem  = isServiceItem(item);
       const effectiveQty = getEffectiveItemQty(item);
-      const lineTotal    = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+      
+      // For services with qty=0 (flat-rate services), line total is just rate * (1 - disc/100)
+      // For all other items, line total is qty * rate * (1 - disc/100)
+      let lineTotal;
+      if (serviceItem && effectiveQty === 0) {
+        lineTotal = item.rate * (1 - (item.disc || 0) / 100);
+      } else {
+        lineTotal = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+      }
 
       if (serviceItem) {
         const stockRegId = new mongoose.Types.ObjectId();
@@ -832,9 +858,21 @@ export const updateBill = async (req, res) => {
 
     await StockReg.insertMany(stockRegDocs, { session });
 
-    const taxableItemsTotal = cart.reduce(
-      (sum, item) => sum + (getEffectiveItemQty(item) * item.rate * (1 - (item.disc || 0) / 100)), 0
-    );
+    const taxableItemsTotal = cart.reduce((sum, item) => {
+      const effectiveQty = getEffectiveItemQty(item);
+      const serviceItem = isServiceItem(item);
+      
+      // For services with qty=0 (flat-rate services), line total is just rate * (1 - disc/100)
+      // For all other items, line total is qty * rate * (1 - disc/100)
+      let lineTotal;
+      if (serviceItem && effectiveQty === 0) {
+        lineTotal = item.rate * (1 - (item.disc || 0) / 100);
+      } else {
+        lineTotal = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+      }
+      
+      return sum + lineTotal;
+    }, 0);
 
     // Step 6: Delete old sales ledger and re-post
     await Ledger.deleteMany({ voucher_id: existingBill.voucher_id, voucher_type: 'SALES', firm_id: firmId }, { session });

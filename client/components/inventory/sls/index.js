@@ -772,10 +772,18 @@ export function initSalesSystem(router) {
                 const rowTotalEl = e.target.closest('.flex')?.querySelector('.row-total');
                 if (rowTotalEl) {
                     const item     = state.cart[idx];
-                    const effectiveQty = (item.itemType === 'SERVICE' && item.showQty === false)
-                        ? 1
-                        : (item.qty || 0);
-                    const rowTotal = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
+                    const effectiveQty = (item.qty || 0);
+                    const rate = Number(item.rate) || 0;
+                    const disc = Number(item.disc) || 0;
+                    
+                    // For services with qty=0 (flat-rate services), line total is just rate * (1 - disc/100)
+                    let rowTotal;
+                    if (item.itemType === 'SERVICE' && effectiveQty === 0) {
+                        rowTotal = rate * (1 - disc / 100);
+                    } else {
+                        rowTotal = effectiveQty * rate * (1 - disc / 100);
+                    }
+                    
                     rowTotalEl.textContent = formatCurrency(rowTotal);
                 }
             };

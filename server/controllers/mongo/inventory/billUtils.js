@@ -92,7 +92,9 @@ export function isServiceItem(item) {
 export function getEffectiveItemQty(item) {
   const qty = parseFloat(item?.qty);
   if (Number.isFinite(qty) && qty > 0) return qty;
-  return isServiceItem(item) ? 1 : 0;
+  // Services can have qty=0 (flat-rate services with no quantity)
+  // Goods must have qty > 0
+  return 0;
 }
 
 /* ── WAC (Weighted Average Cost) ──────────────────────────────────────────── */

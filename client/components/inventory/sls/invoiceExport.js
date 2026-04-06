@@ -31,13 +31,22 @@ export function exportInvoiceToExcel(state) {
         csv += 'ITEMS\n';
         csv += 'Item,Batch,Qty,Unit,Rate,Disc %,Tax %,Total\n';
         state.cart.forEach(item => {
-            const qty   = item.itemType === 'SERVICE' && item.showQty === false ? '' : (parseFloat(item.qty) || 0);
-            const qtyForCalc = item.itemType === 'SERVICE' && item.showQty === false ? 1 : (parseFloat(item.qty) || 0);
+            const qty   = item.itemType === 'SERVICE' && (parseFloat(item.qty) || 0) === 0 ? '' : (parseFloat(item.qty) || 0);
+            const qtyForCalc = parseFloat(item.qty) || 0;
             const rate  = parseFloat(item.rate)  || 0;
             const disc  = parseFloat(item.disc)  || 0;
             const grate = parseFloat(item.grate) || 0;
-            const discAmount    = (qtyForCalc * rate * disc) / 100;
-            const taxableAmount = (qtyForCalc * rate) - discAmount;
+            
+            // For services with qty=0 (flat-rate services), use rate directly
+            // For all other items, use qty * rate
+            let taxableAmount;
+            if (item.itemType === 'SERVICE' && qtyForCalc === 0) {
+                taxableAmount = rate * (1 - disc / 100);
+            } else {
+                const discAmount = (qtyForCalc * rate * disc) / 100;
+                taxableAmount = (qtyForCalc * rate) - discAmount;
+            }
+            
             const taxAmount     = (taxableAmount * grate) / 100;
             const total         = taxableAmount + taxAmount;
             csv += `"${item.item}","${item.itemType === 'SERVICE' ? '' : (item.batch || '-')}","${qty}","${item.itemType === 'SERVICE' ? (item.uom || '') : item.uom}",${rate},${disc},${grate},${total.toFixed(2)}\n`;
