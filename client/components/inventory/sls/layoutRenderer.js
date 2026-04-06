@@ -25,12 +25,23 @@ async function fetchServiceSuggestions() {
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
         });
-        if (!response.ok) return [];
+        if (!response.ok) {
+            console.warn(`Service suggestions fetch failed with status ${response.status}`);
+            return [];
+        }
         const data = await response.json();
-        if (!data.success || !Array.isArray(data.data)) return [];
+        if (!data.success) {
+            console.warn('Service suggestions API returned success: false', data);
+            return [];
+        }
+        if (!Array.isArray(data.data)) {
+            console.warn('Service suggestions API returned non-array data:', data.data);
+            return [];
+        }
         
         serviceAutocompleteCache = data.data;
         serviceAutocompleteTimestamp = now;
+        console.log(`Loaded ${serviceAutocompleteCache.length} service suggestions`);
         return serviceAutocompleteCache;
     } catch (error) {
         console.error('Error fetching service suggestions:', error);
@@ -63,7 +74,12 @@ function createServiceAutocompleteDropdown(suggestions, searchTerm, onSelect) {
 
 export function attachServiceAutocomplete(state, itemIndex) {
     const itemInput = document.querySelector(`input[data-idx="${itemIndex}"][data-field="item"]`);
-    if (!itemInput) return;
+    if (!itemInput) {
+        console.warn(`Service autocomplete: input field not found for index ${itemIndex}`);
+        return;
+    }
+    
+    console.log(`Attaching service autocomplete to item index ${itemIndex}`);
     
     let suggestions = [];
     let dropdownContainer = null;
@@ -122,8 +138,12 @@ export function attachServiceAutocomplete(state, itemIndex) {
         const searchTerm = e.target.value;
         selectedIndex = -1;
         
+        console.log(`Service input changed: "${searchTerm}"`);
+        
         if (!suggestions.length) {
+            console.log('Fetching service suggestions...');
             suggestions = await fetchServiceSuggestions();
+            console.log(`Fetched ${suggestions.length} suggestions`);
         }
         
         // Remove existing dropdown
@@ -134,6 +154,8 @@ export function attachServiceAutocomplete(state, itemIndex) {
         filteredSuggestions = suggestions.filter(s =>
             s.item.toLowerCase().includes(searchTerm.toLowerCase())
         );
+        
+        console.log(`Filtered to ${filteredSuggestions.length} suggestions`);
         
         if (filteredSuggestions.length === 0) return;
         
@@ -279,26 +301,28 @@ export function renderItemsList(state) {
         const effectiveQty = isReturnMode ? (item.returnQty || 0) : getItemEffectiveQty(item);
         const rowTotal  = effectiveQty * item.rate * (1 - (item.disc || 0) / 100);
         const qtyValue  = isReturnMode ? (item.returnQty || 0) : getItemDisplayQty(item);
+        const rowBgColor = index % 2 === 0 ? 'bg-white' : 'bg-blue-50/30';
+        const rowHoverColor = 'hover:bg-blue-100/50';
         
         return `
-        <div class="flex items-center border-b border-gray-100 text-xs text-gray-700 hover:bg-blue-50 transition-colors min-h-10 group bg-white ${isReturnMode ? 'bg-amber-50/20' : ''}">
-            <div class="p-2 w-10 text-center text-gray-400 font-mono">${index + 1}</div>
+        <div class="flex items-center border-b border-gray-200 text-xs text-gray-700 transition-colors min-h-10 group ${rowBgColor} ${rowHoverColor} ${isReturnMode ? 'bg-amber-50/20' : ''}">
+            <div class="p-2 w-10 text-center text-gray-500 font-mono font-bold">${index + 1}</div>
             <div class="p-2 flex-1 font-medium truncate flex flex-col justify-center">
                 ${isService
                     ? `<input type="text" data-idx="${index}" data-field="item"
                        value="${escHtml(item.item || '')}"
                        class="w-full text-xs bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 font-medium text-gray-800"
                        placeholder="Service description" ${isReturnMode ? 'readonly' : ''}>`
-                    : `<span class="text-gray-800">${escHtml(item.item)}</span>`}
-                <span class="text-[10px] text-gray-400 font-normal">${isService ? 'Service Line' : `Batch: ${escHtml(item.batch || '-')} | OEM: ${escHtml(item.oem || '-')}`}</span>
+                    : `<span class="text-gray-800 font-semibold">${escHtml(item.item)}</span>`}
+                <span class="text-[10px] text-gray-500 font-normal">${isService ? '🔧 Service Line' : `📦 Batch: ${escHtml(item.batch || '-')} | OEM: ${escHtml(item.oem || '-')}`}</span>
             </div>
-            <div class="p-2 w-20 text-gray-500 border-l border-transparent group-hover:border-blue-100">
+            <div class="p-2 w-20 text-gray-600 border-l border-gray-200 group-hover:border-blue-300">
                 ${isService
                     ? `<input type="text" data-idx="${index}" data-field="hsn"
                        value="${escHtml(item.hsn || '')}"
-                       class="w-full text-xs bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-500"
+                       class="w-full text-xs bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-600 font-mono"
                        placeholder="SAC" ${isReturnMode ? 'readonly' : ''}>`
-                    : escHtml(item.hsn)}
+                    : `<span class="font-mono text-gray-700">${escHtml(item.hsn)}</span>`}
             </div>
 
             ${isReturnMode ? `
@@ -318,43 +342,43 @@ export function renderItemsList(state) {
             </div>
             `}
 
-            <div class="p-2 w-12 text-center text-gray-500 text-[10px] border-l border-transparent group-hover:border-blue-100">
+            <div class="p-2 w-12 text-center text-gray-600 text-[10px] border-l border-gray-200 group-hover:border-blue-300 font-medium">
                 ${isService
                     ? `<input type="text" data-idx="${index}" data-field="uom"
                        value="${escHtml(item.uom || '')}"
                        class="w-full text-[10px] text-center bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1"
                        placeholder="${shouldShowItemQty(item) ? 'UOM' : ''}" ${isReturnMode ? 'readonly' : ''}>`
-                    : escHtml(item.uom)}
+                    : `<span class="font-semibold">${escHtml(item.uom)}</span>`}
             </div>
 
-            <div class="p-1 w-24 border-l border-transparent group-hover:border-blue-100">
+            <div class="p-1 w-24 border-l border-gray-200 group-hover:border-blue-300">
                 <input type="number" min="0" step="0.01" data-idx="${index}" data-field="rate"
                        value="${Number(item.rate)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1" ${isReturnMode ? 'readonly' : ''}>
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 font-mono font-semibold text-gray-800" ${isReturnMode ? 'readonly' : ''}>
             </div>
 
-            <div class="p-1 w-16 border-l border-transparent group-hover:border-blue-100">
+            <div class="p-1 w-16 border-l border-gray-200 group-hover:border-blue-300">
                 <input type="number" min="0" max="100" step="0.01" data-idx="${index}" data-field="disc"
                        value="${Number(item.disc || 0)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 placeholder-gray-300" placeholder="0" ${isReturnMode ? 'readonly' : ''}>
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 placeholder-gray-300 font-mono" placeholder="0" ${isReturnMode ? 'readonly' : ''}>
             </div>
 
-            <div class="p-1 w-16 border-l border-transparent group-hover:border-blue-100">
+            <div class="p-1 w-16 border-l border-gray-200 group-hover:border-blue-300">
                 ${isService
                     ? `<input type="number" min="0" max="100" step="0.01" data-idx="${index}" data-field="grate"
                        value="${Number(item.grate || 0)}"
-                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-600" ${isReturnMode ? 'readonly' : ''}>`
-                    : `<div class="p-1 text-right text-gray-600">${escHtml(String(item.grate))}%</div>`}
+                       class="tbl-input w-full text-right bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 text-gray-700 font-mono font-semibold" ${isReturnMode ? 'readonly' : ''}>`
+                    : `<div class="p-1 text-right text-gray-700 font-mono font-semibold">${escHtml(String(item.grate))}%</div>`}
             </div>
-            <div class="p-2 w-28 text-right font-bold text-gray-800 row-total border-l border-transparent group-hover:border-blue-100 bg-gray-50/50 group-hover:bg-transparent tabular-nums">${formatCurrency(rowTotal)}</div>
+            <div class="p-2 w-28 text-right font-bold text-blue-700 row-total border-l border-gray-200 group-hover:border-blue-300 bg-blue-50/50 group-hover:bg-blue-100/30 tabular-nums rounded-r">${formatCurrency(rowTotal)}</div>
 
-            <div class="p-2 w-10 text-center border-l border-transparent group-hover:border-blue-100">
-                ${!isReturnMode ? `<button data-idx="${index}" class="btn-remove text-gray-300 hover:text-red-500 transition-colors font-bold text-lg leading-none">&times;</button>` : ''}
+            <div class="p-2 w-10 text-center border-l border-gray-200 group-hover:border-blue-300">
+                ${!isReturnMode ? `<button data-idx="${index}" class="btn-remove text-gray-400 hover:text-red-600 transition-colors font-bold text-lg leading-none hover:scale-125">×</button>` : ''}
             </div>
         </div>
-        <div class="flex items-start border-b border-gray-100 text-xs text-gray-700 group bg-white pl-20 pr-2 py-1">
-            <div class="flex-1 text-[10px] text-gray-500 uppercase tracking-wide pt-1">Item Narration</div>
-            <div class="flex-1 p-1 border-l border-transparent group-hover:border-blue-100">
+        <div class="flex items-start border-b border-gray-200 text-xs text-gray-700 group ${rowBgColor} pl-20 pr-2 py-1">
+            <div class="flex-1 text-[10px] text-gray-600 uppercase tracking-wide pt-1 font-semibold">📝 Item Narration</div>
+            <div class="flex-1 p-1 border-l border-gray-200 group-hover:border-blue-300">
                 <textarea data-idx="${index}" data-field="narration"
                        class="w-full text-xs bg-transparent border-b border-transparent focus:bg-white focus:border-blue-500 outline-none px-1 min-h-12 resize-y"
                        placeholder="Add narration for this item">${escHtml(item.narration || '')}</textarea>

@@ -52,6 +52,12 @@ export function initPurchaseSystem(router) {
     const state = createInitialState();
     state.isReturnMode = isReturnMode;
 
+    // Sorting state for cart table
+    let cartSortConfig = {
+        column: null,
+        direction: 'asc' // 'asc' or 'desc'
+    };
+
     // fetchCurrentUserFirmName now also populates state.firmLocations
     fetchCurrentUserFirmName(state);
 
@@ -222,6 +228,42 @@ export function initPurchaseSystem(router) {
                     ${options}
                 </select>
             </div>`;
+    }
+
+    function sortCart(column) {
+        if (cartSortConfig.column === column) {
+            // Toggle direction if same column clicked
+            cartSortConfig.direction = cartSortConfig.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New column, default to ascending
+            cartSortConfig.column = column;
+            cartSortConfig.direction = 'asc';
+        }
+
+        const sortFunctions = {
+            'item': (a, b) => (a.item || '').localeCompare(b.item || ''),
+            'qty': (a, b) => (parseFloat(a.qty) || 0) - (parseFloat(b.qty) || 0),
+            'rate': (a, b) => (parseFloat(a.rate) || 0) - (parseFloat(b.rate) || 0),
+            'disc': (a, b) => (parseFloat(a.disc) || 0) - (parseFloat(b.disc) || 0),
+            'grate': (a, b) => (parseFloat(a.grate) || 0) - (parseFloat(b.grate) || 0),
+            'total': (a, b) => {
+                const aQty = parseFloat(a.qty) || 0;
+                const bQty = parseFloat(b.qty) || 0;
+                const aTotal = aQty * (parseFloat(a.rate) || 0) * (1 - (parseFloat(a.disc) || 0) / 100);
+                const bTotal = bQty * (parseFloat(b.rate) || 0) * (1 - (parseFloat(b.disc) || 0) / 100);
+                return aTotal - bTotal;
+            }
+        };
+
+        const sortFn = sortFunctions[column];
+        if (sortFn) {
+            state.cart.sort(sortFn);
+            if (cartSortConfig.direction === 'desc') {
+                state.cart.reverse();
+            }
+        }
+
+        renderMainLayout(isEditMode);
     }
 
     function renderMainLayout(isEditMode = false) {
@@ -651,8 +693,34 @@ export function initPurchaseSystem(router) {
         if (resetBtn) {
             resetBtn.onclick = () => {
                 if (confirm('Clear current invoice details?')) {
+                    // Clear cart and party/consignee
                     clearCart(state);
+                    
+                    // Reset party and consignee
+                    state.selectedParty = null;
+                    state.selectedConsignee = null;
+                    state.consigneeSameAsBillTo = true;
+                    state.selectedPartyGstin = null;
+                    state.selectedPartyLocation = null;
+                    
+                    // Reset meta fields to initial values
+                    state.meta.billNo = '';
+                    state.meta.supplierBillNo = '';
+                    state.meta.billDate = new Date().toISOString().split('T')[0];
+                    state.meta.billType = 'intra-state';
+                    state.meta.reverseCharge = false;
+                    state.meta.referenceNo = '';
+                    state.meta.vehicleNo = '';
+                    state.meta.dispatchThrough = '';
+                    state.meta.narration = '';
+                    
+                    // Reset other charges
+                    state.otherCharges = [];
+                    
+                    // Reset file URL
                     state.currentBillFileUrl = null;
+                    
+                    // Re-render the entire layout
                     renderMainLayout(isEditMode);
                 }
             };
@@ -818,6 +886,14 @@ export function initPurchaseSystem(router) {
                 }
             });
         }
+
+        // Sort button handlers
+        document.getElementById('sort-item')?.addEventListener('click', () => sortCart('item'));
+        document.getElementById('sort-qty')?.addEventListener('click', () => sortCart('qty'));
+        document.getElementById('sort-rate')?.addEventListener('click', () => sortCart('rate'));
+        document.getElementById('sort-disc')?.addEventListener('click', () => sortCart('disc'));
+        document.getElementById('sort-grate')?.addEventListener('click', () => sortCart('grate'));
+        document.getElementById('sort-total')?.addEventListener('click', () => sortCart('total'));
 
         // Remove row buttons
         document.querySelectorAll('.btn-remove').forEach(btn => {

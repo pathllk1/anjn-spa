@@ -302,7 +302,7 @@ export function initSalesSystem(router) {
                     <button id="btn-other-charges" class="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 bg-blue-50 rounded hover:bg-blue-100 transition-colors whitespace-nowrap">Other Charges</button>
                     ${!isReturnMode ? `
                     <button id="btn-add-item"    class="px-3 py-1.5 text-xs text-indigo-600 border border-indigo-200 bg-indigo-50 rounded hover:bg-indigo-100 transition-colors whitespace-nowrap">Add Items (F2)</button>
-                    <button id="btn-add-service" class="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors whitespace-nowrap">Add Service</button>
+                    <button id="btn-add-service" class="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors whitespace-nowrap">Add Service (F5)</button>
                     ` : ''}
                     <button id="btn-reset"       class="px-3 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50 rounded hover:bg-red-100 transition-colors whitespace-nowrap">Reset</button>
                     <button id="btn-save"        class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-900 shadow font-medium flex items-center gap-2 transition-colors whitespace-nowrap">
@@ -418,7 +418,7 @@ export function initSalesSystem(router) {
 
                     <div class="p-2 border-t border-dashed border-gray-200 bg-gray-50 shrink-0">
                         <button id="btn-add-item" class="w-full py-2 border border-dashed border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-xs font-bold transition-colors uppercase tracking-wide">
-                            + Add Items (F2) &nbsp;|&nbsp; Select Party (F3) &nbsp;|&nbsp; Charges (F4) &nbsp;|&nbsp; Save (F8) &nbsp;|&nbsp; Reset (F9)
+                            + Add Items (F2) &nbsp;|&nbsp; Select Party (F3) &nbsp;|&nbsp; Add Service (F5) &nbsp;|&nbsp; Charges (F4) &nbsp;|&nbsp; Save (F8) &nbsp;|&nbsp; Reset (F9)
                         </button>
                     </div>
 
@@ -583,6 +583,16 @@ export function initSalesSystem(router) {
             addServiceBtn.onclick = () => {
                 addServiceToCart(state);
                 renderMainLayout(isEditMode);
+                
+                // Auto-focus on the newly added service input field
+                setTimeout(() => {
+                    const newServiceIndex = state.cart.length - 1;
+                    const serviceInput = document.querySelector(`input[data-idx="${newServiceIndex}"][data-field="item"]`);
+                    if (serviceInput) {
+                        serviceInput.focus();
+                        serviceInput.select();
+                    }
+                }, 50);
             };
         }
 
@@ -608,7 +618,30 @@ export function initSalesSystem(router) {
         if (resetBtn) {
             resetBtn.onclick = () => {
                 if (confirm('Clear current invoice details?')) {
+                    // Clear cart and party/consignee
                     clearCart(state);
+                    
+                    // Reset party and consignee
+                    state.selectedParty = null;
+                    state.selectedConsignee = null;
+                    state.consigneeSameAsBillTo = true;
+                    state.selectedPartyGstin = null;
+                    state.selectedPartyLocation = null;
+                    
+                    // Reset meta fields to initial values
+                    state.meta.billNo = '';
+                    state.meta.billDate = new Date().toISOString().split('T')[0];
+                    state.meta.billType = 'intra-state';
+                    state.meta.reverseCharge = false;
+                    state.meta.referenceNo = '';
+                    state.meta.vehicleNo = '';
+                    state.meta.dispatchThrough = '';
+                    state.meta.narration = '';
+                    
+                    // Reset other charges
+                    state.otherCharges = [];
+                    
+                    // Re-render the entire layout
                     renderMainLayout(isEditMode);
                 }
             };
@@ -877,6 +910,7 @@ export function initSalesSystem(router) {
             e.preventDefault();
             (document.getElementById('btn-select-party') || document.getElementById('btn-change-party'))?.click();
         } else if (e.key === 'F4') { e.preventDefault(); document.getElementById('btn-other-charges')?.click(); }
+        else if (e.key === 'F5') { e.preventDefault(); document.getElementById('btn-add-service')?.click(); }
         else if (e.key === 'F8') { e.preventDefault(); document.getElementById('btn-save')?.click(); }
         else if (e.key === 'F9') { e.preventDefault(); document.getElementById('btn-reset')?.click(); }
     });
