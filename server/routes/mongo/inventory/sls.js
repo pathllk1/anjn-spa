@@ -12,6 +12,7 @@ router.use(authMiddleware);
 
 // --- STOCKS API ---
 router.get('/stocks', inventoryController.getAllStocks);
+router.get('/services', inventoryController.getServiceSuggestions);
 router.post('/stocks', inventoryController.createStock);
 router.get('/stocks/:id', inventoryController.getStockById);
 router.put('/stocks/:id', inventoryController.updateStock);

@@ -7,7 +7,7 @@ import { createInitialState, fetchCurrentUserFirmName, fetchData, loadExistingBi
 import { formatCurrency, populateConsigneeFromBillTo, getPartyId, escHtml } from './utils.js';
 import { addOtherCharge, removeOtherCharge, updateOtherCharge } from './otherChargesManager.js';
 import { addItemToCart, addServiceToCart, removeItemFromCart, updateCartItem, updateCartItemNarration, clearCart } from './cartManager.js';
-import { renderItemsList, renderTotals, renderPartyCard } from './layoutRenderer.js';
+import { renderItemsList, renderTotals, renderPartyCard, attachServiceAutocomplete } from './layoutRenderer.js';
 import { openStockModal } from './stockModal.js';
 import { showBatchSelectionModal } from './batchModal.js';
 import { openPartyItemHistoryModal } from './historyModal.js';
@@ -800,6 +800,13 @@ export function initSalesSystem(router) {
                 }
             });
         }
+
+        // Attach service autocomplete to all service items
+        state.cart.forEach((item, idx) => {
+            if (item.itemType === 'SERVICE') {
+                attachServiceAutocomplete(state, idx);
+            }
+        });
 
         // Remove row buttons
         document.querySelectorAll('.btn-remove').forEach(btn => {

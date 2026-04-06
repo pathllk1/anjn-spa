@@ -56,6 +56,44 @@ export const getAllStocks = async (req, res) => {
   }
 };
 
+export const getServiceSuggestions = async (req, res) => {
+  try {
+    const firmId = getFirmId(req, res, 'GET_SERVICE_SUGGESTIONS');
+    if (!firmId) return;
+
+    // Fetch all SERVICE items from StockReg for this firm
+    const services = await StockReg.find({
+      firm_id: firmId,
+      item_type: 'SERVICE',
+      item: { $exists: true, $ne: '' }
+    })
+    .select('item hsn uom rate grate')
+    .lean();
+
+    // Remove duplicates by item name and format response
+    const uniqueServices = [];
+    const seen = new Set();
+    
+    for (const service of services) {
+      if (!seen.has(service.item)) {
+        seen.add(service.item);
+        uniqueServices.push({
+          item: service.item || '',
+          hsn: service.hsn || '',
+          uom: service.uom || '',
+          rate: parseFloat(service.rate) || 0,
+          grate: parseFloat(service.grate) || 18,
+        });
+      }
+    }
+
+    res.json({ success: true, data: uniqueServices });
+  } catch (err) {
+    console.error('[GET_SERVICE_SUGGESTIONS] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 export const getStockById = async (req, res) => {
   try {
     const firmId  = getFirmId(req, res, 'GET_STOCK_BY_ID');

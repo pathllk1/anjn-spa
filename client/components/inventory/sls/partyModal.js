@@ -142,12 +142,46 @@ export function openPartyModal(state, callbacks) {
                         </div>
                         <div class="text-[10px] text-gray-400 mt-1 truncate max-w-xs">${escHtml(party.addr || '')}</div>
                         ${hasMultiGst ? `<div class="text-[9px] text-gray-500 mt-1 font-mono">GSTINs: ${escHtml(gstinList)}</div>` : ''}
+                        <div class="mt-2 flex items-center gap-2">
+                            <span class="text-[9px] font-bold text-gray-500 uppercase tracking-wide">Balance:</span>
+                            <span class="party-balance-loader text-[9px] text-gray-400">Loading...</span>
+                        </div>
                     </div>
                     <span class="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-full
                                  opacity-0 group-hover:opacity-100 transition-all ml-3">SELECT →</span>
                 </div>
             `;
         }).join('');
+
+        // Fetch party balances
+        data.forEach(party => {
+            const partyId = party._id || party.id;
+            const partyDiv = container.querySelector(`[data-id="${partyId}"]`);
+            if (partyDiv) {
+                fetch(`/api/inventory/sales/party-balance/${partyId}`, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        const balanceData = data.data;
+                        const balanceEl = partyDiv.querySelector('.party-balance-loader');
+                        if (balanceEl) {
+                            const balanceColor = balanceData.balance_type === 'Debit' ? 'text-red-600' : balanceData.balance_type === 'Credit' ? 'text-green-600' : 'text-gray-600';
+                            const balanceSymbol = balanceData.balance_type === 'Debit' ? '↑' : balanceData.balance_type === 'Credit' ? '↓' : '—';
+                            balanceEl.innerHTML = `<span class="font-mono font-bold ${balanceColor}">₹${Math.abs(balanceData.balance).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${balanceSymbol} ${balanceData.balance_type}</span>`;
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.warn('Failed to load party balance:', err);
+                    const balanceEl = partyDiv.querySelector('.party-balance-loader');
+                    if (balanceEl) balanceEl.textContent = 'N/A';
+                });
+            }
+        });
 
         container.querySelectorAll('.party-item').forEach(div => {
             div.addEventListener('click', () => {

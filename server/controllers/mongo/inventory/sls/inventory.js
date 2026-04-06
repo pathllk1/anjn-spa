@@ -42,7 +42,7 @@ export {
   getBillById, getAllBills, exportBillsExcel, exportBillsToPdf,
   getStockBatches, getStockMovements, exportStockMovementsToExcel,
   getStockMovementsByStock, createStockMovement,
-  getOtherChargesTypes, lookupGST,
+  getOtherChargesTypes, lookupGST, getServiceSuggestions,
 } from '../sharedStockHandlers.js';
 
 /* ── Sales-specific: getCurrentUserFirmName (includes locations[]) ───────── */

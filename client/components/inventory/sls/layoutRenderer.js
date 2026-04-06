@@ -8,6 +8,219 @@
 import { formatCurrency, getPartyId, escHtml, populateConsigneeFromBillTo, getItemEffectiveQty, getItemDisplayQty, getItemLineTotal, isServiceItem, shouldShowItemQty, calculateBillTotals } from './utils.js';
 import { renderOtherChargesList } from './otherChargesManager.js';
 
+// Service autocomplete cache
+let serviceAutocompleteCache = null;
+let serviceAutocompleteTimestamp = 0;
+const AUTOCOMPLETE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function fetchServiceSuggestions() {
+    const now = Date.now();
+    if (serviceAutocompleteCache && (now - serviceAutocompleteTimestamp) < AUTOCOMPLETE_CACHE_TTL) {
+        return serviceAutocompleteCache;
+    }
+
+    try {
+        const response = await fetch('/api/inventory/sales/services', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) return [];
+        const data = await response.json();
+        if (!data.success || !Array.isArray(data.data)) return [];
+        
+        serviceAutocompleteCache = data.data;
+        serviceAutocompleteTimestamp = now;
+        return serviceAutocompleteCache;
+    } catch (error) {
+        console.error('Error fetching service suggestions:', error);
+        return [];
+    }
+}
+
+function createServiceAutocompleteDropdown(suggestions, searchTerm, onSelect) {
+    if (suggestions.length === 0) return '';
+    
+    const filtered = suggestions.filter(s =>
+        s.item.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    if (filtered.length === 0) return '';
+    
+    return `
+        <div class="absolute top-full left-0 right-0 bg-white border border-blue-300 rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+            ${filtered.slice(0, 10).map((service, idx) => `
+                <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 service-suggestion" data-idx="${idx}">
+                    <div class="font-medium text-gray-800">${escHtml(service.item)}</div>
+                    <div class="text-[10px] text-gray-500">
+                        ${service.hsn ? `SAC: ${escHtml(service.hsn)}` : ''} 
+                        ${service.rate ? `| Rate: ₹${service.rate}` : ''}
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
+}
+
+export function attachServiceAutocomplete(state, itemIndex) {
+    const itemInput = document.querySelector(`input[data-idx="${itemIndex}"][data-field="item"]`);
+    if (!itemInput) return;
+    
+    let suggestions = [];
+    let dropdownContainer = null;
+    let selectedIndex = -1;
+    let filteredSuggestions = [];
+    
+    const selectSuggestion = (service) => {
+        state.cart[itemIndex].item = service.item;
+        state.cart[itemIndex].hsn = service.hsn;
+        state.cart[itemIndex].uom = service.uom;
+        state.cart[itemIndex].rate = service.rate;
+        state.cart[itemIndex].grate = service.grate;
+        
+        // Update UI
+        itemInput.value = service.item;
+        const hsnInput = document.querySelector(`input[data-idx="${itemIndex}"][data-field="hsn"]`);
+        const uomInput = document.querySelector(`input[data-idx="${itemIndex}"][data-field="uom"]`);
+        const rateInput = document.querySelector(`input[data-idx="${itemIndex}"][data-field="rate"]`);
+        const grateInput = document.querySelector(`input[data-idx="${itemIndex}"][data-field="grate"]`);
+        
+        if (hsnInput) hsnInput.value = service.hsn;
+        if (uomInput) uomInput.value = service.uom;
+        if (rateInput) rateInput.value = service.rate;
+        if (grateInput) grateInput.value = service.grate;
+        
+        // Recalculate row total immediately
+        const itemRow = itemInput.closest('.flex.items-center');
+        if (itemRow) {
+            const rowTotalElement = itemRow.querySelector('.row-total');
+            if (rowTotalElement) {
+                const effectiveQty = getItemEffectiveQty(state.cart[itemIndex]);
+                const rowTotal = effectiveQty * service.rate * (1 - (state.cart[itemIndex].disc || 0) / 100);
+                rowTotalElement.textContent = formatCurrency(rowTotal);
+            }
+        }
+        
+        // Recalculate invoice totals
+        const totalsSection = document.getElementById('totals-section');
+        if (totalsSection) {
+            totalsSection.innerHTML = renderTotals(state);
+        }
+        
+        // Close dropdown
+        if (dropdownContainer) {
+            dropdownContainer.remove();
+            dropdownContainer = null;
+        }
+        selectedIndex = -1;
+    };
+    
+    itemInput.addEventListener('focus', async () => {
+        suggestions = await fetchServiceSuggestions();
+    });
+    
+    itemInput.addEventListener('input', async (e) => {
+        const searchTerm = e.target.value;
+        selectedIndex = -1;
+        
+        if (!suggestions.length) {
+            suggestions = await fetchServiceSuggestions();
+        }
+        
+        // Remove existing dropdown
+        if (dropdownContainer) dropdownContainer.remove();
+        
+        if (searchTerm.length === 0) return;
+        
+        filteredSuggestions = suggestions.filter(s =>
+            s.item.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        
+        if (filteredSuggestions.length === 0) return;
+        
+        // Create dropdown container
+        dropdownContainer = document.createElement('div');
+        dropdownContainer.className = 'absolute top-full left-0 right-0 bg-white border border-blue-300 rounded shadow-lg z-50 max-h-48 overflow-y-auto';
+        dropdownContainer.style.minWidth = itemInput.offsetWidth + 'px';
+        
+        dropdownContainer.innerHTML = filteredSuggestions.slice(0, 10).map((service, idx) => `
+            <div class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 service-suggestion" data-service-idx="${idx}">
+                <div class="font-medium text-gray-800">${escHtml(service.item)}</div>
+                <div class="text-[10px] text-gray-500">
+                    ${service.hsn ? `SAC: ${escHtml(service.hsn)}` : ''} 
+                    ${service.rate ? `| Rate: ₹${service.rate}` : ''}
+                </div>
+            </div>
+        `).join('');
+        
+        // Position dropdown
+        const rect = itemInput.getBoundingClientRect();
+        dropdownContainer.style.position = 'fixed';
+        dropdownContainer.style.top = (rect.bottom + 2) + 'px';
+        dropdownContainer.style.left = rect.left + 'px';
+        dropdownContainer.style.width = rect.width + 'px';
+        
+        document.body.appendChild(dropdownContainer);
+        
+        // Add click handlers
+        dropdownContainer.querySelectorAll('.service-suggestion').forEach((el, idx) => {
+            el.addEventListener('click', () => {
+                selectSuggestion(filteredSuggestions[idx]);
+            });
+        });
+    });
+    
+    // Keyboard navigation
+    itemInput.addEventListener('keydown', (e) => {
+        if (!dropdownContainer) return;
+        
+        const items = dropdownContainer.querySelectorAll('.service-suggestion');
+        if (items.length === 0) return;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+            updateHighlight(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            updateHighlight(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedIndex >= 0 && selectedIndex < filteredSuggestions.length) {
+                selectSuggestion(filteredSuggestions[selectedIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            if (dropdownContainer) {
+                dropdownContainer.remove();
+                dropdownContainer = null;
+            }
+            selectedIndex = -1;
+        }
+    });
+    
+    const updateHighlight = (items) => {
+        items.forEach((item, idx) => {
+            if (idx === selectedIndex) {
+                item.classList.add('bg-blue-100');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('bg-blue-100');
+            }
+        });
+    };
+    
+    // Close dropdown on blur
+    itemInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (dropdownContainer) {
+                dropdownContainer.remove();
+                dropdownContainer = null;
+            }
+        }, 200);
+    });
+}
+
 export function renderItemsList(state) {
     if (state.cart.length === 0) {
         return `
