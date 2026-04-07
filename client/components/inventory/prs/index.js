@@ -432,7 +432,9 @@ export function initPurchaseSystem(router) {
 
                 <!-- Items Section -->
                 <div class="flex-1 bg-white flex flex-col relative min-w-0">
-                    <div class="bg-gray-100 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider flex pr-2 shrink-0">
+                    <div class="${isReturnMode
+                        ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 border-b border-amber-300 text-[11px] font-bold text-white uppercase tracking-wider flex pr-2 shrink-0 shadow-sm'
+                        : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 border-b border-emerald-300 text-[11px] font-bold text-white uppercase tracking-wider flex pr-2 shrink-0 shadow-sm'}">
                         <div class="p-2 w-10 text-center">#</div>
                         <div class="p-2 flex-1">Item Description</div>
                         <div class="p-2 w-20">HSN</div>

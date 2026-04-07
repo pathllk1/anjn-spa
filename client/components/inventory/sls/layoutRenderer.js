@@ -263,7 +263,7 @@ export function renderItemsList(state) {
     const isReturnMode = state.isReturnMode;
 
     // Update header if in return mode
-    const header = document.querySelector('.bg-gray-100.border-b.border-gray-200.text-\\[11px\\]');
+    const header = document.getElementById('sales-cart-header');
     if (header) {
         if (isReturnMode) {
             header.innerHTML = `

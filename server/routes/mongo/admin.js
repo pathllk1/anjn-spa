@@ -139,6 +139,7 @@ router.get("/users-with-firms", authenticateJWT, requireRole(["super_admin", "ad
 
 // Create user (admin only for their firm)
 router.post("/users", authenticateJWT, requireRole("admin"), firmManagementController.createUser);
+router.put("/users/:id", authenticateJWT, requireRole("admin"), firmManagementController.updateUser);
 
 // Super Admin Routes
 router.get('/super-admin/stats', authenticateJWT, requireRole('super_admin'), superAdminController.getSuperAdminStats);

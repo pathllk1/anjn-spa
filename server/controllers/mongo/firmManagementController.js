@@ -330,3 +330,72 @@ export async function createUser(req, res) {
     res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export async function updateUser(req, res) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { id } = req.params;
+    const { fullname, username, email, role, status } = req.body;
+
+    if (!fullname || !username || !email || !role || !status) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    if (!['user', 'manager', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    if (!['pending', 'approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser || targetUser.role === 'super_admin') {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (String(targetUser.firm_id || '') !== String(req.user.firm_id || '')) {
+      return res.status(403).json({ error: 'You can only edit users from your own firm' });
+    }
+
+    const isSelf = String(targetUser._id) === String(req.user.id);
+    if (isSelf && (targetUser.role !== role || targetUser.status !== status)) {
+      return res.status(400).json({ error: 'You cannot change your own role or status' });
+    }
+
+    const [usernameTaken, emailTaken] = await Promise.all([
+      User.findOne({ username, _id: { $ne: id } }).lean(),
+      User.findOne({ email, _id: { $ne: id } }).lean(),
+    ]);
+
+    if (usernameTaken) return res.status(409).json({ error: 'Username exists' });
+    if (emailTaken) return res.status(409).json({ error: 'Email exists' });
+
+    targetUser.fullname = fullname;
+    targetUser.username = username;
+    targetUser.email = email;
+    targetUser.role = role;
+    targetUser.status = status;
+
+    await targetUser.save();
+
+    res.json({
+      message: 'User updated successfully',
+      user: {
+        _id: targetUser._id,
+        fullname: targetUser.fullname,
+        username: targetUser.username,
+        email: targetUser.email,
+        role: targetUser.role,
+        status: targetUser.status,
+        firm_id: targetUser.firm_id,
+      },
+    });
+  } catch (err) {
+    console.error('Error updating user:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
