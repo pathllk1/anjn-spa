@@ -6,7 +6,6 @@ import 'dotenv/config.js';
 import { fileURLToPath } from 'url';
 import { dirname, join }  from 'path';
 
-import { corsOptions, isProduction, trustProxy } from './config/security.js';
 import { securityMiddleware }                   from './middleware/mongo/securityMiddleware.js';
 import sanitizer                                from './middleware/sanitizer.js';
 import { csrfGenerateToken, csrfValidateToken } from './middleware/csrfMiddleware.js';
@@ -30,6 +29,7 @@ const __filename   = fileURLToPath(import.meta.url);
 const __dirname    = dirname(__filename);
 const app          = express();
 const PORT         = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
 const isVercel     = process.env.VERCEL === '1';
 
 // Track real DB readiness so the health check reflects actual state
@@ -55,10 +55,17 @@ let dbReady = false;
 
 // ── Trust first proxy (Nginx, Vercel edge, load balancer) ─────────────────
 // Without this req.ip returns the proxy IP, breaking rate-limiting and audit logs.
-app.set('trust proxy', trustProxy);
+app.set('trust proxy', 1);
 
 // ── Core middleware ────────────────────────────────────────────────────────
-app.use(cors(corsOptions));
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://anjn-vue.vercel.app' // 👈 new domain added
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

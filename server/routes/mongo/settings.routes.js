@@ -1,11 +1,8 @@
 import express from 'express';
 import * as settingsController from '../../controllers/mongo/settingsController.js';
 import * as systemConfigController from '../../controllers/mongo/systemConfigController.js';
-import { authMiddleware } from '../../middleware/mongo/authMiddleware.js';
 
 const router = express.Router();
-
-router.use(authMiddleware);
 
 // System config endpoints (must come BEFORE /:key routes to avoid conflicts)
 router.get('/system-config/gst-status', systemConfigController.getGstStatus);

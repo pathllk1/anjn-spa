@@ -1,13 +1,11 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { buildClearCookieOptions, buildCookieOptions } from '../../config/security.js';
 import { verifyAccessToken, verifyRefreshToken, generateAccessToken } from '../../utils/mongo/tokenUtils.js';
 import { isTokenBlacklisted } from '../../utils/mongo/tokenRevocationUtils.js';
 import { RefreshToken } from '../../models/index.js';
 import User from '../../models/User.model.js';  // FIX: added for tokens_invalidated_at check
 
 const ACCESS_LIFE_MS = 15 * 60 * 1000; // 15 minutes
-const CLEAR_COOKIE_OPTIONS = buildClearCookieOptions();
 
 /* ─────────────────────────────────────────────────────────────────────────
    HELPERS
@@ -22,19 +20,26 @@ function hashToken(raw) {
 function setAccessCookies(res, newAccessToken) {
   const newExpiryTimestamp = Date.now() + ACCESS_LIFE_MS;
 
-  res.cookie('accessToken', newAccessToken, buildCookieOptions({ maxAge: ACCESS_LIFE_MS }));
-  res.cookie(
-    'tokenExpiry',
-    newExpiryTimestamp.toString(),
-    buildCookieOptions({ httpOnly: false, maxAge: ACCESS_LIFE_MS })
-  );
+  res.cookie('accessToken', newAccessToken, {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge:   ACCESS_LIFE_MS,
+  });
+
+  res.cookie('tokenExpiry', newExpiryTimestamp.toString(), {
+    httpOnly: false,
+    sameSite: 'strict',
+    secure:   process.env.NODE_ENV === 'production',
+    maxAge:   ACCESS_LIFE_MS,
+  });
 }
 
 /** Clear both auth cookies and return a 401 */
 function clearAndReject(res, message = 'Session expired, please login again') {
-  res.clearCookie('accessToken', CLEAR_COOKIE_OPTIONS);
-  res.clearCookie('refreshToken', CLEAR_COOKIE_OPTIONS);
-  res.clearCookie('tokenExpiry', CLEAR_COOKIE_OPTIONS);
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  res.clearCookie('tokenExpiry');
   return res.status(401).json({ success: false, message });
 }
 

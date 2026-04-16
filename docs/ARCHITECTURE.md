@@ -52,9 +52,3 @@ The application follows a modular architecture where the frontend and backend ar
 1.  **Request Flow:** Client → Middleware (Auth, CSRF, Sanitize) → Router → Controller → Database → Response.
 2.  **Auth Flow:** Login → Generate Access (15m) & Refresh (30d) Tokens → Set as HTTP-only cookies → Client uses Axios interceptors for automatic refresh.
 3.  **Data Flow:** Models like `Firm`, `User`, `MasterRoll`, `Wage`, `Stock`, `Bill`, and `Ledger` form a relational-like structure in MongoDB, managed via Prisma.
-
-## Backend Security Notes
-*   Credentialed browser requests are restricted by an env-driven CORS allowlist via `ALLOWED_ORIGINS`.
-*   Cookie settings for auth, refresh, and CSRF are centralized so cross-origin browser deployments can be hardened consistently.
-*   CSRF validation remains enforced for state-changing requests that rely on cookies.
-*   Session security still depends on hashed refresh tokens, blacklist checks, and server-side revocation tracking.

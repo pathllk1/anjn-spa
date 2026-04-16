@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { buildClearCookieOptions, buildCookieOptions } from '../../config/security.js';
 import { generateTokenPair } from '../../utils/mongo/tokenUtils.js';
 import {
   addTokenToBlacklist,
@@ -18,7 +17,6 @@ import { User, RefreshToken } from '../../models/index.js';
 
 const ACCESS_LIFE_MS  = 15 * 60 * 1000;            // 15 minutes
 const REFRESH_LIFE_MS = 30 * 24 * 60 * 60 * 1000;  // 30 days
-const CLEAR_COOKIE_OPTIONS = buildClearCookieOptions();
 
 /** SHA-256 hash a raw token — must match the hash used in authMiddleware */
 function hashToken(raw) {
@@ -188,13 +186,15 @@ export const login = async (req, res) => {
       }
     }
 
-    res.cookie('accessToken', accessToken, buildCookieOptions({ maxAge: ACCESS_LIFE_MS }));
-    res.cookie('refreshToken', refreshToken, buildCookieOptions({ maxAge: REFRESH_LIFE_MS }));
-    res.cookie(
-      'tokenExpiry',
-      String(Date.now() + ACCESS_LIFE_MS),
-      buildCookieOptions({ httpOnly: false, maxAge: ACCESS_LIFE_MS })
-    );
+    // Set cookies
+    const cookieBase = {
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    };
+
+    res.cookie('accessToken',  accessToken,  { ...cookieBase, httpOnly: true,  maxAge: ACCESS_LIFE_MS });
+    res.cookie('refreshToken', refreshToken, { ...cookieBase, httpOnly: true,  maxAge: REFRESH_LIFE_MS });
+    res.cookie('tokenExpiry',  String(Date.now() + ACCESS_LIFE_MS), { ...cookieBase, httpOnly: false, maxAge: ACCESS_LIFE_MS });
 
     // Log successful login
     await logLoginAttempt({
@@ -286,9 +286,9 @@ export const logout = async (req, res) => {
     // Non-fatal — still clear cookies
   }
 
-  res.clearCookie('accessToken', CLEAR_COOKIE_OPTIONS);
-  res.clearCookie('refreshToken', CLEAR_COOKIE_OPTIONS);
-  res.clearCookie('tokenExpiry', CLEAR_COOKIE_OPTIONS);
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  res.clearCookie('tokenExpiry');
 
   res.json({ success: true, message: 'Logout successful' });
 };
