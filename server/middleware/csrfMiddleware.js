@@ -1,5 +1,20 @@
 import { generateCSRFToken, getCSRFTokenFromRequest } from '../utils/csrfUtils.js';
 import crypto from 'crypto';
+import { buildCookieOptions, csrfCookieSameSite } from '../config/security.js';
+
+const CSRF_COOKIE_MAX_AGE = 24 * 60 * 60 * 1000;
+
+function setCsrfCookie(res, csrfToken) {
+  res.cookie(
+    'csrfToken',
+    csrfToken,
+    buildCookieOptions({
+      httpOnly: false,
+      sameSite: csrfCookieSameSite,
+      maxAge: CSRF_COOKIE_MAX_AGE,
+    })
+  );
+}
 
 /**
  * Middleware to generate CSRF token if not present
@@ -13,14 +28,9 @@ export const csrfGenerateToken = (req, res, next) => {
     if (!csrfToken) {
       // Generate new CSRF token
       csrfToken = generateCSRFToken();
-      
-      // Set token in non-httpOnly cookie so JavaScript can read it
-      res.cookie('csrfToken', csrfToken, {
-        httpOnly: false, // Allow JS to read this
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict', // CSRF protection: don't send cross-origin
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-      });
+
+      // Cross-origin cookie-based frontends still need a readable CSRF cookie.
+      setCsrfCookie(res, csrfToken);
     }
     
     next();
@@ -113,13 +123,8 @@ export const csrfValidateToken = (req, res, next) => {
 export const csrfRefreshToken = (req, res, next) => {
   try {
     const newCSRFToken = generateCSRFToken();
-    
-    res.cookie('csrfToken', newCSRFToken, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000
-    });
+
+    setCsrfCookie(res, newCSRFToken);
     
     next();
   } catch (error) {
