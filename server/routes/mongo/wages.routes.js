@@ -11,11 +11,20 @@ import {
   getWageById,
   getWagesHistoryForEmployee
 } from '../../controllers/mongo/wages.controller.js';
+import { exportWagesToExcel } from '../../controllers/mongo/wageExport.controller.js';
 import { authMiddleware } from '../../middleware/mongo/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
+
+/* --------------------------------------------------
+   EXPORT ROUTES
+-------------------------------------------------- */
+
+// Export wages based on UI data
+// POST /api/wages/export
+router.post('/export', exportWagesToExcel);
 
 /* --------------------------------------------------
    CREATE WAGES TAB ROUTES

@@ -901,99 +901,118 @@ function handleManageFieldChange(wageId, field, value) {
      EXPORT FUNCTIONS
   -------------------------------------------------- */
 
-  function exportToExcel() {
-    // Determine which rows to export
-    let rowsToExport = [];
-    
-    if (activeTab === 'create') {
-      if (selectedEmployeeIds.size > 0) {
-        // Export only selected rows
-        rowsToExport = Array.from(selectedEmployeeIds);
-      } else if (employees.length === 0) {
-        showToast('No data to export', 'warning');
-        return;
-      } else {
-        // Export all if none selected
-        rowsToExport = employees.map(e => e.master_roll_id);
-      }
-    } else {
-      if (selectedWageIds.size > 0) {
-        // Export only selected rows
-        rowsToExport = Array.from(selectedWageIds);
-      } else if (existingWages.length === 0) {
-        showToast('No data to export', 'warning');
-        return;
-      } else {
-        // Export all if none selected
-        rowsToExport = existingWages.map(w => w.id);
-      }
+  async function exportToExcel() {
+    const month = activeTab === 'create' ? selectedMonth : manageMonth;
+    if (!month) {
+      showToast('Please select a month first', 'error');
+      return;
     }
 
-    const data = activeTab === 'create' 
-      ? employees.filter(emp => rowsToExport.includes(emp.master_roll_id)).map(emp => {
-          const wage = wageData[emp.master_roll_id] || {};
-          return {
-            'Employee Name': emp.employee_name,
-            'Bank': emp.bank,
-            'Account No': emp.account_no,
-            'Per Day Wage': wage.p_day_wage || emp.p_day_wage || 0,
-            'Wage Days': wage.wage_days || 26,
-            'Gross Salary': wage.gross_salary || 0,
-            'EPF': wage.epf_deduction || 0,
-            'ESIC': wage.esic_deduction || 0,
-            'Other Deduction': wage.other_deduction || 0,
-            'Other Benefit': wage.other_benefit || 0,
-            'Advance Repayment': wage.advance_deduction || 0,
-            'Net Salary': calculateNetSalary(
-              wage.gross_salary,
-              wage.epf_deduction,
-              wage.esic_deduction,
-              wage.other_deduction,
-              wage.other_benefit,
-              wage.advance_deduction
-            )
-          };
-        })
-      : existingWages.filter(wage => rowsToExport.includes(wage.id)).map(wage => {
-          const edited = editedWages[wage.id] || wage;
-          const mr = wage.master_roll_id || {}; // populated nested object
-          return {
-            'Employee Name': mr.employee_name || '-',
-            'Aadhar': mr.aadhar || '-',
-            'Bank': mr.bank || '-',
-            'Account No': mr.account_no || '-',
-            'Per Day Wage': edited.p_day_wage,
-            'Wage Days': edited.wage_days,
-            'Gross Salary': edited.gross_salary,
-            'EPF': edited.epf_deduction,
-            'ESIC': edited.esic_deduction,
-            'Other Deduction': edited.other_deduction || 0,
-            'Other Benefit': edited.other_benefit || 0,
-            'Advance Repayment': edited.advance_deduction || 0,
-            'Net Salary': calculateNetSalary(
-              edited.gross_salary,
-              edited.epf_deduction,
-              edited.esic_deduction,
-              edited.other_deduction,
-              edited.other_benefit,
-              edited.advance_deduction
-            ),
-            'Paid Date': edited.paid_date || '-',
-            'Cheque No': edited.cheque_no || '-',
-            'Paid From Bank': edited.paid_from_bank_ac || '-'
-          };
-        });
+    // Determine which rows to export
+    let rowsToExport = [];
+    if (activeTab === 'create') {
+      const filtered = getFilteredCreateEmployees();
+      rowsToExport = selectedEmployeeIds.size > 0 
+        ? filtered.filter(e => selectedEmployeeIds.has(e.master_roll_id))
+        : filtered;
+    } else {
+      const filtered = getFilteredManageWages();
+      rowsToExport = selectedWageIds.size > 0 
+        ? filtered.filter(w => selectedWageIds.has(w.id))
+        : filtered;
+    }
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Wages');
-    
-    const month = activeTab === 'create' ? selectedMonth : manageMonth;
-    XLSX.writeFile(wb, `Wages_${month}_${activeTab}.xlsx`);
-    const exportCount = activeTab === 'create' ? selectedEmployeeIds.size || employees.length : selectedWageIds.size || existingWages.length;
-    showToast(`Exported ${exportCount} record(s) successfully`, 'success');
-  }
-     /* --------------------------------------------------
+    if (rowsToExport.length === 0) {
+      showToast('No data available to export', 'warning');
+      return;
+    }
+
+    // Map UI data to a format the server can use
+    const exportData = rowsToExport.map(item => {
+      if (activeTab === 'create') {
+        const wage = wageData[item.master_roll_id] || {};
+        return {
+          employee_name: item.employee_name,
+          project: item.project || 'General',
+          site: item.site || 'N/A',
+          bank: item.bank || 'N/A',
+          account_no: item.account_no || 'N/A',
+          p_day_wage: wage.p_day_wage || item.p_day_wage || 0,
+          wage_days: wage.wage_days || 0,
+          gross_salary: wage.gross_salary || 0,
+          epf_deduction: wage.epf_deduction || 0,
+          esic_deduction: wage.esic_deduction || 0,
+          other_deduction: wage.other_deduction || 0,
+          other_benefit: wage.other_benefit || 0,
+          advance_deduction: wage.advance_deduction || 0,
+          net_salary: calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit, wage.advance_deduction)
+        };
+      } else {
+        const edited = editedWages[item.id] || item;
+        const mr = item.master_roll_id || {};
+        return {
+          employee_name: mr.employee_name || 'N/A',
+          project: mr.project || 'General',
+          site: mr.site || 'N/A',
+          bank: mr.bank || 'N/A',
+          account_no: mr.account_no || 'N/A',
+          p_day_wage: edited.p_day_wage || 0,
+          wage_days: edited.wage_days || 0,
+          gross_salary: edited.gross_salary || 0,
+          epf_deduction: edited.epf_deduction || 0,
+          esic_deduction: edited.esic_deduction || 0,
+          other_deduction: edited.other_deduction || 0,
+          other_benefit: edited.other_benefit || 0,
+          advance_deduction: edited.advance_deduction || 0,
+          net_salary: calculateNetSalary(toNumber(edited.gross_salary), toNumber(edited.epf_deduction), toNumber(edited.esic_deduction), toNumber(edited.other_deduction), toNumber(edited.other_benefit), toNumber(edited.advance_deduction))
+        };
+      }
+    });
+
+    showToast('Generating enterprise report...', 'info');
+
+    try {
+      const response = await fetch('/api/wages/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'X-CSRF-Token': (function() {
+            const name = 'csrfToken=';
+            const decodedCookie = decodeURIComponent(document.cookie);
+            const ca = decodedCookie.split(';');
+            for(let i = 0; i <ca.length; i++) {
+              let c = ca[i].trim();
+              if (c.indexOf(name) === 0) return c.substring(name.length, c.length);
+            }
+            return "";
+          })()
+        },
+        body: JSON.stringify({ 
+          month, 
+          data: exportData,
+          firmName: 'Payroll Statement' // We'll get real name from server
+        })
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Wages_${activeTab}_${month}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      showToast('Report downloaded successfully', 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Failed to generate report', 'error');
+    }
+  }     /* --------------------------------------------------
      FILTERING AND SORTING
   -------------------------------------------------- */
 
