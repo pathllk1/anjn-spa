@@ -972,26 +972,14 @@ function handleManageFieldChange(wageId, field, value) {
     showToast('Generating enterprise report...', 'info');
 
     try {
-      const response = await fetch('/api/wages/export', {
+      const response = await fetchWithCSRF('/api/wages/export', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'X-CSRF-Token': (function() {
-            const name = 'csrfToken=';
-            const decodedCookie = decodeURIComponent(document.cookie);
-            const ca = decodedCookie.split(';');
-            for(let i = 0; i <ca.length; i++) {
-              let c = ca[i].trim();
-              if (c.indexOf(name) === 0) return c.substring(name.length, c.length);
-            }
-            return "";
-          })()
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         },
         body: JSON.stringify({ 
           month, 
-          data: exportData,
-          firmName: 'Payroll Statement' // We'll get real name from server
+          data: exportData
         })
       });
 
@@ -1150,10 +1138,13 @@ function handleManageFieldChange(wageId, field, value) {
       } else if (action === 'toggle-employee') {
         const empId = e.target.dataset.empId;
         window.wagesDashboard.toggleEmployeeSelection(empId, e.target.checked);
-      } else if (action === 'select-all-wages') {
-        window.wagesDashboard.toggleSelectAll(e.target.checked);
-      } else if (action === 'select-all-employees') {
-        window.wagesDashboard.toggleSelectAllCreate(e.target.checked);
+      } else if (action === 'select-all') {
+        const mode = e.target.dataset.mode;
+        if (mode === 'create') {
+          window.wagesDashboard.toggleSelectAllCreate(e.target.checked);
+        } else if (mode === 'manage') {
+          window.wagesDashboard.toggleSelectAll(e.target.checked);
+        }
       } else if (action === 'set-month' || (action === 'month-change' && e.target.dataset.mode === 'create')) {
         window.wagesDashboard.setMonth(e.target.value);
       } else if (action === 'set-manage-month' || (action === 'month-change' && e.target.dataset.mode === 'manage')) {

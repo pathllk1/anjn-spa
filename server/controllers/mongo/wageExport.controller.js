@@ -128,7 +128,7 @@ export async function exportWagesToExcel(req, res) {
     });
 
     totalRow.font = { bold: true };
-    totalRow.eachCell((cell, colNumber) => {
+    totalRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       cell.border = borderStyle;
       if (colNumber >= 7) {
         cell.numFmt = '#,##0.00';
