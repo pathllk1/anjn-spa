@@ -1172,12 +1172,13 @@ function handleManageFieldChange(wageId, field, value) {
 
     const html = `
       <div id="wages-dashboard">
-        <div class="wages-dashboard-header">
-          <h2 class="wages-dashboard-title">💰 Wages Management</h2>
-          <p class="wages-dashboard-subtitle">Create new wages or manage existing wage records</p>
+        <div class="wages-dashboard-nav-strip">
+          <div class="header-main">
+            <h2 class="wages-dashboard-title">💰 Wages</h2>
+            <span class="wages-dashboard-subtitle">Manage records</span>
+          </div>
+          ${renderTabs({ activeTab })}
         </div>
-
-        ${renderTabs({ activeTab })}
         
         ${activeTab === 'create' ? renderCreateMode({
           selectedMonth,
