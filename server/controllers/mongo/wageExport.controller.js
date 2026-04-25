@@ -39,9 +39,29 @@ export async function exportWagesToExcel(req, res) {
     ];
 
     // Styles
+    const headerGradient = {
+      type: 'gradient',
+      gradient: 'angle',
+      angle: 90,
+      stops: [
+        { position: 0, color: { argb: 'FF1E293B' } }, // Slate-900
+        { position: 1, color: { argb: 'FF334155' } }  // Slate-700
+      ]
+    };
+
+    const companyGradient = {
+      type: 'gradient',
+      gradient: 'angle',
+      angle: 0,
+      stops: [
+        { position: 0, color: { argb: 'FF4F46E5' } }, // Indigo-600
+        { position: 1, color: { argb: 'FF9333EA' } }  // Purple-600
+      ]
+    };
+
     const headerStyle = {
       font: { bold: true, color: { argb: 'FFFFFF' }, size: 10 },
-      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E293B' } },
+      fill: headerGradient,
       alignment: { vertical: 'middle', horizontal: 'center' },
       border: {
         top: { style: 'thin' }, left: { style: 'thin' },
@@ -57,17 +77,19 @@ export async function exportWagesToExcel(req, res) {
     // 3. Add Company Header
     worksheet.insertRow(1, [(firm?.name || 'Payroll Statement').toUpperCase()]);
     worksheet.mergeCells('A1:M1');
-    const titleRow = worksheet.getRow(1);
-    titleRow.height = 30;
-    titleRow.font = { bold: true, size: 16, color: { argb: '1D4ED8' } };
-    titleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    const titleCell = worksheet.getCell('A1');
+    titleCell.height = 30;
+    titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFF' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    titleCell.fill = companyGradient;
 
     worksheet.insertRow(2, [`PAYROLL STATEMENT FOR ${month}`]);
     worksheet.mergeCells('A2:M2');
-    const subtitleRow = worksheet.getRow(2);
-    subtitleRow.height = 20;
-    subtitleRow.font = { bold: true, size: 12, color: { argb: '475569' } };
-    subtitleRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    const subtitleCell = worksheet.getCell('A2');
+    subtitleCell.height = 20;
+    subtitleCell.font = { bold: true, size: 12, color: { argb: 'FFFFFF' } };
+    subtitleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    subtitleCell.fill = companyGradient;
     
     worksheet.insertRow(3, []); // Gap
 
