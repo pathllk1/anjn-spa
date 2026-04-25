@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getEmployeeAdvanceBalance,
   getEmployeeAdvanceHistory,
+  getAllEmployeeBalances,
   recordAdvance,
   deleteAdvanceRecord
 } from '../../controllers/mongo/advance.controller.js';
@@ -13,6 +14,9 @@ router.use(authMiddleware);
 
 // GET /api/advances/balance/:masterRollId
 router.get('/balance/:masterRollId', getEmployeeAdvanceBalance);
+
+// GET /api/advances/bulk-balances
+router.get('/bulk-balances', getAllEmployeeBalances);
 
 // GET /api/advances/history/:masterRollId
 router.get('/history/:masterRollId', getEmployeeAdvanceHistory);

@@ -61,6 +61,47 @@ export async function getEmployeeAdvanceHistory(req, res) {
 }
 
 /**
+ * Get all employee balances for a firm (Bulk)
+ */
+export async function getAllEmployeeBalances(req, res) {
+  try {
+    const firmId = req.user.firm_id;
+
+    const pipeline = [
+      { $match: { firm_id: new mongoose.Types.ObjectId(firmId) } },
+      {
+        $group: {
+          _id: '$master_roll_id',
+          totalAdvance: {
+            $sum: { $cond: [{ $eq: ['$type', 'ADVANCE'] }, '$amount', 0] }
+          },
+          totalRepayment: {
+            $sum: { $cond: [{ $eq: ['$type', 'REPAYMENT'] }, '$amount', 0] }
+          }
+        }
+      },
+      {
+        $project: {
+          masterRollId: '$_id',
+          balance: { $subtract: ['$totalAdvance', '$totalRepayment'] }
+        }
+      }
+    ];
+
+    const results = await Advance.aggregate(pipeline);
+    const balanceMap = {};
+    results.forEach(r => {
+      balanceMap[r.masterRollId] = r.balance;
+    });
+
+    res.json({ success: true, balances: balanceMap });
+  } catch (error) {
+    console.error('Error fetching bulk balances:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+}
+
+/**
  * Record a new advance (Disbursement)
  */
 export async function recordAdvance(req, res) {
