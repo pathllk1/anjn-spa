@@ -1,6 +1,7 @@
 import { renderTabs } from "../components/wages/renderTabs.js";
 import { renderCreateMode } from "../components/wages/renderCreateMode.js";
 import { renderManageMode } from "../components/wages/renderManageMode.js";
+import { createAdvanceModal } from "../components/wages/advanceModal.js";
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { renderLayout } from '../components/layout.js';
 import { api, fetchWithCSRF } from '../utils/api.js';
@@ -11,6 +12,8 @@ export async function renderWagesDashboard(router) {
 
   // State initialization
   let firmBankAccounts = [];
+  const advanceModal = createAdvanceModal();
+  let employeeAdvances = {}; // Map of master_roll_id -> outstanding balance
 
   // Load XLSX library dynamically like master-roll.js
   await loadXLSX();
@@ -149,8 +152,8 @@ let createRenderDebounceTimer = null;
     return `₹${parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
-  function calculateNetSalary(gross, epf, esic, otherDed, otherBen) {
-    const totalDeductions = (epf || 0) + (esic || 0) + (otherDed || 0);
+  function calculateNetSalary(gross, epf, esic, otherDed, otherBen, advDed = 0) {
+    const totalDeductions = (epf || 0) + (esic || 0) + (otherDed || 0) + (advDed || 0);
     const totalBenefits = otherBen || 0;
     return parseFloat((gross - totalDeductions + totalBenefits).toFixed(2));
   }
@@ -200,7 +203,8 @@ let createRenderDebounceTimer = null;
       wage.epf_deduction,
       wage.esic_deduction,
       wage.other_deduction,
-      wage.other_benefit
+      wage.other_benefit,
+      wage.advance_deduction
     );
 
     // Update all readonly/auto-calculated fields
@@ -274,19 +278,21 @@ let createRenderDebounceTimer = null;
     const grossEl = document.getElementById('create-summary-gross');
     const epfEl   = document.getElementById('create-summary-epf');
     const esicEl  = document.getElementById('create-summary-esic');
+    const advEl   = document.getElementById('create-summary-advance');
     const netEl   = document.getElementById('create-summary-net');
     if (!grossEl) return; // panel not in DOM yet (no employees loaded)
 
-    let tGross = 0, tEpf = 0, tEsic = 0, tNet = 0;
+    let tGross = 0, tEpf = 0, tEsic = 0, tAdv = 0, tNet = 0;
     selectedEmployeeIds.forEach(id => {
       const w = wageData[id];
       if (!w) return;
       tGross += w.gross_salary   || 0;
       tEpf   += w.epf_deduction  || 0;
       tEsic  += w.esic_deduction || 0;
+      tAdv   += w.advance_deduction || 0;
       tNet   += calculateNetSalary(
         w.gross_salary, w.epf_deduction, w.esic_deduction,
-        w.other_deduction, w.other_benefit
+        w.other_deduction, w.other_benefit, w.advance_deduction
       );
     });
 
@@ -294,6 +300,7 @@ let createRenderDebounceTimer = null;
     if (grossEl) grossEl.textContent = formatCurrency(tGross);
     if (epfEl)   epfEl.textContent   = formatCurrency(tEpf);
     if (esicEl)  esicEl.textContent  = formatCurrency(tEsic);
+    if (advEl)   advEl.textContent   = formatCurrency(tAdv);
     if (netEl)   netEl.textContent   = formatCurrency(tNet);
   }
 
@@ -373,7 +380,8 @@ let createRenderDebounceTimer = null;
           epf_deduction: 0,
           esic_deduction: 0,
           other_deduction: 0,
-          other_benefit: 0
+          other_benefit: 0,
+          advance_deduction: 0
         };
       }
       calculateAllWagesForEmployee(emp.master_roll_id);
@@ -381,11 +389,6 @@ let createRenderDebounceTimer = null;
     // updateWageRowDisplay() already patched each row — just refresh summary
     updateCreateSummaryTotals();
   }
-
-  // ====================================================================
-// COMPLETE BUGFIX FOR handleCreateFieldChange FUNCTION
-// Replace lines 180-209 in WagesDashboard.js
-// ====================================================================
 
 function handleCreateFieldChange(empId, field, value) {
   if (!wageData[empId]) {
@@ -396,7 +399,8 @@ function handleCreateFieldChange(empId, field, value) {
       epf_deduction: 0,
       esic_deduction: 0,
       other_deduction: 0,
-      other_benefit: 0
+      other_benefit: 0,
+      advance_deduction: 0
     };
   }
   
@@ -451,8 +455,7 @@ function handleCreateFieldChange(empId, field, value) {
     updateWageRowDisplay(empId);
   }
   
-  // ✅ FIX BUG #2: AUTO-UPDATE net when EPF/ESIC manually edited
-  // ✅ FIX BUG #3: If gross manually edited, recalculate EPF/ESIC
+  // ✅ FIX BUG #2: AUTO-UPDATE net when ANY field changes
   if (field === 'gross_salary') {
     // Recalculate per-day wage
     const wage = wageData[empId];
@@ -467,16 +470,31 @@ function handleCreateFieldChange(empId, field, value) {
     updateWageRowDisplay(empId);
   }
   
-  // ✅ FIX BUG #2: Update net salary when ANY deduction/benefit changes
+  // ✅ FIX BUG #2: Update net salary when ANY deduction/benefit/advance changes
   if (field === 'epf_deduction' || field === 'esic_deduction' || 
-      field === 'other_deduction' || field === 'other_benefit') {
+      field === 'other_deduction' || field === 'other_benefit' || 
+      field === 'advance_deduction') {
     updateWageRowDisplay(empId);
   }
+
+  // Always update global summary
+  updateCreateSummaryTotals();
 }
 
   /* --------------------------------------------------
      CREATE MODE - API FUNCTIONS
   -------------------------------------------------- */
+
+  async function loadAdvanceBalance(masterRollId) {
+    try {
+      const res = await api.get(`/api/advances/balance/${masterRollId}`);
+      if (res.success) {
+        employeeAdvances[masterRollId] = res.balance;
+      }
+    } catch (e) {
+      console.error('Failed to load advance balance', e);
+    }
+  }
 
   async function loadEmployeesForWages() {
     if (!selectedMonth) {
@@ -496,6 +514,9 @@ function handleCreateFieldChange(empId, field, value) {
         wageData = {};
         selectedEmployeeIds = new Set(); // Clear selections
 
+        // Fetch balances for all loaded employees
+        await Promise.all(employees.map(emp => loadAdvanceBalance(emp.master_roll_id)));
+
         // Initialize wage data with last values
         employees.forEach(emp => {
           wageData[emp.master_roll_id] = {
@@ -505,7 +526,8 @@ function handleCreateFieldChange(empId, field, value) {
             epf_deduction: 0,
             esic_deduction: 0,
             other_deduction: 0,
-            other_benefit: 0
+            other_benefit: 0,
+            advance_deduction: 0
           };
         });
 
@@ -614,6 +636,10 @@ function handleCreateFieldChange(empId, field, value) {
         editedWages = {};
         selectedWageIds = new Set();
         isBulkEditMode = false;
+
+        // Fetch balances for all employees in existing wages
+        const masterRollIds = [...new Set(existingWages.map(w => w.master_roll_id?._id).filter(id => id))];
+        await Promise.all(masterRollIds.map(id => loadAdvanceBalance(id)));
         
         showToast(`Loaded ${existingWages.length} wage records for ${formatMonthDisplay(manageMonth)}`, 'success');
       } else {
@@ -769,6 +795,10 @@ function handleCreateFieldChange(empId, field, value) {
         editedWages[wageId].other_benefit = parseFloat(bulkEditData.other_benefit);
       }
 
+      if (bulkEditData.advance_deduction !== '') {
+        editedWages[wageId].advance_deduction = parseFloat(bulkEditData.advance_deduction);
+      }
+
       if (bulkEditData.paid_date !== '') {
         editedWages[wageId].paid_date = bulkEditData.paid_date;
       }
@@ -793,6 +823,7 @@ function handleCreateFieldChange(empId, field, value) {
       esic_deduction: '',
       other_deduction: '',
       other_benefit: '',
+      advance_deduction: '',
       paid_date: '',
       cheque_no: '',
       paid_from_bank_ac: '',
@@ -847,7 +878,8 @@ function handleManageFieldChange(wageId, field, value) {
       toNumber(currentData.epf_deduction),
       toNumber(currentData.esic_deduction),
       toNumber(currentData.other_deduction),
-      toNumber(currentData.other_benefit)
+      toNumber(currentData.other_benefit),
+      toNumber(currentData.advance_deduction)
     );
 
     // Direct DOM Update: Net Salary display span
@@ -905,12 +937,14 @@ function handleManageFieldChange(wageId, field, value) {
             'ESIC': wage.esic_deduction || 0,
             'Other Deduction': wage.other_deduction || 0,
             'Other Benefit': wage.other_benefit || 0,
+            'Advance Repayment': wage.advance_deduction || 0,
             'Net Salary': calculateNetSalary(
               wage.gross_salary,
               wage.epf_deduction,
               wage.esic_deduction,
               wage.other_deduction,
-              wage.other_benefit
+              wage.other_benefit,
+              wage.advance_deduction
             )
           };
         })
@@ -929,12 +963,14 @@ function handleManageFieldChange(wageId, field, value) {
             'ESIC': edited.esic_deduction,
             'Other Deduction': edited.other_deduction || 0,
             'Other Benefit': edited.other_benefit || 0,
+            'Advance Repayment': edited.advance_deduction || 0,
             'Net Salary': calculateNetSalary(
               edited.gross_salary,
               edited.epf_deduction,
               edited.esic_deduction,
               edited.other_deduction,
-              edited.other_benefit
+              edited.other_benefit,
+              edited.advance_deduction
             ),
             'Paid Date': edited.paid_date || '-',
             'Cheque No': edited.cheque_no || '-',
@@ -1152,6 +1188,9 @@ function handleManageFieldChange(wageId, field, value) {
         window.wagesDashboard.applyBulkEdit();
       } else if (action === 'clear-bulk-edit') {
         window.wagesDashboard.clearBulkEdit();
+      } else if (action === 'open-advance-modal') {
+        const empId = e.target.dataset.empId || null;
+        window.wagesDashboard.openAdvanceModal(empId);
       }
     });
   }
@@ -1177,7 +1216,15 @@ function handleManageFieldChange(wageId, field, value) {
             <h2 class="wages-dashboard-title">💰 Wages</h2>
             <span class="wages-dashboard-subtitle">Manage records</span>
           </div>
-          ${renderTabs({ activeTab })}
+          <div class="flex items-center gap-3">
+            <button 
+              data-action="open-advance-modal" 
+              class="tab-btn advance-toolbar-btn"
+            >
+              💸 Advances
+            </button>
+            ${renderTabs({ activeTab })}
+          </div>
         </div>
         
         ${activeTab === 'create' ? renderCreateMode({
@@ -1190,6 +1237,8 @@ function handleManageFieldChange(wageId, field, value) {
           createSort,
           commonPaymentData,
           firmBankAccounts,
+          employeeAdvances,
+          openAdvanceModal: window.wagesDashboard.openAdvanceModal,
           formatMonthDisplay,
           formatCurrency,
           calculateNetSalary,
@@ -1207,6 +1256,8 @@ function handleManageFieldChange(wageId, field, value) {
           manageFilters,
           manageSort,
           firmBankAccounts,
+          employeeAdvances,
+          openAdvanceModal: window.wagesDashboard.openAdvanceModal,
           formatMonthDisplay,
           formatDateDisplay,
           formatCurrency,
@@ -1296,6 +1347,7 @@ function handleManageFieldChange(wageId, field, value) {
     let totalGross = 0;
     let totalEpf = 0;
     let totalEsic = 0;
+    let totalAdvance = 0;
     let totalNet = 0;
 
     // Loop through ALL selected wages to recalculate totals
@@ -1309,13 +1361,15 @@ function handleManageFieldChange(wageId, field, value) {
       totalGross += toNumber(data.gross_salary);
       totalEpf += toNumber(data.epf_deduction);
       totalEsic += toNumber(data.esic_deduction);
+      totalAdvance += toNumber(data.advance_deduction);
       
       totalNet += calculateNetSalary(
         toNumber(data.gross_salary),
         toNumber(data.epf_deduction),
         toNumber(data.esic_deduction),
         toNumber(data.other_deduction),
-        toNumber(data.other_benefit)
+        toNumber(data.other_benefit),
+        toNumber(data.advance_deduction)
       );
     });
 
@@ -1323,11 +1377,13 @@ function handleManageFieldChange(wageId, field, value) {
     const elGross = document.getElementById('summary-total-gross');
     const elEpf = document.getElementById('summary-total-epf');
     const elEsic = document.getElementById('summary-total-esic');
+    const elAdvance = document.getElementById('summary-total-advance');
     const elNet = document.getElementById('summary-total-net');
 
     if (elGross) elGross.innerText = formatCurrency(totalGross);
     if (elEpf) elEpf.innerText = formatCurrency(totalEpf);
     if (elEsic) elEsic.innerText = formatCurrency(totalEsic);
+    if (elAdvance) elAdvance.innerText = formatCurrency(totalAdvance);
     if (elNet) elNet.innerText = formatCurrency(totalNet);
   }
 
@@ -1337,6 +1393,33 @@ function handleManageFieldChange(wageId, field, value) {
 
   window.wagesDashboard = {
     router: router,
+    openAdvanceModal: (empId) => {
+      let empData = null;
+
+      if (empId) {
+        const emp = activeTab === 'create' 
+          ? employees.find(e => e.master_roll_id?.toString() === empId.toString())
+          : existingWages.find(w => w.master_roll_id?._id?.toString() === empId.toString())?.master_roll_id;
+
+        if (emp) {
+          empData = activeTab === 'create' ? emp : {
+            master_roll_id: emp._id,
+            employee_name: emp.employee_name
+          };
+        }
+      }
+
+      advanceModal.open(empId, firmBankAccounts, async (affectedEmpId) => {
+        // Refresh balance and UI when modal records changes
+        // Use affectedEmpId from callback if provided, otherwise the original empId
+        const idToRefresh = affectedEmpId || empId;
+        if (idToRefresh) {
+          await loadAdvanceBalance(idToRefresh);
+        }
+        const content = render();
+        renderLayout(content, window.wagesDashboard.router);
+      });
+    },
     // Tab switching
     switchTab: (tab) => {
       activeTab = tab;

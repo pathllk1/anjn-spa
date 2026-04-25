@@ -46,9 +46,14 @@ export const createMasterRoll = async (req, res) => {
 
 export const getAllMasterRolls = async (req, res) => {
   try {
-    const { role, firm_id } = req.user;
+    const { firm_id, role } = req.user;
+    const { activeOnly, all_firms } = req.query;
 
-    const filter = (role === 'admin' && req.query.all_firms === 'true') ? {} : { firm_id };
+    const filter = (role === 'admin' && all_firms === 'true') ? {} : { firm_id };
+
+    if (activeOnly === 'true') {
+      filter.status = 'Active';
+    }
 
     const rows = await MasterRoll.find(filter)
       .populate('firm_id',    'name code')

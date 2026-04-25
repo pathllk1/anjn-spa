@@ -10,6 +10,8 @@ export function renderManageMode(ctx) {
     manageFilters,
     manageSort,
     firmBankAccounts,
+    employeeAdvances,
+    openAdvanceModal,
     formatMonthDisplay,
     formatDateDisplay,
     formatCurrency,
@@ -130,6 +132,14 @@ export function renderManageMode(ctx) {
                     return sum + (edited ? edited.esic_deduction : 0);
                   }, 0))}</span></div>
                 </div>
+                <div class="manage-summary-card">
+                  <div class="manage-summary-card-label">Total Advance</div>
+                  <div class="manage-summary-card-value"><span id="summary-total-advance">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
+                    const wage = existingWages.find(w => w.id === wageId);
+                    const edited = editedWages[wageId] || wage;
+                    return sum + (edited ? (edited.advance_deduction || 0) : 0);
+                  }, 0))}</span></div>
+                </div>
                 <div class="manage-summary-card manage-summary-net">
                   <div class="manage-summary-card-label">Total Net Salary</div>
                   <div class="manage-summary-card-value"><span id="summary-total-net">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
@@ -140,7 +150,8 @@ export function renderManageMode(ctx) {
                       toNumber(edited.epf_deduction),
                       toNumber(edited.esic_deduction),
                       toNumber(edited.other_deduction),
-                      toNumber(edited.other_benefit)
+                      toNumber(edited.other_benefit),
+                      toNumber(edited.advance_deduction)
                     ) : 0);
                   }, 0))}</span></div>
                 </div>
@@ -209,6 +220,18 @@ export function renderManageMode(ctx) {
                       value="${bulkEditData.other_benefit || ''}"
                       data-action="set-bulk-edit"
                       data-field="other_benefit"
+                      placeholder="Leave blank to skip"
+                      class="bulk-edit-input"
+                    />
+                  </div>
+                  <div>
+                    <label class="bulk-edit-label">Adv Repayment</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      value="${bulkEditData.advance_deduction || ''}"
+                      data-action="set-bulk-edit"
+                      data-field="advance_deduction"
                       placeholder="Leave blank to skip"
                       class="bulk-edit-input"
                     />
@@ -376,6 +399,7 @@ export function renderManageMode(ctx) {
                     <th class="wages-table-th wages-sortable" data-action="sort" data-column="esic_deduction" data-mode="manage">ESIC ${manageSort.column === 'esic_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th class="wages-table-th wages-sortable" data-action="sort" data-column="other_deduction" data-mode="manage">Other Ded ${manageSort.column === 'other_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th class="wages-table-th wages-sortable" data-action="sort" data-column="other_benefit" data-mode="manage">Other Ben ${manageSort.column === 'other_benefit' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th class="wages-table-th">Advance</th>
                     <th class="wages-table-th wages-sortable" data-action="sort" data-column="net_salary" data-mode="manage">Net ${manageSort.column === 'net_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th class="wages-table-th">Payment</th>
                   </tr>
@@ -390,8 +414,11 @@ export function renderManageMode(ctx) {
                       toNumber(edited.epf_deduction),
                       toNumber(edited.esic_deduction),
                       toNumber(edited.other_deduction),
-                      toNumber(edited.other_benefit)
+                      toNumber(edited.other_benefit),
+                      toNumber(edited.advance_deduction)
                     );
+                    
+                    const outstanding = employeeAdvances[wage.master_roll_id?._id] || 0;
                     
                     return `
                       <tr data-wage-row="${String(wage.id)}" class="wages-table-row ${isSelected ? 'selected' : ''}">
@@ -405,7 +432,10 @@ export function renderManageMode(ctx) {
                           />
                         </td>
                         <td class="wages-table-td">
-                          <div class="wage-employee-name">${wage.master_roll_id?.employee_name}</div>
+                          <div class="flex items-center">
+                            <div class="wage-employee-name">${wage.master_roll_id?.employee_name}</div>
+                            ${outstanding > 0 ? `<span class="advance-badge" title="Outstanding: ₹${outstanding}">ADV</span>` : ''}
+                          </div>
                           <div class="wage-employee-details">${wage.master_roll_id?.project || 'N/A'} - ${wage.master_roll_id?.site || 'N/A'}</div>
                         </td>
                         <td class="wages-table-td">
@@ -468,6 +498,19 @@ export function renderManageMode(ctx) {
                             data-wage-id="${String(wage.id)}"
                             data-field="other_benefit"
                             class="wage-input wage-numeric-input"
+                          />
+                        </td>
+                        <td class="wages-table-td">
+                          <input 
+                            id="wage-${String(wage.id)}-advance_deduction"
+                            type="number" 
+                            step="0.01"
+                            value="${edited.advance_deduction ?? ''}"
+                            data-action="edit-wage"
+                            data-wage-id="${String(wage.id)}"
+                            data-field="advance_deduction"
+                            class="wage-input wage-numeric-input ${outstanding > 0 ? 'wage-input--has-advance' : ''}"
+                            placeholder="${outstanding > 0 ? '₹' + outstanding : '0.00'}"
                           />
                         </td>
                         <td class="wages-table-td wages-right">

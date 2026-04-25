@@ -9,6 +9,8 @@ export function renderCreateMode(ctx) {
     createSort,
     commonPaymentData,
     firmBankAccounts,
+    employeeAdvances,
+    openAdvanceModal,
     formatMonthDisplay,
     formatCurrency,
     calculateNetSalary,
@@ -213,6 +215,10 @@ export function renderCreateMode(ctx) {
                   <div class="create-summary-label">Total ESIC</div>
                   <div class="create-summary-value"><span id="create-summary-esic">${formatCurrency(Array.from(selectedEmployeeIds).reduce((sum, empId) => sum + (wageData[empId]?.esic_deduction || 0), 0))}</span></div>
                 </div>
+                <div class="create-summary-card">
+                  <div class="create-summary-label">Total Advance</div>
+                  <div class="create-summary-value"><span id="create-summary-advance">${formatCurrency(Array.from(selectedEmployeeIds).reduce((sum, empId) => sum + (wageData[empId]?.advance_deduction || 0), 0))}</span></div>
+                </div>
                 <div class="create-summary-card create-summary-net">
                   <div class="create-summary-label">Total Net Salary</div>
                   <div class="create-summary-value"><span id="create-summary-net">${formatCurrency(Array.from(selectedEmployeeIds).reduce((sum, empId) => {
@@ -223,7 +229,8 @@ export function renderCreateMode(ctx) {
                       wage.epf_deduction,
                       wage.esic_deduction,
                       wage.other_deduction,
-                      wage.other_benefit
+                      wage.other_benefit,
+                      wage.advance_deduction
                     );
                   }, 0))}</span></div>
                 </div>
@@ -262,6 +269,7 @@ export function renderCreateMode(ctx) {
                     <th class="create-table-th create-sortable" data-action="sort" data-column="esic_deduction" data-mode="create">ESIC ${createSort.column === 'esic_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th class="create-table-th create-sortable" data-action="sort" data-column="other_deduction" data-mode="create">Other Ded ${createSort.column === 'other_deduction' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
                     <th class="create-table-th create-sortable" data-action="sort" data-column="other_benefit" data-mode="create">Other Ben ${createSort.column === 'other_benefit' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
+                    <th class="create-table-th">Advance</th>
                     <th class="create-table-th create-sortable" data-action="sort" data-column="net_salary" data-mode="create">Net Salary ${createSort.column === 'net_salary' ? (createSort.asc ? '▲' : '▼') : '⇅'}</th>
                   </tr>
                 </thead>
@@ -274,8 +282,11 @@ export function renderCreateMode(ctx) {
                       wage.epf_deduction,
                       wage.esic_deduction,
                       wage.other_deduction,
-                      wage.other_benefit
+                      wage.other_benefit,
+                      wage.advance_deduction
                     );
+                    
+                    const outstanding = employeeAdvances[emp.master_roll_id] || 0;
                     
                     return `
                       <tr data-emp-row="${emp.master_roll_id}" class="create-table-row ${isSelected ? 'selected' : ''}">
@@ -289,7 +300,10 @@ export function renderCreateMode(ctx) {
                           />
                         </td>
                         <td class="create-table-td">
-                          <div class="create-emp-name">${emp.employee_name}</div>
+                          <div class="flex items-center">
+                            <div class="create-emp-name">${emp.employee_name}</div>
+                            ${outstanding > 0 ? `<span class="advance-badge" title="Outstanding: ₹${outstanding}">ADV</span>` : ''}
+                          </div>
                           <div class="create-emp-details">${emp.project || 'N/A'} - ${emp.site || 'N/A'}</div>
                         </td>
                         <td class="create-table-td">
@@ -369,6 +383,18 @@ export function renderCreateMode(ctx) {
                             data-emp-id="${emp.master_roll_id}"
                             data-field="other_benefit"
                             class="create-input create-numeric-input"
+                          />
+                        </td>
+                        <td class="create-table-td">
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            value="${wage.advance_deduction || 0}"
+                            data-action="edit-employee"
+                            data-emp-id="${emp.master_roll_id}"
+                            data-field="advance_deduction"
+                            class="create-input create-numeric-input ${outstanding > 0 ? 'wage-input--has-advance' : ''}"
+                            placeholder="${outstanding > 0 ? '₹' + outstanding : '0.00'}"
                           />
                         </td>
                         <td class="create-table-td">

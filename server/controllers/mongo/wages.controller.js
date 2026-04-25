@@ -11,7 +11,7 @@
  *  - IDs are MongoDB ObjectIds instead of integers
  */
 
-import { Wage, MasterRoll } from '../../models/index.js';
+import { Wage, MasterRoll, Advance } from '../../models/index.js';
 
 /* ── HELPER FUNCTIONS ────────────────────────────────────────────────────── */
 
@@ -37,8 +37,8 @@ function isEmployeeEligible(employee, yearMonth) {
   return true;
 }
 
-function calculateNetSalary(gross, epf, esic, otherDeduction, otherBenefit) {
-  return gross - ((epf ?? 0) + (esic ?? 0) + (otherDeduction ?? 0)) + (otherBenefit ?? 0);
+function calculateNetSalary(gross, epf, esic, otherDeduction, otherBenefit, advanceDeduction = 0) {
+  return gross - ((epf ?? 0) + (esic ?? 0) + (otherDeduction ?? 0) + (advanceDeduction ?? 0)) + (otherBenefit ?? 0);
 }
 
 function calculatePerDayWage(gross, wageDays) {
@@ -225,7 +225,8 @@ export async function createWagesBulk(req, res) {
           esic_deduction:   wage.esic_deduction        ?? 0,
           other_deduction:  wage.other_deduction       ?? 0,
           other_benefit:    wage.other_benefit         ?? 0,
-          net_salary:       calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit),
+          advance_deduction: wage.advance_deduction     ?? 0,
+          net_salary:       calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit, wage.advance_deduction),
           salary_month:     month,
           paid_date:        wage.paid_date             ?? null,
           cheque_no:        wage.cheque_no             ?? null,
@@ -233,6 +234,22 @@ export async function createWagesBulk(req, res) {
           created_by:       userId,
           updated_by:       userId,
         });
+
+        // If there's an advance deduction, record it in the Advance model
+        if (wage.advance_deduction > 0) {
+          await Advance.create({
+            firm_id: firmId,
+            master_roll_id: wage.master_roll_id,
+            type: 'REPAYMENT',
+            amount: wage.advance_deduction,
+            date: wage.paid_date || new Date().toISOString().split('T')[0],
+            payment_mode: 'WAGE_DEDUCTION',
+            wage_id: doc._id,
+            remarks: `Repayment from wages - ${month}`,
+            created_by: userId,
+            updated_by: userId
+          });
+        }
 
         results.push({ master_roll_id: wage.master_roll_id, wage_id: doc._id, success: true });
       } catch (error) {
@@ -264,7 +281,7 @@ export async function updateWage(req, res) {
     const firmId     = req.user.firm_id;
 
     const { wage_days, gross_salary, epf_deduction, esic_deduction,
-            other_deduction, other_benefit, paid_date, cheque_no, paid_from_bank_ac } = req.body;
+            other_deduction, other_benefit, advance_deduction, paid_date, cheque_no, paid_from_bank_ac } = req.body;
 
     if (!wage_days || gross_salary === undefined) {
       return res.status(400).json({ success: false, message: 'wage_days and gross_salary are required' });
@@ -282,13 +299,36 @@ export async function updateWage(req, res) {
     existingWage.esic_deduction   = esic_deduction   ?? 0;
     existingWage.other_deduction  = other_deduction  ?? 0;
     existingWage.other_benefit    = other_benefit    ?? 0;
-    existingWage.net_salary       = calculateNetSalary(gross_salary, epf_deduction, esic_deduction, other_deduction, other_benefit);
+    existingWage.advance_deduction = advance_deduction ?? 0;
+    existingWage.net_salary       = calculateNetSalary(gross_salary, epf_deduction, esic_deduction, other_deduction, other_benefit, existingWage.advance_deduction);
     existingWage.paid_date        = paid_date        ?? null;
     existingWage.cheque_no        = cheque_no        ?? null;
     existingWage.paid_from_bank_ac = paid_from_bank_ac ?? null;
     existingWage.updated_by       = userId;
 
     await existingWage.save();
+
+    // Sync Advance model repayment
+    if (existingWage.advance_deduction > 0) {
+      await Advance.findOneAndUpdate(
+        { wage_id: existingWage._id, type: 'REPAYMENT' },
+        {
+          firm_id: firmId,
+          master_roll_id: existingWage.master_roll_id,
+          type: 'REPAYMENT',
+          amount: existingWage.advance_deduction,
+          date: existingWage.paid_date || new Date().toISOString().split('T')[0],
+          payment_mode: 'WAGE_DEDUCTION',
+          wage_id: existingWage._id,
+          remarks: `Repayment from wages - ${existingWage.salary_month}`,
+          updated_by: userId,
+          $setOnInsert: { created_by: userId }
+        },
+        { upsert: true }
+      );
+    } else {
+      await Advance.deleteOne({ wage_id: existingWage._id, type: 'REPAYMENT' });
+    }
 
     res.json({ success: true, message: 'Wage updated successfully', data: existingWage });
   } catch (error) {
@@ -331,13 +371,39 @@ export async function updateWagesBulk(req, res) {
         doc.esic_deduction    = wage.esic_deduction   ?? 0;
         doc.other_deduction   = wage.other_deduction  ?? 0;
         doc.other_benefit     = wage.other_benefit    ?? 0;
-        doc.net_salary        = calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit);
+        doc.advance_deduction = wage.advance_deduction ?? 0;
+        doc.net_salary        = calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit, wage.advance_deduction);
         doc.paid_date         = wage.paid_date        ?? null;
         doc.cheque_no         = wage.cheque_no        ?? null;
         doc.paid_from_bank_ac = wage.paid_from_bank_ac ?? null;
         doc.updated_by        = userId;
 
         await doc.save();
+
+        // Sync Advance model repayment
+        if (doc.advance_deduction > 0) {
+          // Update or create repayment record
+          await Advance.findOneAndUpdate(
+            { wage_id: doc._id, type: 'REPAYMENT' },
+            {
+              firm_id: firmId,
+              master_roll_id: doc.master_roll_id,
+              type: 'REPAYMENT',
+              amount: doc.advance_deduction,
+              date: doc.paid_date || new Date().toISOString().split('T')[0],
+              payment_mode: 'WAGE_DEDUCTION',
+              wage_id: doc._id,
+              remarks: `Repayment from wages - ${doc.salary_month}`,
+              updated_by: userId,
+              $setOnInsert: { created_by: userId }
+            },
+            { upsert: true }
+          );
+        } else {
+          // If deduction is now 0, remove any existing repayment record linked to this wage
+          await Advance.deleteOne({ wage_id: doc._id, type: 'REPAYMENT' });
+        }
+
         results.push({ id: wage.id, success: true, message: 'Updated' });
       } catch (error) {
         results.push({ id: wage.id, success: false, message: error.message });
@@ -370,6 +436,9 @@ export async function deleteWage(req, res) {
       return res.status(404).json({ success: false, message: 'Wage record not found or access denied' });
     }
 
+    // Also delete any repayment linked to this wage
+    await Advance.deleteMany({ wage_id: id });
+
     res.json({ success: true, message: 'Wage deleted successfully', deletedId: id });
   } catch (error) {
     console.error('Error deleting wage:', error);
@@ -394,6 +463,8 @@ export async function deleteWagesBulk(req, res) {
       try {
         const deleted = await Wage.findOneAndDelete({ _id: id, firm_id: firmId });
         if (deleted) {
+          // Also delete any repayment linked to this wage
+          await Advance.deleteMany({ wage_id: id });
           results.push({ id, success: true,  message: 'Deleted' });
         } else {
           results.push({ id, success: false, message: 'Wage record not found or access denied' });

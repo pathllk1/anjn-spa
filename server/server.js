@@ -14,6 +14,7 @@ import sessionRoutes                            from './routes/mongo/sessionRout
 import pageRoutes                               from './routes/mongo/pageRoutes.js';
 import masterRollRoutes                         from './routes/mongo/masterRoll.routes.js';
 import wagesRoutes                              from './routes/mongo/wages.routes.js';
+import advanceRoutes                            from './routes/mongo/advance.routes.js';
 import settingsRoutes                           from './routes/mongo/settings.routes.js';
 import inventorySalesRoutes                     from './routes/mongo/inventory/sls.js';
 import inventoryPurchaseRoutes                  from './routes/mongo/inventory/prs.js';
@@ -99,6 +100,7 @@ app.use('/api/sessions',        sessionRoutes);
 app.use('/api/pages',           pageRoutes);
 app.use('/api/master-rolls',    masterRollRoutes);
 app.use('/api/wages',           wagesRoutes);
+app.use('/api/advances',        advanceRoutes);
 app.use('/api/settings',        settingsRoutes);
 app.use('/api/inventory/sales', inventorySalesRoutes);
 app.use('/api/inventory/purchase', inventoryPurchaseRoutes);
