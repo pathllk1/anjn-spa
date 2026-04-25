@@ -123,10 +123,7 @@ function escapeRegExp(value) {
 }
 
 function stripInlineStyles(html) {
-  const tmp = document.createElement('div');
-  tmp.innerHTML = html;
-  tmp.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
-  return tmp.innerHTML;
+  return html.replace(/\sstyle\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
 }
 
 export function createTextStudioToolModal() {
@@ -534,6 +531,75 @@ export function createTextStudioToolModal() {
     queueSave(root);
   }
 
+  function applyFontName(root, fontName) {
+    const editor = focusEditor(root);
+    if (!editor) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      // No selection — execCommand only sets pending internal state, no DOM write, no CSP risk
+      document.execCommand('fontName', false, fontName);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+
+    const tmp = document.createElement('div');
+    tmp.appendChild(range.cloneContents());
+    insertHtml(root, `<font face="${escapeHtml(fontName)}">${tmp.innerHTML}</font>`);
+  }
+
+  function getBlockNode(root) {
+    const editor = root.querySelector('[data-text-studio-editor]');
+    if (!editor) return null;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+
+    let node = selection.getRangeAt(0).commonAncestorContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+
+    const blockTags = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'DIV', 'PRE']);
+    while (node && node !== editor && !blockTags.has(node.nodeName)) {
+      node = node.parentElement;
+    }
+
+    return node && node !== editor ? node : null;
+  }
+
+  const INDENT_CLASSES = ['pl-8', 'pl-16', 'pl-24', 'pl-32'];
+
+  function applyIndent(root) {
+    const node = getBlockNode(root);
+    if (!node) return;
+
+    const level = Math.min(4, Number(node.dataset.indent || 0) + 1);
+    node.dataset.indent = String(level);
+    node.classList.remove(...INDENT_CLASSES);
+    node.classList.add(INDENT_CLASSES[level - 1]);
+
+    const activeDoc = getActiveDoc();
+    if (activeDoc) { activeDoc.content = root.querySelector('[data-text-studio-editor]').innerHTML; activeDoc.modified = new Date().toISOString(); }
+    saveSelection(root);
+    queueSave(root);
+  }
+
+  function applyOutdent(root) {
+    const node = getBlockNode(root);
+    if (!node) return;
+
+    const level = Math.max(0, Number(node.dataset.indent || 0) - 1);
+    node.dataset.indent = String(level);
+    node.classList.remove(...INDENT_CLASSES);
+    if (level > 0) node.classList.add(INDENT_CLASSES[level - 1]);
+
+    const activeDoc = getActiveDoc();
+    if (activeDoc) { activeDoc.content = root.querySelector('[data-text-studio-editor]').innerHTML; activeDoc.modified = new Date().toISOString(); }
+    saveSelection(root);
+    queueSave(root);
+  }
+
   function handleCommand(root, command) {
     switch (command) {
       case 'new':
@@ -552,12 +618,16 @@ export function createTextStudioToolModal() {
       case 'superscript':
       case 'insertUnorderedList':
       case 'insertOrderedList':
-      case 'outdent':
-      case 'indent':
       case 'removeFormat':
       case 'selectAll':
       case 'insertHorizontalRule':
         exec(root, command);
+        break;
+      case 'indent':
+        applyIndent(root);
+        break;
+      case 'outdent':
+        applyOutdent(root);
         break;
       case 'justifyLeft':
         applyAlignment(root, 'text-left');
@@ -669,11 +739,37 @@ export function createTextStudioToolModal() {
 
               <div class="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1">
                 <select data-editor-select="fontName" class="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none">
-                  <option value="Arial">Arial</option>
-                  <option value="Segoe UI" selected>Segoe UI</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="Courier New">Courier New</option>
-                  <option value="Georgia">Georgia</option>
+                  <optgroup label="Sans-serif">
+                    <option value="Arial">Arial</option>
+                    <option value="Arial Black">Arial Black</option>
+                    <option value="Calibri">Calibri</option>
+                    <option value="Candara">Candara</option>
+                    <option value="Century Gothic">Century Gothic</option>
+                    <option value="Franklin Gothic Medium">Franklin Gothic</option>
+                    <option value="Gill Sans">Gill Sans</option>
+                    <option value="Helvetica">Helvetica</option>
+                    <option value="Impact">Impact</option>
+                    <option value="Segoe UI" selected>Segoe UI</option>
+                    <option value="Tahoma">Tahoma</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Verdana">Verdana</option>
+                  </optgroup>
+                  <optgroup label="Serif">
+                    <option value="Book Antiqua">Book Antiqua</option>
+                    <option value="Cambria">Cambria</option>
+                    <option value="Constantia">Constantia</option>
+                    <option value="Garamond">Garamond</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Palatino Linotype">Palatino</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                  </optgroup>
+                  <optgroup label="Monospace">
+                    <option value="Consolas">Consolas</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Lucida Console">Lucida Console</option>
+                    <option value="Monaco">Monaco</option>
+                    <option value="Roboto Mono">Roboto Mono</option>
+                  </optgroup>
                 </select>
                 <select data-editor-select="fontSize" class="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none">
                   <option value="2">10pt</option>
@@ -879,10 +975,16 @@ export function createTextStudioToolModal() {
       const editor = root.querySelector('[data-text-studio-editor]');
       const title = root.querySelector('[data-doc-title]');
 
-      root.querySelectorAll('button[data-editor-cmd], select[data-editor-select]').forEach((element) => {
+      root.querySelectorAll('button[data-editor-cmd]').forEach((element) => {
         element.addEventListener('mousedown', (event) => {
           saveSelection(root);
           event.preventDefault();
+        });
+      });
+
+      root.querySelectorAll('select[data-editor-select]').forEach((element) => {
+        element.addEventListener('mousedown', () => {
+          saveSelection(root);
         });
       });
 
@@ -951,7 +1053,7 @@ export function createTextStudioToolModal() {
       root.querySelectorAll('select[data-editor-select]').forEach((select) => {
         select.addEventListener('change', (event) => {
           const { editorSelect } = event.target.dataset;
-          if (editorSelect === 'fontName') exec(root, 'fontName', event.target.value);
+          if (editorSelect === 'fontName') applyFontName(root, event.target.value);
           if (editorSelect === 'fontSize') exec(root, 'fontSize', event.target.value);
           if (editorSelect === 'formatBlock') exec(root, 'formatBlock', event.target.value);
         });

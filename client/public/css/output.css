@@ -3510,8 +3510,17 @@
   .pl-10 {
     padding-left: calc(var(--spacing) * 10);
   }
+  .pl-16 {
+    padding-left: calc(var(--spacing) * 16);
+  }
   .pl-20 {
     padding-left: calc(var(--spacing) * 20);
+  }
+  .pl-24 {
+    padding-left: calc(var(--spacing) * 24);
+  }
+  .pl-32 {
+    padding-left: calc(var(--spacing) * 32);
   }
   .text-center {
     text-align: center;
