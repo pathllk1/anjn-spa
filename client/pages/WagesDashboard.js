@@ -208,15 +208,18 @@ let createRenderDebounceTimer = null;
     );
 
     // Update all readonly/auto-calculated fields
-    // NOTE: selector must match data-emp-id (not data-employee) used in the template
-    const fields = ['gross_salary', 'epf_deduction', 'esic_deduction'];
+    const fields = ['gross_salary', 'epf_deduction', 'esic_deduction', 'net_salary'];
     fields.forEach(field => {
       const input = document.querySelector(`input[data-emp-id="${empId}"][data-field="${field}"]`);
-      if (input) input.value = wage[field] || 0;
+      const span = document.querySelector(`span[data-emp-id="${empId}"][data-field="${field}"]`);
+      
+      if (input) {
+        input.value = field === 'net_salary' ? netSalary.toFixed(2) : (wage[field] || 0);
+      }
+      if (span) {
+        span.textContent = field === 'net_salary' ? netSalary.toFixed(2) : (wage[field] || 0);
+      }
     });
-
-    const netInput = document.querySelector(`input[data-emp-id="${empId}"][data-field="net_salary"]`);
-    if (netInput) netInput.value = netSalary.toFixed(2);
   }
 
 
@@ -1129,9 +1132,9 @@ function handleManageFieldChange(wageId, field, value) {
         window.wagesDashboard.toggleSelectAll(e.target.checked);
       } else if (action === 'select-all-employees') {
         window.wagesDashboard.toggleSelectAllCreate(e.target.checked);
-      } else if (action === 'set-month') {
+      } else if (action === 'set-month' || (action === 'month-change' && e.target.dataset.mode === 'create')) {
         window.wagesDashboard.setMonth(e.target.value);
-      } else if (action === 'set-manage-month') {
+      } else if (action === 'set-manage-month' || (action === 'month-change' && e.target.dataset.mode === 'manage')) {
         window.wagesDashboard.setManageMonth(e.target.value);
       } else if (action === 'filter-select') {
         const mode = e.target.dataset.mode;
@@ -1210,20 +1213,27 @@ function handleManageFieldChange(wageId, field, value) {
     const focusedSelectionDirection = activeElement?.selectionDirection;
 
     const html = `
-      <div id="wages-dashboard">
-        <div class="wages-dashboard-nav-strip">
-          <div class="header-main">
-            <h2 class="wages-dashboard-title">💰 Wages</h2>
-            <span class="wages-dashboard-subtitle">Manage records</span>
-          </div>
+      <div id="wages-dashboard" class="w-full px-4 pt-10 pb-12 animate-in fade-in duration-500">
+        <!-- Dashboard Header -->
+        <div class="flex justify-between items-center bg-white px-6 h-14 rounded-2xl shadow-sm border border-slate-100 mb-4">
           <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg shadow-slate-200">💰</div>
+            <div>
+              <h2 class="text-sm font-black text-slate-900 uppercase tracking-tighter italic">Wages Management</h2>
+              <p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">Enterprise Payroll Console</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-6">
             <button 
               data-action="open-advance-modal" 
-              class="tab-btn advance-toolbar-btn"
+              class="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-2"
             >
-              💸 Advances
+              <span class="w-5 h-5 bg-indigo-50 rounded flex items-center justify-center text-xs">💸</span>
+              Advance Ledger
             </button>
-            ${renderTabs({ activeTab })}
+            <div class="w-64">
+              ${renderTabs({ activeTab })}
+            </div>
           </div>
         </div>
         
@@ -1427,11 +1437,15 @@ function handleManageFieldChange(wageId, field, value) {
       renderLayout(content, window.wagesDashboard.router);
     },
 
-    // Create mode - Data loading
-    setMonth: (month) => {
-      selectedMonth = month;
-      // Browser already updated the input value — no re-render needed
-    },
+     // Create mode - Data loading
+     setMonth: (month) => {
+       selectedMonth = month;
+       // Sync both possible inputs in the DOM
+       const createInput = document.getElementById('create-month-input');
+       const manageInput = document.getElementById('manage-month-input');
+       if (createInput) createInput.value = month;
+       if (manageInput) manageInput.value = month;
+     },
     loadEmployees: loadEmployeesForWages,
     
     // Create mode - Calculations (auto-calculate on field change)

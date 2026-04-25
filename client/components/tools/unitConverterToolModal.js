@@ -91,41 +91,45 @@ export function createUnitConverterToolModal() {
     badge: 'Convert',
     render() {
       return `
-        <div class="tool-utility-card hidden" data-tool-modal="converter" role="dialog" aria-modal="true" aria-labelledby="tool-converter-title">
-          <div class="tool-utility-card__header">
-            <div>
-              <p class="tool-utility-card__eyebrow">Conversion</p>
-              <h2 id="tool-converter-title" class="tool-utility-card__title">Unit Converter</h2>
+        <div class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" data-tool-modal="converter" role="dialog" aria-modal="true" aria-labelledby="tool-converter-title">
+          <div class="absolute inset-0" data-dismiss-modal></div>
+          <div class="relative bg-gray-900 border border-gray-700 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="border-b border-gray-700 p-6 flex justify-between items-start bg-gray-800/50">
+              <div>
+                <p class="text-xs font-black text-indigo-400 uppercase tracking-widest">Conversion</p>
+                <h2 id="tool-converter-title" class="text-2xl font-black text-white mt-1 tracking-tighter italic">Unit Converter</h2>
+              </div>
+              <button type="button" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800 text-gray-400 hover:text-white transition" data-close-utility aria-label="Close dialog">✕</button>
             </div>
-            <button type="button" class="tool-utility-card__close" data-close-utility aria-label="Close dialog">x</button>
-          </div>
-          <div class="tool-utility-card__body">
-            <div class="tool-converter">
-              <div class="tool-converter__grid">
-                <label class="tool-converter__field">
-                  <span>Group</span>
-                  <select id="tool-converter-group" class="tool-converter__select">
-                    <option value="length">Length</option>
-                    <option value="weight">Weight</option>
-                    <option value="currency">Desk ratios</option>
-                  </select>
-                </label>
-                <label class="tool-converter__field">
-                  <span>Value</span>
-                  <input id="tool-converter-input" class="tool-converter__input" type="number" step="any" value="1" />
-                </label>
-                <label class="tool-converter__field">
-                  <span>From</span>
-                  <select id="tool-converter-from" class="tool-converter__select"></select>
-                </label>
-                <label class="tool-converter__field">
-                  <span>To</span>
-                  <select id="tool-converter-to" class="tool-converter__select"></select>
-                </label>
-                <label class="tool-converter__field tool-converter__field--full">
-                  <span>Converted value</span>
-                  <input id="tool-converter-output" class="tool-converter__input" type="text" readonly />
-                </label>
+            <div class="p-8 space-y-6 bg-gray-900">
+              <div class="space-y-2">
+                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Measure Category</label>
+                <select id="tool-converter-group" class="w-full bg-gray-800 border-none rounded-2xl px-4 py-3 text-white text-sm font-black focus:ring-2 focus:ring-indigo-500/30 transition-all appearance-none cursor-pointer">
+                  <option value="length">Length & Distance</option>
+                  <option value="weight">Mass & Weight</option>
+                  <option value="currency">Desk Quantity Ratios</option>
+                </select>
+              </div>
+              
+              <div class="space-y-2">
+                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Input Quantity</label>
+                <input id="tool-converter-input" class="w-full bg-gray-800 border-none rounded-2xl px-4 py-4 text-white text-2xl font-black focus:ring-2 focus:ring-indigo-500/30 transition-all text-center placeholder:text-gray-700 shadow-inner" type="number" step="any" value="1" />
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4 bg-gray-800/30 p-4 rounded-3xl border border-gray-800">
+                <div class="space-y-2">
+                  <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 text-center">From</label>
+                  <select id="tool-converter-from" class="w-full bg-gray-800 border-none rounded-xl px-3 py-2 text-white text-[11px] font-black focus:ring-1 focus:ring-indigo-500/30 appearance-none text-center cursor-pointer"></select>
+                </div>
+                <div class="space-y-2">
+                  <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 text-center">To</label>
+                  <select id="tool-converter-to" class="w-full bg-gray-800 border-none rounded-xl px-3 py-2 text-white text-[11px] font-black focus:ring-1 focus:ring-indigo-500/30 appearance-none text-center cursor-pointer"></select>
+                </div>
+              </div>
+              
+              <div class="space-y-2">
+                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Resulting Value</label>
+                <input id="tool-converter-output" class="w-full bg-emerald-950/30 border-2 border-emerald-900/20 rounded-2xl px-4 py-4 text-emerald-400 text-2xl font-black focus:outline-none text-center cursor-default font-mono shadow-lg shadow-emerald-900/10" type="text" readonly />
               </div>
             </div>
           </div>

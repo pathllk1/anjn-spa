@@ -35,535 +35,143 @@ export function renderManageMode(ctx) {
     ].filter(Boolean);
     return parts.join(' • ');
   }
+
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   
   return `
-      <div class="manage-mode">
-        <!-- Controls -->
-        <div class="manage-controls">
-          <div class="manage-controls-row">
-            <div class="manage-month-field">
-              <label class="manage-month-label">Month</label>
-              <input 
-                type="month" 
-                value="${manageMonth}"
-                data-action="set-manage-month"
-                class="manage-month-input"
-              />
+      <div class="w-full flex flex-col gap-2">
+        <!-- 1. TOOLBAR -->
+        <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">History</label>
+              <input type="month" id="manage-month-input" value="${manageMonth}" data-action="month-change" data-mode="manage"
+                class="px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg text-xs font-black text-slate-700 outline-none focus:ring-1 focus:ring-slate-900/10" />
             </div>
-            
-            <div class="manage-margin-auto">
-              <button 
-                data-action="load-manage-wages" 
-                ${isManageLoading ? 'disabled' : ''}
-                class="manage-button"
-              >
-                ${isManageLoading ? '⏳ Loading...' : '🔄 Load Wages'}
-              </button>
-            </div>
-
-            ${existingWages.length > 0 ? `
-              <!-- Selection actions: always in DOM, shown/hidden via JS -->
-              <div id="manage-selection-actions" class="${selectedWageIds.size > 0 ? 'visible' : 'hidden'}">
-                <button 
-                  id="bulk-edit-btn"
-                  data-action="toggle-bulk-edit"
-                  class="bulk-edit-button ${isBulkEditMode ? 'active' : ''}"
-                >
-                  ${isBulkEditMode ? '❌ Cancel Bulk Edit' : '✏️ Bulk Edit (' + selectedWageIds.size + ')'}
-                </button>
-                <button 
-                  id="delete-selected-btn"
-                  data-action="delete-selected"
-                  class="delete-button"
-                >
-                  🗑️ Delete Selected (${selectedWageIds.size})
-                </button>
-              </div>
-
-              <!-- Save edited: always in DOM, shown/hidden via JS -->
-              <div id="save-edited-btn-container" class="${Object.keys(editedWages).length > 0 ? 'visible' : 'hidden'}">
-                <button 
-                  id="save-edited-btn"
-                  data-action="save-edited"
-                  ${isManageLoading ? 'disabled' : ''}
-                  class="save-button"
-                >
-                  💾 Save Changes (${Object.keys(editedWages).length})
-                </button>
-              </div>
-
-              <div class="manage-margin-auto">
-                <button 
-                  data-action="export-excel"
-                  class="export-button"
-                >
-                  📊 Export
-                </button>
-              </div>
-            ` : ''}
+            <button data-action="load-wages" class="px-3 py-1.5 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all flex items-center gap-1.5" ${isManageLoading ? 'disabled' : ''}>
+              ${isManageLoading ? 'Syncing...' : '🔄 Fetch Records'}
+            </button>
           </div>
 
-          ${existingWages.length > 0 ? `
-            <!-- Summary panel: always in DOM, shown/hidden via JS -->
-            <div id="manage-summary-panel" class="manage-summary-panel ${selectedWageIds.size > 0 ? 'visible' : 'hidden'}">
-              <h4 class="manage-summary-header">📊 Summary (${selectedWageIds.size} selected)</h4>
-              <div class="manage-summary-grid">
-                <div class="manage-summary-card manage-summary-gross">
-                  <div class="manage-summary-card-label">Total Gross Salary</div>
-                  <div class="manage-summary-card-value"><span id="summary-total-gross">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                    const wage = existingWages.find(w => w.id === wageId);
-                    const edited = editedWages[wageId] || wage;
-                    return sum + (edited ? edited.gross_salary : 0);
-                  }, 0))}</span></div>
-                </div>
-                <div class="manage-summary-card manage-summary-epf">
-                  <div class="manage-summary-card-label">Total EPF</div>
-                  <div class="manage-summary-card-value"><span id="summary-total-epf">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                    const wage = existingWages.find(w => w.id === wageId);
-                    const edited = editedWages[wageId] || wage;
-                    return sum + (edited ? edited.epf_deduction : 0);
-                  }, 0))}</span></div>
-                </div>
-                <div class="manage-summary-card manage-summary-esic">
-                  <div class="manage-summary-card-label">Total ESIC</div>
-                  <div class="manage-summary-card-value"><span id="summary-total-esic">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                    const wage = existingWages.find(w => w.id === wageId);
-                    const edited = editedWages[wageId] || wage;
-                    return sum + (edited ? edited.esic_deduction : 0);
-                  }, 0))}</span></div>
-                </div>
-                <div class="manage-summary-card">
-                  <div class="manage-summary-card-label">Total Advance</div>
-                  <div class="manage-summary-card-value"><span id="summary-total-advance">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                    const wage = existingWages.find(w => w.id === wageId);
-                    const edited = editedWages[wageId] || wage;
-                    return sum + (edited ? (edited.advance_deduction || 0) : 0);
-                  }, 0))}</span></div>
-                </div>
-                <div class="manage-summary-card manage-summary-net">
-                  <div class="manage-summary-card-label">Total Net Salary</div>
-                  <div class="manage-summary-card-value"><span id="summary-total-net">${formatCurrency(Array.from(selectedWageIds).reduce((sum, wageId) => {
-                    const wage = existingWages.find(w => w.id === wageId);
-                    const edited = editedWages[wageId] || wage;
-                    return sum + (edited ? calculateNetSalary(
-                      toNumber(edited.gross_salary),
-                      toNumber(edited.epf_deduction),
-                      toNumber(edited.esic_deduction),
-                      toNumber(edited.other_deduction),
-                      toNumber(edited.other_benefit),
-                      toNumber(edited.advance_deduction)
-                    ) : 0);
-                  }, 0))}</span></div>
-                </div>
-              </div>
+          <div class="flex items-center gap-2">
+            <button data-action="toggle-bulk-edit" class="px-3 py-1.5 ${isBulkEditMode ? 'bg-rose-600 text-white' : 'bg-indigo-50 text-indigo-600'} text-[9px] font-black uppercase tracking-widest rounded-lg transition-all" ${selectedWageIds.size === 0 ? 'disabled' : ''}>
+              ${isBulkEditMode ? '✖ Cancel Bulk' : '✏️ Bulk Edit'}
+            </button>
+            <div id="manage-selection-actions" class="${selectedWageIds.size > 0 ? 'flex' : 'hidden'} items-center gap-2 border-l border-slate-100 pl-4 ml-2 animate-in slide-in-from-right-4">
+               <button data-action="delete-selected" class="px-3 py-1.5 bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-rose-100 transition-all">🗑 Delete (${selectedWageIds.size})</button>
             </div>
-
-            <!-- Bulk Edit Form -->
-            ${isBulkEditMode ? `
-              <div class="bulk-edit-form">
-                <h4 class="bulk-edit-header">✏️ Bulk Edit Form (${selectedWageIds.size} wages selected)</h4>
-                <div class="bulk-edit-inputs">
-                  <div>
-                    <label class="bulk-edit-label">Wage Days</label>
-                    <input 
-                      type="number"
-                      min="0"
-                      max="31"
-                      value="${bulkEditData.wage_days || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="wage_days"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">EPF Deduction</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      value="${bulkEditData.epf_deduction || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="epf_deduction"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">ESIC Deduction</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      value="${bulkEditData.esic_deduction || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="esic_deduction"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Other Deduction</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      value="${bulkEditData.other_deduction || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="other_deduction"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Other Benefit</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      value="${bulkEditData.other_benefit || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="other_benefit"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Adv Repayment</label>
-                    <input 
-                      type="number" 
-                      step="0.01"
-                      value="${bulkEditData.advance_deduction || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="advance_deduction"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Paid Date</label>
-                    <input 
-                      type="date"
-                      value="${bulkEditData.paid_date || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="paid_date"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Cheque No</label>
-                    <input 
-                      type="text"
-                      value="${bulkEditData.cheque_no || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="cheque_no"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Paid From Bank</label>
-                    <select 
-                      data-action="set-bulk-edit"
-                      data-field="paid_from_bank_ac"
-                      class="bulk-edit-input"
-                    >
-                      <option value="">Leave blank to skip</option>
-                      ${firmBankAccounts.map(account => `
-                        <option value="${getBankAccountOptionLabel(account)}" ${bulkEditData.paid_from_bank_ac === getBankAccountOptionLabel(account) ? 'selected' : ''}>
-                          ${getBankAccountOptionLabel(account)}
-                        </option>
-                      `).join('')}
-                    </select>
-                  </div>
-                  <div>
-                    <label class="bulk-edit-label">Remarks</label>
-                    <input 
-                      type="text"
-                      value="${bulkEditData.remarks || ''}"
-                      data-action="set-bulk-edit"
-                      data-field="remarks"
-                      placeholder="Leave blank to skip"
-                      class="bulk-edit-input"
-                    />
-                  </div>
-                </div>
-                <div class="bulk-edit-buttons">
-                  <button 
-                    data-action="apply-bulk-edit"
-                    class="bulk-apply-button"
-                  >
-                    ✅ Apply to ${selectedWageIds.size} Wages
-                  </button>
-                  <button 
-                    data-action="clear-bulk-edit"
-                    class="bulk-clear-button"
-                  >
-                    🔄 Clear Form
-                  </button>
-                </div>
-              </div>
-            ` : ''}
-
-            <!-- Filters -->
-            <div class="filters-section">
-              <h4 class="filters-header">🔍 Filters</h4>
-              <div class="filters-grid">
-                <div>
-                  <input 
-                    type="text" 
-                    placeholder="Search by name, account..."
-                    value="${manageFilters.searchTerm}"
-                    data-action="search-filter"
-                    data-mode="manage"
-                    data-field="searchTerm"
-                    class="filter-input"
-                  />
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="filter-select"
-                    data-mode="manage"
-                    data-field="bankFilter"
-                    class="filter-select"
-                  >
-                    <option value="all" ${manageFilters.bankFilter === 'all' ? 'selected' : ''}>All Banks</option>
-                    ${uniqueBanks.map(bank => `<option value="${bank}" ${manageFilters.bankFilter === bank ? 'selected' : ''}>${bank}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="filter-select"
-                    data-mode="manage"
-                    data-field="projectFilter"
-                    class="filter-select"
-                  >
-                    <option value="all" ${manageFilters.projectFilter === 'all' ? 'selected' : ''}>All Projects</option>
-                    ${uniqueProjects.map(proj => `<option value="${proj}" ${manageFilters.projectFilter === proj ? 'selected' : ''}>${proj}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="filter-select"
-                    data-mode="manage"
-                    data-field="siteFilter"
-                    class="filter-select"
-                  >
-                    <option value="all" ${manageFilters.siteFilter === 'all' ? 'selected' : ''}>All Sites</option>
-                    ${uniqueSites.map(site => `<option value="${site}" ${manageFilters.siteFilter === site ? 'selected' : ''}>${site}</option>`).join('')}
-                  </select>
-                </div>
-                
-                <div>
-                  <select 
-                    data-action="filter-select"
-                    data-mode="manage"
-                    data-field="paidFilter"
-                    class="filter-select"
-                  >
-                    <option value="all" ${manageFilters.paidFilter === 'all' ? 'selected' : ''}>All Payment Status</option>
-                    <option value="paid" ${manageFilters.paidFilter === 'paid' ? 'selected' : ''}>Paid</option>
-                    <option value="unpaid" ${manageFilters.paidFilter === 'unpaid' ? 'selected' : ''}>Unpaid</option>
-                  </select>
-                </div>
-              </div>
+            <div id="save-edited-btn-container" class="${Object.keys(editedWages).length > 0 ? 'block' : 'hidden'} animate-in zoom-in">
+               <button data-action="save-edited" class="px-3 py-1.5 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-900/10">💾 Push Changes (${Object.keys(editedWages).length})</button>
             </div>
-          ` : ''}
+            <button data-action="export-wages" class="px-3 py-1.5 bg-slate-100 text-slate-600 text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-slate-200 transition-all">📥 Export</button>
+          </div>
         </div>
 
-        <!-- Wages Table -->
-        ${existingWages.length > 0 ? `
-          <div class="wages-table-container">
-            <h3 class="wages-table-title">
-              Wage Records for ${formatMonthDisplay(manageMonth)}
-              <span class="wages-table-count">(${filteredWages.length} of ${existingWages.length} records)</span>
-              <span id="unsaved-changes-badge" class="${Object.keys(editedWages).length > 0 ? 'visible' : 'hidden'}">⚠️ <span id="unsaved-count">${Object.keys(editedWages).length}</span> unsaved changes</span>
-            </h3>
-            
-            <div class="wages-table-wrapper">
-              <table class="wages-table">
-                <thead>
-                  <tr class="wages-table-header">
-                    <th class="wages-table-th">
-                      <input 
-                        id="select-all-manage"
-                        type="checkbox" 
-                        ${selectedWageIds.size === filteredWages.length && filteredWages.length > 0 ? 'checked' : ''}
-                        data-action="select-all-wages"
-                        class="wages-checkbox"
-                      />
-                    </th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="employee_name" data-mode="manage">Employee ${manageSort.column === 'employee_name' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="wage_days" data-mode="manage">Days ${manageSort.column === 'wage_days' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="gross_salary" data-mode="manage">Gross ${manageSort.column === 'gross_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="epf_deduction" data-mode="manage">EPF ${manageSort.column === 'epf_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="esic_deduction" data-mode="manage">ESIC ${manageSort.column === 'esic_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="other_deduction" data-mode="manage">Other Ded ${manageSort.column === 'other_deduction' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="other_benefit" data-mode="manage">Other Ben ${manageSort.column === 'other_benefit' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th">Advance</th>
-                    <th class="wages-table-th wages-sortable" data-action="sort" data-column="net_salary" data-mode="manage">Net ${manageSort.column === 'net_salary' ? (manageSort.asc ? '▲' : '▼') : '⇅'}</th>
-                    <th class="wages-table-th">Payment</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${sortArray(filteredWages, manageSort.column, manageSort.asc).map(wage => {
-                    const edited = editedWages[wage.id] || wage;
-                    const isEdited = !!editedWages[wage.id];
-                    const isSelected = selectedWageIds.has(wage.id);
-                    const netSalary = calculateNetSalary(
-                      toNumber(edited.gross_salary),
-                      toNumber(edited.epf_deduction),
-                      toNumber(edited.esic_deduction),
-                      toNumber(edited.other_deduction),
-                      toNumber(edited.other_benefit),
-                      toNumber(edited.advance_deduction)
-                    );
-                    
-                    const outstanding = employeeAdvances[wage.master_roll_id?._id] || 0;
-                    
-                    return `
-                      <tr data-wage-row="${String(wage.id)}" class="wages-table-row ${isSelected ? 'selected' : ''}">
-                        <td class="wages-table-td">
-                          <input 
-                            type="checkbox" 
-                            ${isSelected ? 'checked' : ''}
-                            data-action="toggle-wage"
-                            data-wage-id="${String(wage.id)}"
-                            class="wages-checkbox"
-                          />
-                        </td>
-                        <td class="wages-table-td">
-                          <div class="flex items-center">
-                            <div class="wage-employee-name">${wage.master_roll_id?.employee_name}</div>
-                            ${outstanding > 0 ? `<span class="advance-badge" title="Outstanding: ₹${outstanding}">ADV</span>` : ''}
-                          </div>
-                          <div class="wage-employee-details">${wage.master_roll_id?.project || 'N/A'} - ${wage.master_roll_id?.site || 'N/A'}</div>
-                        </td>
-                        <td class="wages-table-td">
-                          <input 
-                            id="wage-${String(wage.id)}-wage_days"
-                            type="number" 
-                            value="${edited.wage_days ?? ''}"
-                            data-action="edit-wage"
-                            data-wage-id="${String(wage.id)}"
-                            data-field="wage_days"
-                            class="wage-input wage-days-input"
-                          />
-                        </td>
-                        <td class="wages-table-td wages-right">
-                          <span id="wage-${String(wage.id)}-gross-display" class="wage-currency">${formatCurrency(edited.gross_salary)}</span>
-                        </td>
-                        <td class="wages-table-td wages-right">
-                          <input 
-                            id="wage-${String(wage.id)}-epf_deduction"
-                            type="number" 
-                            step="0.01"
-                            value="${edited.epf_deduction ?? ''}"
-                            data-action="edit-wage"
-                            data-wage-id="${String(wage.id)}"
-                            data-field="epf_deduction"
-                            class="wage-input wage-numeric-input"
-                          />
-                        </td>
-                        <td class="wages-table-td wages-right">
-                          <input 
-                            id="wage-${String(wage.id)}-esic_deduction"
-                            type="number" 
-                            step="0.01"
-                            value="${edited.esic_deduction ?? ''}"
-                            data-action="edit-wage"
-                            data-wage-id="${String(wage.id)}"
-                            data-field="esic_deduction"
-                            class="wage-input wage-numeric-input"
-                          />
-                        </td>
-                        <td class="wages-table-td wages-right">
-                          <input 
-                            id="wage-${String(wage.id)}-other_deduction"
-                            type="number" 
-                            step="0.01"
-                            value="${edited.other_deduction ?? ''}"
-                            data-action="edit-wage"
-                            data-wage-id="${String(wage.id)}"
-                            data-field="other_deduction"
-                            class="wage-input wage-numeric-input"
-                          />
-                        </td>
-                        <td class="wages-table-td wages-right">
-                          <input 
-                            id="wage-${String(wage.id)}-other_benefit"
-                            type="number" 
-                            step="0.01"
-                            value="${edited.other_benefit ?? ''}"
-                            data-action="edit-wage"
-                            data-wage-id="${String(wage.id)}"
-                            data-field="other_benefit"
-                            class="wage-input wage-numeric-input"
-                          />
-                        </td>
-                        <td class="wages-table-td">
-                          <input 
-                            id="wage-${String(wage.id)}-advance_deduction"
-                            type="number" 
-                            step="0.01"
-                            value="${edited.advance_deduction ?? ''}"
-                            data-action="edit-wage"
-                            data-wage-id="${String(wage.id)}"
-                            data-field="advance_deduction"
-                            class="wage-input wage-numeric-input ${outstanding > 0 ? 'wage-input--has-advance' : ''}"
-                            placeholder="${outstanding > 0 ? '₹' + outstanding : '0.00'}"
-                          />
-                        </td>
-                        <td class="wages-table-td wages-right">
-                          <span id="wage-${String(wage.id)}-net-display" class="wage-net-salary">${formatCurrency(netSalary)}</span>
-                        </td>
-                        <td class="wages-table-td">
-                          <div class="wage-payment-info">
-                            <input 
-                              type="date"
-                              value="${edited.paid_date || ''}"
-                              data-action="edit-wage"
-                              data-wage-id="${String(wage.id)}"
-                              data-field="paid_date"
-                              class="wage-date-input"
-                            />
-                            <input 
-                              type="text"
-                              value="${edited.cheque_no || ''}"
-                              data-action="edit-wage"
-                              data-wage-id="${String(wage.id)}"
-                              data-field="cheque_no"
-                              placeholder="Cheque/Ref"
-                              class="wage-cheque-input"
-                            />
-                            <select 
-                              data-action="edit-wage"
-                              data-wage-id="${String(wage.id)}"
-                              data-field="paid_from_bank_ac"
-                              class="wage-bank-select"
-                            >
-                              <option value="">Select Bank</option>
-                              ${firmBankAccounts.map(account => `
-                                <option value="${getBankAccountOptionLabel(account)}" ${edited.paid_from_bank_ac === getBankAccountOptionLabel(account) ? 'selected' : ''}>
-                                  ${getBankAccountOptionLabel(account)}
-                                </option>
-                              `).join('')}
-                            </select>
-                          </div>
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
+        <!-- 2. BULK EDIT -->
+        ${isBulkEditMode ? `
+          <div class="bg-indigo-900/5 border-2 border-indigo-100 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300">
+             <div class="grid grid-cols-5 gap-4">
+                <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Wage Days</label><input type="number" value="${bulkEditData.wage_days}" data-action="set-bulk-edit" data-field="wage_days" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-xs font-bold" /></div>
+                <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Paid Date</label><input type="date" value="${bulkEditData.paid_date}" data-action="set-bulk-edit" data-field="paid_date" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-xs font-bold" /></div>
+                <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Funding Account</label><select data-action="set-bulk-edit" data-field="paid_from_bank_ac" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-[10px] font-bold">
+                    <option value="">Skip</option>
+                    ${firmBankAccounts.map(a => `<option value="${getBankAccountOptionLabel(a)}" ${bulkEditData.paid_from_bank_ac === getBankAccountOptionLabel(a) ? 'selected' : ''}>${getBankAccountOptionLabel(a)}</option>`).join('')}
+                </select></div>
+                <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Reference</label><input type="text" value="${bulkEditData.cheque_no}" data-action="set-bulk-edit" data-field="cheque_no" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-xs font-bold" /></div>
+                <div class="flex items-end gap-2">
+                   <button data-action="apply-bulk-edit" class="flex-1 py-1.5 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg">Apply</button>
+                   <button data-action="clear-bulk-edit" class="flex-1 py-1.5 bg-white text-slate-400 text-[9px] font-black uppercase rounded-lg border border-indigo-100">Clear</button>
+                </div>
+             </div>
           </div>
-        ` : `
-          <div class="no-wages-container">
-            <div class="no-wages-icon">📊</div>
-            <h3 class="no-wages-title">No Wage Records Found</h3>
-            <p class="no-wages-message">Select a month and click "Load Wages" to manage existing wage records</p>
+        ` : ''}
+
+        <!-- 3. FILTERS -->
+        <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3 overflow-x-auto">
+          <input type="text" placeholder="Search entries..." data-action="search-filter" data-mode="manage" data-field="searchTerm" value="${manageFilters.searchTerm || ''}"
+            class="min-w-[140px] px-2 py-1 bg-slate-50 border-none rounded-lg text-[10px] font-bold outline-none" />
+          <select data-action="search-filter" data-mode="manage" data-field="projectFilter" class="px-2 py-1 bg-slate-50 border-none rounded-lg text-[10px] font-bold outline-none">
+            <option value="all">All Projects</option>
+            ${uniqueProjects.map(p => `<option value="${p}" ${manageFilters.projectFilter === p ? 'selected' : ''}>${p}</option>`).join('')}
+          </select>
+          <select data-action="search-filter" data-mode="manage" data-field="siteFilter" class="px-2 py-1 bg-slate-50 border-none rounded-lg text-[10px] font-bold outline-none">
+            <option value="all">All Sites</option>
+            ${uniqueSites.map(s => `<option value="${s}" ${manageFilters.siteFilter === s ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+          <div class="w-px h-4 bg-slate-100"></div>
+          <select data-action="search-filter" data-mode="manage" data-field="paidFilter" class="px-2 py-1 bg-slate-50 border-none rounded-lg text-[10px] font-bold outline-none">
+            <option value="all" ${manageFilters.paidFilter === 'all' ? 'selected' : ''}>All Status</option>
+            <option value="paid" ${manageFilters.paidFilter === 'paid' ? 'selected' : ''}>Settled</option>
+            <option value="unpaid" ${manageFilters.paidFilter === 'unpaid' ? 'selected' : ''}>Pending</option>
+          </select>
+        </div>
+
+        <!-- 4. SUMMARY STRIP -->
+        <div class="bg-slate-900 rounded-xl p-2 px-6 flex items-center gap-8 border border-slate-800 h-11 shrink-0 ${selectedWageIds.size > 0 ? 'flex' : 'hidden'}">
+             <div class="flex flex-col"><span class="text-[7px] font-black text-slate-500 uppercase">Gross</span><span id="summary-total-gross" class="text-[11px] font-black text-white font-mono leading-none">₹0</span></div>
+             <div class="flex flex-col"><span class="text-[7px] font-black text-slate-500 uppercase">EPF</span><span id="summary-total-epf" class="text-[11px] font-black text-amber-500 font-mono leading-none">₹0</span></div>
+             <div class="flex flex-col"><span class="text-[7px] font-black text-slate-500 uppercase">ESIC</span><span id="summary-total-esic" class="text-[11px] font-black text-amber-500 font-mono leading-none">₹0</span></div>
+             <div class="flex flex-col"><span class="text-[7px] font-black text-slate-500 uppercase">Advance</span><span id="summary-total-advance" class="text-[11px] font-black text-rose-400 font-mono leading-none">₹0</span></div>
+             <div class="w-px h-6 bg-slate-800"></div>
+             <div class="flex flex-col"><span class="text-[7px] font-black text-emerald-500 uppercase">Net Settled</span><span id="summary-total-net" class="text-sm font-black text-emerald-400 font-mono italic">₹0</span></div>
+             <div id="unsaved-changes-badge" class="hidden px-2 py-0.5 bg-amber-500 text-slate-900 text-[8px] font-black rounded uppercase ml-auto">Unpushed Changes</div>
+        </div>
+
+        <!-- 5. DATA TABLE -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex-1">
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse table-fixed">
+              <thead>
+                <tr class="bg-slate-900 border-b border-white/5">
+                  <th class="p-2 w-10 text-center"><input type="checkbox" id="select-all-manage" data-action="select-all" data-mode="manage" class="w-3 h-3 rounded accent-indigo-600" ${filteredWages.length > 0 && filteredWages.every(w => selectedWageIds.has(w.id)) ? 'checked' : ''} /></th>
+                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-48">Employee</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">Days</th>
+                  <th class="px-3 py-2 text-right text-[9px] font-black text-slate-500 uppercase w-24">Gross</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">EPF</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">ESIC</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">Other Ded</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">Adv Pay</th>
+                  <th class="px-4 py-2 text-right text-[9px] font-black text-emerald-400 uppercase bg-white/5 italic w-28">Net</th>
+                  <th class="px-4 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-64">Settlement Details</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                ${filteredWages.map(wage => {
+                  const edited = editedWages[wage.id] || wage;
+                  const isSelected = selectedWageIds.has(wage.id);
+                  const mr = wage.master_roll_id || {};
+                  const outstanding = employeeAdvances[mr._id] || 0;
+                  const netSalary = calculateNetSalary(toNumber(edited.gross_salary), toNumber(edited.epf_deduction), toNumber(edited.esic_deduction), toNumber(edited.other_deduction), toNumber(edited.other_benefit), toNumber(edited.advance_deduction));
+
+                  return `
+                    <tr data-wage-row="${String(wage.id)}" class="hover:bg-slate-50/50 group ${isSelected ? 'bg-indigo-50/20' : ''}">
+                      <td class="p-2 text-center border-r border-slate-50"><input type="checkbox" data-action="toggle-wage" data-wage-id="${String(wage.id)}" ${isSelected ? 'checked' : ''} class="w-3 h-3 rounded accent-indigo-600" /></td>
+                      <td class="px-3 py-1.5 border-r border-slate-50"><div class="flex items-center gap-1.5"><span class="text-[10px] font-black text-slate-800">${esc(mr.employee_name)}</span>${outstanding > 0 ? `<span class="px-1 py-0.5 bg-rose-50 text-rose-600 text-[6px] font-black rounded">ADV</span>` : ''}</div><p class="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">${esc(mr.project)} • ${esc(mr.site)}</p></td>
+                      <td class="px-2 py-1.5 text-center border-r border-slate-50"><input type="number" value="${edited.wage_days}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="wage_days" class="w-full px-1 py-0.5 bg-slate-50 border-none rounded text-center text-xs font-black text-indigo-600" /></td>
+                      <td class="px-3 py-1.5 text-right border-r border-slate-50"><span data-wage-id="${String(wage.id)}" data-field="gross_salary" class="text-[10px] font-black text-slate-900 font-mono">${Math.round(edited.gross_salary)}</span></td>
+                      <td class="px-2 py-1.5 border-r border-slate-50"><input type="number" value="${edited.epf_deduction}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="epf_deduction" class="w-full px-1 py-0.5 bg-transparent border-none text-center text-[10px] font-bold text-amber-700" id="wage-${String(wage.id)}-epf_deduction" /></td>
+                      <td class="px-2 py-1.5 border-r border-slate-50"><input type="number" value="${edited.esic_deduction}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="esic_deduction" class="w-full px-1 py-0.5 bg-transparent border-none text-center text-[10px] font-bold text-amber-700" id="wage-${String(wage.id)}-esic_deduction" /></td>
+                      <td class="px-2 py-1.5 border-r border-slate-50"><input type="number" value="${edited.other_deduction}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="other_deduction" class="w-full px-1 py-0.5 bg-transparent border-none text-center text-[10px] font-bold text-amber-600" /></td>
+                      <td class="px-2 py-1.5 border-r border-slate-50"><input type="number" value="${edited.advance_deduction}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="advance_deduction" placeholder="${outstanding > 0 ? '₹' + Math.round(outstanding) : '0'}" class="w-full px-1 py-0.5 rounded text-center text-[10px] font-black transition-all ${outstanding > 0 ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-transparent border-none focus:ring-1 focus:ring-slate-100 text-slate-400'}" id="wage-${String(wage.id)}-advance_deduction" /></td>
+                      <td class="px-4 py-1.5 text-right border-r border-slate-50 font-black text-emerald-600 font-mono text-xs italic"><span id="wage-${String(wage.id)}-net-display" data-wage-id="${String(wage.id)}" data-field="net_salary">${formatCurrency(netSalary)}</span></td>
+                      <td class="px-4 py-1.5">
+                        <div class="flex items-center gap-2">
+                           <input type="date" value="${edited.paid_date || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="paid_date" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" />
+                           <select data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="paid_from_bank_ac" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold max-w-[110px]">
+                              <option value="">Choose Bank</option>
+                              ${firmBankAccounts.map(a => `<option value="${getBankAccountOptionLabel(a)}" ${edited.paid_from_bank_ac === getBankAccountOptionLabel(a) ? 'selected' : ''}>${getBankAccountOptionLabel(a)}</option>`).join('')}
+                           </select>
+                           <input type="text" value="${edited.cheque_no || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="cheque_no" placeholder="Ref" class="w-16 px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" />
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
           </div>
-        `}
+          ${filteredWages.length === 0 ? `<div class="p-12 text-center text-[10px] font-black uppercase text-slate-300">No matching wage records found</div>` : ''}
+        </div>
       </div>
     `;
 }

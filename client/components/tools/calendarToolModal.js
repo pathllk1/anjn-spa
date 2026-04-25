@@ -59,7 +59,7 @@ export function createCalendarToolModal() {
     monthEl.textContent = getMonthLabel(calendarDate);
     gridEl.innerHTML = getCalendarGrid(calendarDate)
       .map((cell) => `
-        <div class="tool-calendar__day${cell.muted ? ' is-muted' : ''}${cell.today ? ' is-today' : ''}">
+        <div class="aspect-square flex items-center justify-center rounded text-sm font-medium ${cell.muted ? 'text-gray-600' : 'text-white'} ${cell.today ? 'bg-blue-600 font-bold' : 'bg-gray-800 hover:bg-gray-700'}">
           ${escapeHtml(cell.day)}
         </div>
       `)
@@ -74,30 +74,29 @@ export function createCalendarToolModal() {
     badge: 'Date',
     render() {
       return `
-        <div class="tool-utility-card hidden" data-tool-modal="calendar" role="dialog" aria-modal="true" aria-labelledby="tool-calendar-title">
-          <div class="tool-utility-card__header">
-            <div>
-              <p class="tool-utility-card__eyebrow">Calendar</p>
-              <h2 id="tool-calendar-title" class="tool-utility-card__title">Monthly Calendar</h2>
+        <div class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" data-tool-modal="calendar" role="dialog" aria-modal="true" aria-labelledby="tool-calendar-title">
+          <div class="absolute inset-0" data-dismiss-modal></div>
+          <div class="relative bg-gray-900 border border-gray-700 rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="border-b border-gray-700 p-6 flex justify-between items-start bg-gray-800/50">
+              <div>
+                <p class="text-xs font-black text-indigo-400 uppercase tracking-widest">Calendar</p>
+                <h2 id="tool-calendar-title" class="text-2xl font-black text-white mt-1 tracking-tighter italic">Monthly Planner</h2>
+              </div>
+              <button type="button" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800 text-gray-400 hover:text-white transition" data-close-utility aria-label="Close dialog">✕</button>
             </div>
-            <button type="button" class="tool-utility-card__close" data-close-utility aria-label="Close dialog">×</button>
-          </div>
-          <div class="tool-utility-card__body">
-            <div class="tool-calendar__toolbar">
-              <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-calendar-nav="prev">Previous</button>
-              <div class="tool-calendar__month" id="tool-calendar-month"></div>
-              <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-calendar-nav="next">Next</button>
+            <div class="p-6 space-y-6 bg-gray-900">
+              <div class="flex justify-between items-center gap-4 bg-gray-800/50 p-2 rounded-2xl border border-gray-800">
+                <button type="button" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800 hover:bg-gray-700 text-white transition font-black" data-calendar-nav="prev">←</button>
+                <div class="text-sm font-black text-white uppercase tracking-[0.2em]" id="tool-calendar-month"></div>
+                <button type="button" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800 hover:bg-gray-700 text-white transition font-black" data-calendar-nav="next">→</button>
+              </div>
+              <div class="grid grid-cols-7 gap-2">
+                ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `
+                  <div class="text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">${d}</div>
+                `).join('')}
+              </div>
+              <div class="grid grid-cols-7 gap-2" id="tool-calendar-grid"></div>
             </div>
-            <div class="tool-calendar__weekdays">
-              <span>Sun</span>
-              <span>Mon</span>
-              <span>Tue</span>
-              <span>Wed</span>
-              <span>Thu</span>
-              <span>Fri</span>
-              <span>Sat</span>
-            </div>
-            <div class="tool-calendar__grid" id="tool-calendar-grid"></div>
           </div>
         </div>
       `;

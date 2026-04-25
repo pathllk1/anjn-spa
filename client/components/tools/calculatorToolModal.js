@@ -178,13 +178,13 @@ export function createCalculatorToolModal() {
 
     if (historyEl) {
       if (!state.history.length) {
-        historyEl.innerHTML = '<div class="tool-calculator__history-empty">No calculations yet.</div>';
+        historyEl.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">No calculations yet.</div>';
       } else {
         historyEl.innerHTML = state.history
           .map((item, index) => `
-            <button type="button" class="tool-calculator__history-item" data-history-index="${index}">
-              <span class="tool-calculator__history-expression">${item.expression}</span>
-              <span class="tool-calculator__history-result">${item.result}</span>
+            <button type="button" class="w-full text-left px-2 py-2 rounded bg-gray-700 hover:bg-gray-600 text-xs transition" data-history-index="${index}">
+              <div class="text-gray-300 truncate">${item.expression}</div>
+              <div class="text-orange-400 font-semibold">${item.result}</div>
             </button>
           `)
           .join('');
@@ -233,70 +233,74 @@ export function createCalculatorToolModal() {
     badge: 'Math',
     render() {
       return `
-        <div class="tool-utility-card hidden tool-utility-card--wide" data-tool-modal="calculator" role="dialog" aria-modal="true" aria-labelledby="tool-calculator-title">
-          <div class="tool-utility-card__header">
-            <div>
-              <p class="tool-utility-card__eyebrow">Calculator</p>
-              <h2 id="tool-calculator-title" class="tool-utility-card__title">Calculation Workspace</h2>
-            </div>
-            <button type="button" class="tool-utility-card__close" data-close-utility aria-label="Close dialog">x</button>
-          </div>
-          <div class="tool-utility-card__body">
-            <div class="tool-calculator">
-              <div class="tool-calculator__main">
-                <div class="tool-calculator__screen">
-                  <div class="tool-calculator__screen-top">
-                    <div class="tool-calculator__label">EXPRESSION</div>
-                    <div id="tool-calculator-memory" class="tool-calculator__memory">Memory empty</div>
-                  </div>
-                  <input id="tool-calculator-input" class="tool-calculator__input" type="text" autocomplete="off" placeholder="(2400*18)/12" />
-                  <div id="tool-calculator-result" class="tool-calculator__result">0</div>
-                  <div class="tool-calculator__actions">
-                    <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-calc-action="copy-result">Copy result</button>
-                    <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-calc-action="clear-history">Clear history</button>
-                  </div>
-                </div>
-                <div class="tool-calculator__memory-actions">
-                  <button type="button" class="tool-calculator__mini-key" data-calc-action="memory-clear">MC</button>
-                  <button type="button" class="tool-calculator__mini-key" data-calc-action="memory-recall">MR</button>
-                  <button type="button" class="tool-calculator__mini-key" data-calc-action="memory-add">M+</button>
-                  <button type="button" class="tool-calculator__mini-key" data-calc-action="memory-subtract">M-</button>
-                  <button type="button" class="tool-calculator__mini-key" data-calc-action="toggle-sign">+/-</button>
-                </div>
-                <div class="tool-calculator__keys">
-                  <button type="button" class="tool-calculator__key tool-calculator__key--muted" data-calc-action="clear">AC</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--muted" data-calc-action="backspace">BS</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--muted" data-calc-value="(">(</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--muted" data-calc-value=")">)</button>
-                  
-                  <button type="button" class="tool-calculator__key" data-calc-value="7">7</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value="8">8</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value="9">9</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--accent" data-calc-value="/">/</button>
-                  
-                  <button type="button" class="tool-calculator__key" data-calc-value="4">4</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value="5">5</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value="6">6</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--accent" data-calc-value="*">*</button>
-                  
-                  <button type="button" class="tool-calculator__key" data-calc-value="1">1</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value="2">2</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value="3">3</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--accent" data-calc-value="-">-</button>
-                  
-                  <button type="button" class="tool-calculator__key tool-calculator__key--wide" data-calc-value="0">0</button>
-                  <button type="button" class="tool-calculator__key" data-calc-value=".">.</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--accent" data-calc-value="+">+</button>
-                  
-                  <button type="button" class="tool-calculator__key tool-calculator__key--muted tool-calculator__key--wide" data-calc-value="%">%</button>
-                  <button type="button" class="tool-calculator__key tool-calculator__key--accent tool-calculator__key--wide" data-calc-action="equals">=</button>
-                </div>
+        <div class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" data-tool-modal="calculator" role="dialog" aria-modal="true" aria-labelledby="tool-calculator-title">
+          <div class="absolute inset-0" data-dismiss-modal></div>
+          <div class="relative bg-gray-900 border border-gray-700 rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="border-b border-gray-700 p-6 flex justify-between items-start bg-gray-800/50">
+              <div>
+                <p class="text-xs font-black text-indigo-400 uppercase tracking-widest">Calculator</p>
+                <h2 id="tool-calculator-title" class="text-2xl font-black text-white mt-1 tracking-tighter italic">Calculation Workspace</h2>
               </div>
-              <div class="tool-calculator__sidebar">
-                <div class="tool-calculator__history-header">
-                  <span>Recent history</span>
+              <button type="button" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800 text-gray-400 hover:text-white transition" data-close-utility aria-label="Close dialog">✕</button>
+            </div>
+            <div class="flex-1 overflow-auto p-8">
+              <div class="flex flex-col lg:flex-row gap-8 h-full">
+                <div class="flex-1 space-y-6">
+                  <div class="bg-black rounded-3xl p-8 space-y-4 shadow-inner border border-white/5">
+                    <div class="flex justify-between items-center px-1">
+                      <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Expression</div>
+                      <div id="tool-calculator-memory" class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Memory empty</div>
+                    </div>
+                    <input id="tool-calculator-input" class="w-full bg-transparent text-gray-400 text-2xl font-bold px-1 outline-none placeholder:text-gray-800" type="text" autocomplete="off" placeholder="(2400*18)/12" />
+                    <div id="tool-calculator-result" class="text-6xl font-black text-white text-right py-4 font-mono tracking-tighter italic">0</div>
+                    <div class="flex gap-3">
+                      <button type="button" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition" data-calc-action="copy-result">Copy result</button>
+                      <button type="button" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition" data-calc-action="clear-history">Clear history</button>
+                    </div>
+                  </div>
+                  
+                  <div class="grid grid-cols-5 gap-3 bg-gray-800/30 p-4 rounded-3xl border border-gray-800">
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-indigo-400 py-3 rounded-xl text-xs font-black transition uppercase tracking-widest" data-calc-action="memory-clear">MC</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-indigo-400 py-3 rounded-xl text-xs font-black transition uppercase tracking-widest" data-calc-action="memory-recall">MR</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-indigo-400 py-3 rounded-xl text-xs font-black transition uppercase tracking-widest" data-calc-action="memory-add">M+</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-indigo-400 py-3 rounded-xl text-xs font-black transition uppercase tracking-widest" data-calc-action="memory-subtract">M-</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-indigo-400 py-3 rounded-xl text-xs font-black transition uppercase tracking-widest" data-calc-action="toggle-sign">+/-</button>
+                  </div>
+                  
+                  <div class="grid grid-cols-4 gap-4 bg-gray-800/30 p-4 rounded-3xl border border-gray-800">
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-white py-5 rounded-2xl font-black text-lg transition shadow-sm border border-gray-700/50" data-calc-action="clear">AC</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-white py-5 rounded-2xl font-black text-lg transition shadow-sm border border-gray-700/50" data-calc-action="backspace">BS</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-white py-5 rounded-2xl font-black text-lg transition shadow-sm border border-gray-700/50" data-calc-value="(">(</button>
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-white py-5 rounded-2xl font-black text-lg transition shadow-sm border border-gray-700/50" data-calc-value=")">)</button>
+                    
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="7">7</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="8">8</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="9">9</button>
+                    <button type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xl transition shadow-lg shadow-indigo-900/20" data-calc-value="/">/</button>
+                    
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="4">4</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="5">5</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="6">6</button>
+                    <button type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xl transition shadow-lg shadow-indigo-900/20" data-calc-value="*">*</button>
+                    
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="1">1</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="2">2</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value="3">3</button>
+                    <button type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xl transition shadow-lg shadow-indigo-900/20" data-calc-value="-">-</button>
+                    
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition col-span-2" data-calc-value="0">0</button>
+                    <button type="button" class="bg-gray-700 hover:bg-gray-600 text-white py-5 rounded-2xl font-black text-xl transition" data-calc-value=".">.</button>
+                    <button type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white py-5 rounded-2xl font-black text-xl transition shadow-lg shadow-indigo-900/20" data-calc-value="+">+</button>
+                    
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-gray-400 py-5 rounded-2xl font-black text-xl transition col-span-2 uppercase tracking-widest text-sm" data-calc-value="%">%</button>
+                    <button type="button" class="bg-emerald-600 hover:bg-emerald-500 text-white py-5 rounded-2xl font-black text-xl transition col-span-2 shadow-lg shadow-emerald-900/20" data-calc-action="equals">=</button>
+                  </div>
                 </div>
-                <div id="tool-calculator-history" class="tool-calculator__history"></div>
+                
+                <div class="w-full lg:w-64 bg-gray-800/50 rounded-3xl p-6 flex flex-col border border-gray-800">
+                  <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-4">Account History</div>
+                  <div id="tool-calculator-history" class="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-gray-700"></div>
+                </div>
               </div>
             </div>
           </div>

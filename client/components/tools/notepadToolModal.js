@@ -70,12 +70,12 @@ export function createNotepadToolModal() {
     if (listEl) {
       listEl.innerHTML = visibleNotes
         .map((note) => `
-          <button type="button" class="tool-notepad__note-item${note.id === activeNote?.id ? ' is-active' : ''}" data-note-id="${note.id}">
-            <span class="tool-notepad__note-title">${note.title || 'Untitled note'}</span>
-            <span class="tool-notepad__note-meta">${formatTimestamp(note.updatedAt)}</span>
+          <button type="button" class="w-full text-left px-2 py-2 rounded transition ${note.id === activeNote?.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-100'}" data-note-id="${note.id}">
+            <div class="font-semibold text-sm truncate">${note.title || 'Untitled note'}</div>
+            <div class="text-xs opacity-75">${formatTimestamp(note.updatedAt)}</div>
           </button>
         `)
-        .join('') || '<div class="tool-notepad__empty">No notes match the current filter.</div>';
+        .join('') || '<div class="text-xs text-gray-400 text-center py-4 px-2">No notes match the current filter.</div>';
     }
 
     if (titleEl && activeNote) {
@@ -125,34 +125,37 @@ export function createNotepadToolModal() {
     badge: 'Notes',
     render() {
       return `
-        <div class="tool-utility-card hidden tool-utility-card--wide" data-tool-modal="notepad" role="dialog" aria-modal="true" aria-labelledby="tool-notepad-title-main">
-          <div class="tool-utility-card__header">
-            <div>
-              <p class="tool-utility-card__eyebrow">Notepad</p>
-              <h2 id="tool-notepad-title-main" class="tool-utility-card__title">Note Workspace</h2>
+        <div class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" data-tool-modal="notepad" role="dialog" aria-modal="true" aria-labelledby="tool-notepad-title-main">
+          <div class="absolute inset-0" data-dismiss-modal></div>
+          <div class="relative bg-gray-900 border border-gray-700 rounded-[2rem] shadow-2xl w-full max-w-5xl h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="border-b border-gray-700 p-6 flex justify-between items-start bg-gray-800/50">
+              <div>
+                <p class="text-xs font-black text-indigo-400 uppercase tracking-widest">Notepad</p>
+                <h2 id="tool-notepad-title-main" class="text-2xl font-black text-white mt-1 tracking-tighter italic">Note Workspace</h2>
+              </div>
+              <button type="button" class="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800 text-gray-400 hover:text-white transition" data-close-utility aria-label="Close dialog">✕</button>
             </div>
-            <button type="button" class="tool-utility-card__close" data-close-utility aria-label="Close dialog">x</button>
-          </div>
-          <div class="tool-utility-card__body">
-            <div class="tool-notepad">
-              <aside class="tool-notepad__sidebar">
-                <div class="tool-notepad__toolbar">
-                  <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-note-action="new">New note</button>
-                  <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-note-action="duplicate">Duplicate</button>
+            <div class="flex-1 overflow-hidden flex">
+              <aside class="w-64 border-r border-gray-700 bg-gray-800/30 flex flex-col">
+                <div class="p-4 border-b border-gray-700 flex gap-2">
+                  <button type="button" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] py-2.5 rounded-xl font-black uppercase tracking-widest transition shadow-lg shadow-indigo-900/20" data-note-action="new">New</button>
+                  <button type="button" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-[10px] py-2.5 rounded-xl font-black uppercase tracking-widest transition" data-note-action="duplicate">Dup</button>
                 </div>
-                <input id="tool-notepad-filter" class="tool-notepad__filter" type="text" placeholder="Search notes..." />
-                <div id="tool-notepad-list" class="tool-notepad__note-list"></div>
+                <div class="p-4 border-b border-gray-700 bg-gray-900/50">
+                  <input id="tool-notepad-filter" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 transition-all" type="text" placeholder="Search notes..." />
+                </div>
+                <div id="tool-notepad-list" class="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin scrollbar-thumb-gray-700"></div>
               </aside>
-              <section class="tool-notepad__editor">
-                <div class="tool-notepad__editor-toolbar">
-                  <input id="tool-notepad-title" class="tool-notepad__title-input" type="text" placeholder="Note title" />
-                  <div class="tool-notepad__editor-actions">
-                    <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-note-action="export">Export</button>
-                    <button type="button" class="tool-utility-btn tool-utility-btn--ghost" data-note-action="delete">Delete</button>
+              <section class="flex-1 bg-gray-900 flex flex-col overflow-hidden relative">
+                <div class="border-b border-gray-700 p-4 flex items-center justify-between gap-4 bg-gray-800/20">
+                  <input id="tool-notepad-title" class="flex-1 bg-transparent border-none text-white font-black text-lg focus:outline-none placeholder:text-gray-700" type="text" placeholder="Note title" />
+                  <div class="flex gap-2">
+                    <button type="button" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-[10px] px-4 py-2 rounded-xl font-black uppercase tracking-widest transition border border-gray-700" data-note-action="export">Export</button>
+                    <button type="button" class="bg-gray-800 hover:bg-rose-900/30 hover:text-rose-400 text-rose-900 text-[10px] px-4 py-2 rounded-xl font-black uppercase tracking-widest transition border border-gray-700" data-note-action="delete">Delete</button>
                   </div>
                 </div>
-                <div id="tool-notepad-stats" class="tool-notepad__status"></div>
-                <textarea id="tool-notepad-input" class="tool-notepad__input tool-notepad__input--workspace" placeholder="Write anything here..."></textarea>
+                <div id="tool-notepad-stats" class="px-6 py-2 text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-700/50 bg-gray-900"></div>
+                <textarea id="tool-notepad-input" class="flex-1 bg-transparent border-0 px-6 py-6 text-gray-300 text-base leading-relaxed focus:outline-none resize-none scrollbar-thin scrollbar-thumb-gray-800" placeholder="Start writing here..."></textarea>
               </section>
             </div>
           </div>
