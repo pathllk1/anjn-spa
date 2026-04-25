@@ -4,6 +4,8 @@
 //  only when the route is first visited.
 // ─────────────────────────────────────────────
 
+import { initGlobalToolModal } from './components/tools/globalToolModal.js';
+
 const loadHome = () => import('./pages/home.js').then(m => m.renderHome);
 const loadAbout = () => import('./pages/about.js').then(m => m.renderAbout);
 const loadLogin = () => import('./pages/login.js').then(m => m.renderLogin);
@@ -108,6 +110,8 @@ const navigate = (loadFn) => async (match) => {
 // ─────────────────────────────────────────────
 
 const router = new Navigo('/', { hash: false });
+
+initGlobalToolModal();
 
 router
   // General

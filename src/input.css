@@ -700,15 +700,28 @@
 }
 
 .wage-payment-info {
-  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.wage-payment-date {
-  color: #6b7280;
+.wage-date-input,
+.wage-cheque-input,
+.wage-bank-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  width: 100%;
 }
 
-.wage-payment-cheque {
-  color: #6b7280;
+.wage-bank-select {
+  background-color: #f9fafb;
+}
+
+.wage-bank-select:focus {
+  border-color: #2563eb;
+  outline: none;
 }
 
 /* No Wages Container */

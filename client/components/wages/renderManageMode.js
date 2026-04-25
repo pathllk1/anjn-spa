@@ -9,6 +9,7 @@ export function renderManageMode(ctx) {
     bulkEditData,
     manageFilters,
     manageSort,
+    firmBankAccounts,
     formatMonthDisplay,
     formatDateDisplay,
     formatCurrency,
@@ -23,6 +24,15 @@ export function renderManageMode(ctx) {
   const uniqueBanks = getUniqueValues(existingWages.map(w => w.master_roll_id).filter(Boolean), 'bank');
   const uniqueProjects = getUniqueValues(existingWages.map(w => w.master_roll_id).filter(Boolean), 'project');
   const uniqueSites = getUniqueValues(existingWages.map(w => w.master_roll_id).filter(Boolean), 'site');
+
+  function getBankAccountOptionLabel(account) {
+    const parts = [
+      account.account_name || account.bank_name || 'Bank Account',
+      account.bank_name || null,
+      account.account_number ? `A/C ${account.account_number}` : null,
+    ].filter(Boolean);
+    return parts.join(' • ');
+  }
   
   return `
       <div class="manage-mode">
@@ -226,14 +236,18 @@ export function renderManageMode(ctx) {
                   </div>
                   <div>
                     <label class="bulk-edit-label">Paid From Bank</label>
-                    <input 
-                      type="text"
-                      value="${bulkEditData.paid_from_bank_ac || ''}"
+                    <select 
                       data-action="set-bulk-edit"
                       data-field="paid_from_bank_ac"
-                      placeholder="Leave blank to skip"
                       class="bulk-edit-input"
-                    />
+                    >
+                      <option value="">Leave blank to skip</option>
+                      ${firmBankAccounts.map(account => `
+                        <option value="${getBankAccountOptionLabel(account)}" ${bulkEditData.paid_from_bank_ac === getBankAccountOptionLabel(account) ? 'selected' : ''}>
+                          ${getBankAccountOptionLabel(account)}
+                        </option>
+                      `).join('')}
+                    </select>
                   </div>
                   <div>
                     <label class="bulk-edit-label">Remarks</label>
@@ -461,8 +475,36 @@ export function renderManageMode(ctx) {
                         </td>
                         <td class="wages-table-td">
                           <div class="wage-payment-info">
-                            <div class="wage-payment-date">${edited.paid_date ? formatDateDisplay(edited.paid_date) : 'Not paid'}</div>
-                            <div class="wage-payment-cheque">${edited.cheque_no || '-'}</div>
+                            <input 
+                              type="date"
+                              value="${edited.paid_date || ''}"
+                              data-action="edit-wage"
+                              data-wage-id="${String(wage.id)}"
+                              data-field="paid_date"
+                              class="wage-date-input"
+                            />
+                            <input 
+                              type="text"
+                              value="${edited.cheque_no || ''}"
+                              data-action="edit-wage"
+                              data-wage-id="${String(wage.id)}"
+                              data-field="cheque_no"
+                              placeholder="Cheque/Ref"
+                              class="wage-cheque-input"
+                            />
+                            <select 
+                              data-action="edit-wage"
+                              data-wage-id="${String(wage.id)}"
+                              data-field="paid_from_bank_ac"
+                              class="wage-bank-select"
+                            >
+                              <option value="">Select Bank</option>
+                              ${firmBankAccounts.map(account => `
+                                <option value="${getBankAccountOptionLabel(account)}" ${edited.paid_from_bank_ac === getBankAccountOptionLabel(account) ? 'selected' : ''}>
+                                  ${getBankAccountOptionLabel(account)}
+                                </option>
+                              `).join('')}
+                            </select>
                           </div>
                         </td>
                       </tr>

@@ -9,9 +9,15 @@ export async function renderWagesDashboard(router) {
   const canAccess = await requireAuth(router);
   if (!canAccess) return;
 
+  // State initialization
+  let firmBankAccounts = [];
+
   // Load XLSX library dynamically like master-roll.js
   await loadXLSX();
   const XLSX = window.XLSX;
+  
+  // Load firm bank accounts
+  await loadFirmBankAccounts();
 
   function loadXLSX() {
     return new Promise((resolve) => {
@@ -623,6 +629,17 @@ function handleCreateFieldChange(empId, field, value) {
     }
   }
 
+  async function loadFirmBankAccounts() {
+    try {
+      const result = await api.get('/api/ledger/bank-accounts?activeOnly=true');
+      if (result.success) {
+        firmBankAccounts = result.data;
+      }
+    } catch (error) {
+      console.error('Error loading firm bank accounts:', error);
+    }
+  }
+
   async function saveEditedWages() {
     const wagesToUpdate = Object.keys(editedWages).map(id => {
       const edited = editedWages[id];
@@ -1171,6 +1188,7 @@ function handleManageFieldChange(wageId, field, value) {
           createFilters,
           createSort,
           commonPaymentData,
+          firmBankAccounts,
           formatMonthDisplay,
           formatCurrency,
           calculateNetSalary,
@@ -1187,6 +1205,7 @@ function handleManageFieldChange(wageId, field, value) {
           bulkEditData,
           manageFilters,
           manageSort,
+          firmBankAccounts,
           formatMonthDisplay,
           formatDateDisplay,
           formatCurrency,

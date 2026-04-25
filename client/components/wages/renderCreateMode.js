@@ -8,6 +8,7 @@ export function renderCreateMode(ctx) {
     createFilters,
     createSort,
     commonPaymentData,
+    firmBankAccounts,
     formatMonthDisplay,
     formatCurrency,
     calculateNetSalary,
@@ -20,6 +21,15 @@ export function renderCreateMode(ctx) {
   const uniqueBanks = getUniqueValues(employees, 'bank');
   const uniqueProjects = getUniqueValues(employees, 'project');
   const uniqueSites = getUniqueValues(employees, 'site');
+
+  function getBankAccountOptionLabel(account) {
+    const parts = [
+      account.account_name || account.bank_name || 'Bank Account',
+      account.bank_name || null,
+      account.account_number ? `A/C ${account.account_number}` : null,
+    ].filter(Boolean);
+    return parts.join(' • ');
+  }
   
   return `
       <div class="create-mode">
@@ -160,14 +170,18 @@ export function renderCreateMode(ctx) {
                 </div>
                 <div>
                   <label class="create-payment-label">Paid From Bank</label>
-                  <input 
-                    type="text" 
-                    value="${commonPaymentData.paid_from_bank_ac}"
+                  <select 
                     data-action="common-payment"
                     data-field="paid_from_bank_ac"
-                    placeholder="Optional"
                     class="create-payment-input"
-                  />
+                  >
+                    <option value="">Select Bank Account</option>
+                    ${firmBankAccounts.map(account => `
+                      <option value="${getBankAccountOptionLabel(account)}" ${commonPaymentData.paid_from_bank_ac === getBankAccountOptionLabel(account) ? 'selected' : ''}>
+                        ${getBankAccountOptionLabel(account)}
+                      </option>
+                    `).join('')}
+                  </select>
                 </div>
                 <div>
                   <label class="create-payment-label">Remarks</label>
