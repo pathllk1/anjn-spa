@@ -47,10 +47,15 @@ const showLoading = () => {
     loadingEl = document.createElement('div');
     loadingEl.id = 'page-loading';
     loadingEl.innerHTML = `
-      <div class="loading-overlay">
-        <div class="loading-container">
-          <div class="loading-spinner"></div>
-          <p class="loading-text">Loading...</p>
+      <div class="fixed inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-50">
+        <div class="flex flex-col items-center gap-4">
+          <!-- Spinner -->
+          <div class="relative w-12 h-12">
+            <div class="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+            <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-600 border-r-indigo-600 animate-spin"></div>
+          </div>
+          <!-- Loading text -->
+          <p class="text-gray-600 font-medium text-sm">Loading...</p>
         </div>
       </div>
     `;

@@ -34,31 +34,32 @@ function buildModalMarkup() {
   const modal = document.createElement('div');
   modal.id = MODAL_ID;
   // Use Tailwind 'hidden' by default on the root element
-  modal.className = 'hidden fixed inset-0 z-[9999] flex items-start justify-center pt-[15vh] bg-slate-900/60 backdrop-blur-sm';
+  modal.className = 'hidden fixed inset-0 z-[9999] flex items-start justify-center pt-[10vh] bg-slate-900/60 backdrop-blur-sm';
   modal.setAttribute('aria-hidden', 'true');
   
   modal.innerHTML = `
-    <div class="bg-white w-full max-w-[600px] rounded-[2rem] shadow-2xl overflow-hidden transform translate-y-4 scale-95 transition-all duration-300" role="dialog" aria-modal="true" aria-labelledby="tool-modal-title">
-      <div class="p-8 bg-slate-50 border-b border-slate-100">
+    <div class="bg-white w-full max-w-4xl rounded-[2rem] shadow-2xl overflow-hidden transform translate-y-4 scale-95 transition-all duration-300" role="dialog" aria-modal="true" aria-labelledby="tool-modal-title">
+      <div class="p-8 bg-gradient-to-br from-slate-50 to-slate-100 border-b border-slate-200">
         <div class="flex justify-between items-baseline mb-2">
           <div>
             <p class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Global Tools</p>
-            <h2 id="tool-modal-title" class="text-2xl font-black text-slate-900 tracking-tight">Utility Launcher</h2>
+            <h2 id="tool-modal-title" class="text-3xl font-black text-slate-900 tracking-tight">Utility Launcher</h2>
           </div>
-          <span class="text-[10px] font-bold px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-400">Ctrl + .</span>
+          <span class="text-[10px] font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-500 shadow-sm">Ctrl + .</span>
         </div>
-        <p class="text-xs text-slate-500 font-medium">Open quick utilities from anywhere in the app.</p>
+        <p class="text-sm text-slate-600 font-medium mt-1">Access quick utilities from anywhere in the app.</p>
         <input
           id="${SEARCH_INPUT_ID}"
-          class="w-full mt-6 px-5 py-4 bg-white border-2 border-slate-100 rounded-2xl text-sm font-bold focus:outline-none focus:border-indigo-500/30 transition-all placeholder:text-slate-300"
+          class="w-full mt-6 px-5 py-4 bg-white border-2 border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-slate-400"
           type="text"
           autocomplete="off"
           placeholder="Search tools..."
         />
       </div>
-      <div id="${RESULTS_ID}" class="max-h-[400px] overflow-y-auto p-4 space-y-1"></div>
-      <div class="px-8 py-3 bg-slate-50 border-t border-slate-100 flex gap-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-        <span>Enter to open</span>
+      <div id="${RESULTS_ID}" class="max-h-[500px] overflow-y-auto p-6"></div>
+      <div class="px-8 py-4 bg-slate-50 border-t border-slate-200 flex gap-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+        <span>↵ Enter to open</span>
+        <span>↑↓ Navigate</span>
         <span>Esc to close</span>
       </div>
     </div>
@@ -99,29 +100,36 @@ export function initGlobalToolModal() {
     visibleTools = toolRegistry.getTools().filter(tool => matchesTool(tool, query));
 
     if (!visibleTools.length) {
-      resultsContainer.innerHTML = '<div class="text-center text-slate-400 py-8 text-sm font-bold uppercase tracking-widest">No matching tools</div>';
+      resultsContainer.innerHTML = '<div class="text-center text-slate-400 py-12 text-sm font-bold uppercase tracking-widest">No matching tools</div>';
       return;
     }
 
     activeIndex = Math.min(activeIndex, visibleTools.length - 1);
 
     resultsContainer.innerHTML = `
-      <div class="grid grid-cols-1 gap-2">
+      <div class="grid grid-cols-2 gap-4">
         ${visibleTools.map((tool, index) => `
           <button
             type="button"
-            class="group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${index === activeIndex ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-100' : 'bg-white border-slate-50 hover:bg-slate-50 hover:border-slate-100'}"
+            class="group relative p-5 rounded-2xl border-2 transition-all text-left overflow-hidden ${index === activeIndex ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-md'}"
             data-tool-index="${index}"
           >
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-black uppercase tracking-tighter shadow-sm transition-all ${index === activeIndex ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}">
-              ${escapeHtml(tool.badge)}
-            </div>
-            <div class="flex-1 min-w-0">
-              <h4 class="text-sm font-black truncate ${index === activeIndex ? 'text-white' : 'text-slate-800'}">${escapeHtml(tool.title)}</h4>
-              <p class="text-[10px] font-bold truncate uppercase tracking-widest ${index === activeIndex ? 'text-indigo-200' : 'text-slate-400'}">${escapeHtml(tool.subtitle)}</p>
-            </div>
-            <div class="text-[10px] font-black uppercase tracking-[0.2em] transition-all ${index === activeIndex ? 'text-white translate-x-0 opacity-100' : 'text-indigo-600 translate-x-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0'}">
-              Launch
+            <!-- Background accent -->
+            <div class="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white/20 to-transparent rounded-full -mr-10 -mt-10 transition-all group-hover:scale-150"></div>
+            
+            <!-- Content -->
+            <div class="relative z-10">
+              <div class="flex items-start justify-between mb-3">
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black uppercase tracking-tighter shadow-sm transition-all ${index === activeIndex ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'}">
+                  ${escapeHtml(tool.badge)}
+                </div>
+                <div class="text-[10px] font-black uppercase tracking-[0.2em] transition-all opacity-0 ${index === activeIndex ? 'text-white opacity-100' : 'text-indigo-600 group-hover:opacity-100'}">
+                  Launch →
+                </div>
+              </div>
+              <h4 class="text-base font-black truncate mb-1 ${index === activeIndex ? 'text-white' : 'text-slate-800'}">${escapeHtml(tool.title)}</h4>
+              <p class="text-xs font-bold truncate uppercase tracking-widest ${index === activeIndex ? 'text-indigo-100' : 'text-slate-500'}">${escapeHtml(tool.subtitle)}</p>
+              ${tool.description ? `<p class="text-xs mt-2 line-clamp-2 ${index === activeIndex ? 'text-indigo-50' : 'text-slate-600'}">${escapeHtml(tool.description)}</p>` : ''}
             </div>
           </button>
         `).join('')}
