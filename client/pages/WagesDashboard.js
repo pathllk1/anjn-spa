@@ -534,6 +534,9 @@ function handleCreateFieldChange(empId, field, value) {
           };
         });
 
+        // ✅ AUTO-CALCULATE ALL on load
+        calculateBulkForAllEmployees();
+
         showToast(`Loaded ${employees.length} employees (${result.meta.already_paid} already paid)`, 'success');
       } else {
         showToast(result.message || 'Failed to load employees', 'error');
@@ -1166,13 +1169,13 @@ function handleManageFieldChange(wageId, field, value) {
         }
       } else if (action === 'load-employees') {
         window.wagesDashboard.loadEmployees();
-      } else if (action === 'load-manage-wages') {
+      } else if (action === 'load-manage-wages' || action === 'load-wages') {
         window.wagesDashboard.loadManageWages();
       } else if (action === 'calculate-bulk') {
         window.wagesDashboard.calculateBulk();
       } else if (action === 'save-wages') {
         window.wagesDashboard.saveWages();
-      } else if (action === 'export-excel') {
+      } else if (action === 'export-excel' || action === 'export-wages') {
         window.wagesDashboard.exportToExcel();
       } else if (action === 'reset-filters') {
         const mode = e.target.dataset.mode;
@@ -1213,9 +1216,9 @@ function handleManageFieldChange(wageId, field, value) {
     const focusedSelectionDirection = activeElement?.selectionDirection;
 
     const html = `
-      <div id="wages-dashboard" class="w-full px-4 pt-10 pb-12 animate-in fade-in duration-500">
+      <div id="wages-dashboard" class="w-full px-4 -mt-6 pb-8 animate-in fade-in duration-500">
         <!-- Dashboard Header -->
-        <div class="flex justify-between items-center bg-white px-6 h-14 rounded-2xl shadow-sm border border-slate-100 mb-4">
+        <div class="flex justify-between items-center bg-white px-6 h-14 rounded-2xl shadow-sm border border-slate-100 mb-4 shrink-0">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg shadow-slate-200">💰</div>
             <div>

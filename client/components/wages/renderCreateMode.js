@@ -116,18 +116,18 @@ export function renderCreateMode(ctx) {
             <table class="w-full border-collapse table-fixed">
               <thead class="sticky top-0 z-10">
                 <tr class="bg-slate-900 border-b border-white/5">
-                  <th class="p-2 w-10 text-center"><input type="checkbox" id="select-all-create" data-action="select-all" data-mode="create" class="w-3 h-3 rounded accent-indigo-600" ${filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.has(e.master_roll_id)) ? 'checked' : ''} /></th>
-                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-48">Employee</th>
-                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-40">Bank</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">Rate</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-12">Days</th>
-                  <th class="px-3 py-2 text-right text-[9px] font-black text-slate-500 uppercase w-20">Gross</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">EPF</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">ESIC</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">Other</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">Ben</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">Adv</th>
-                  <th class="px-4 py-2 text-right text-[9px] font-black text-emerald-400 uppercase bg-white/5 italic w-24">Net</th>
+                  <th class="p-2 w-10 text-center shrink-0"><input type="checkbox" id="select-all-create" data-action="select-all" data-mode="create" class="w-3 h-3 rounded accent-indigo-600" ${filteredEmployees.length > 0 && filteredEmployees.every(e => selectedEmployeeIds.has(e.master_roll_id)) ? 'checked' : ''} /></th>
+                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-48 shrink-0">Employee</th>
+                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-40 shrink-0">Bank</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">Rate</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-12 shrink-0">Days</th>
+                  <th class="px-3 py-2 text-right text-[9px] font-black text-slate-500 uppercase w-20 shrink-0">Gross</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">EPF</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">ESIC</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">Other</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">Ben</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">Adv</th>
+                  <th class="px-4 py-2 text-right text-[9px] font-black text-emerald-400 uppercase bg-white/5 italic w-24 shrink-0">Net</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-50">

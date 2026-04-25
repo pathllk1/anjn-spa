@@ -121,18 +121,18 @@ export function renderManageMode(ctx) {
         <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex-1">
           <div class="overflow-x-auto">
             <table class="w-full border-collapse table-fixed">
-              <thead>
+              <thead class="sticky top-0 z-10">
                 <tr class="bg-slate-900 border-b border-white/5">
-                  <th class="p-2 w-10 text-center"><input type="checkbox" id="select-all-manage" data-action="select-all" data-mode="manage" class="w-3 h-3 rounded accent-indigo-600" ${filteredWages.length > 0 && filteredWages.every(w => selectedWageIds.has(w.id)) ? 'checked' : ''} /></th>
-                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-48">Employee</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16">Days</th>
-                  <th class="px-3 py-2 text-right text-[9px] font-black text-slate-500 uppercase w-24">Gross</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">EPF</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">ESIC</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">Other Ded</th>
-                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20">Adv Pay</th>
-                  <th class="px-4 py-2 text-right text-[9px] font-black text-emerald-400 uppercase bg-white/5 italic w-28">Net</th>
-                  <th class="px-4 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-64">Settlement Details</th>
+                  <th class="p-2 w-10 text-center shrink-0"><input type="checkbox" id="select-all-manage" data-action="select-all" data-mode="manage" class="w-3 h-3 rounded accent-indigo-600" ${filteredWages.length > 0 && filteredWages.every(w => selectedWageIds.has(w.id)) ? 'checked' : ''} /></th>
+                  <th class="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-48 shrink-0">Employee</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">Days</th>
+                  <th class="px-3 py-2 text-right text-[9px] font-black text-slate-500 uppercase w-24 shrink-0">Gross</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20 shrink-0">EPF</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20 shrink-0">ESIC</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20 shrink-0">Other Ded</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20 shrink-0">Adv Pay</th>
+                  <th class="px-4 py-2 text-right text-[9px] font-black text-emerald-400 uppercase bg-white/5 italic w-28 shrink-0">Net</th>
+                  <th class="px-4 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-64 shrink-0">Settlement Details</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-50">
