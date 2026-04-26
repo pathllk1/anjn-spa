@@ -337,3 +337,138 @@ export const getCurrentUser = async (req, res) => {
 export const refreshToken = (req, res) => {
   res.json({ success: true, message: 'Token refreshed', user: req.user });
 };
+
+/* ─────────────────────────────────────────────────────────────────────────
+   REGISTER
+───────────────────────────────────────────────────────────────────────── */
+
+export const register = async (req, res) => {
+  const { username, email, fullname, password, firm_code } = req.body;
+  const ip = getClientIP(req);
+  const userAgent = req.headers['user-agent'] || null;
+
+  try {
+    // Validate required fields
+    if (!username || !email || !fullname || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username, email, fullname, and password are required',
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format',
+      });
+    }
+
+    // Validate username (alphanumeric, underscore, hyphen only)
+    const usernameRegex = /^[a-zA-Z0-9_-]{3,20}$/;
+    if (!usernameRegex.test(username)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username must be 3-20 characters (alphanumeric, underscore, hyphen only)',
+      });
+    }
+
+    // Validate password strength (minimum 8 chars, at least one uppercase, one number)
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters',
+      });
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must contain at least one uppercase letter',
+      });
+    }
+
+    if (!/[0-9]/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must contain at least one number',
+      });
+    }
+
+    console.log(`📝 Registration attempt: ${username} (${email}) from ${ip}`);
+
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }],
+    });
+
+    if (existingUser) {
+      console.log(`❌ Registration failed: User already exists (${email})`);
+      return res.status(409).json({
+        success: false,
+        error: 'Email or username already registered',
+      });
+    }
+
+    // Lookup firm by code if provided
+    let firmId = null;
+    if (firm_code) {
+      const { Firm } = await import('../../models/index.js');
+      const firm = await Firm.findOne({ code: firm_code });
+
+      if (!firm) {
+        console.log(`❌ Registration failed: Invalid firm code (${firm_code})`);
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid firm code',
+        });
+      }
+
+      if (firm.status !== 'approved') {
+        console.log(`❌ Registration failed: Firm not approved (${firm_code})`);
+        return res.status(403).json({
+          success: false,
+          error: 'This firm is not approved yet. Please contact support.',
+        });
+      }
+
+      firmId = firm._id;
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Create user with 'pending' status (requires admin approval)
+    const newUser = await User.create({
+      username,
+      email,
+      fullname,
+      password: hashedPassword,
+      role: 'user',
+      firm_id: firmId || null,
+      status: 'pending', // Requires admin approval
+    });
+
+    console.log(`✅ Registration successful: ${username} (pending approval)`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful. Your account is pending admin approval.',
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        fullname: newUser.fullname,
+        status: newUser.status,
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ Registration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during registration',
+    });
+  }
+};
