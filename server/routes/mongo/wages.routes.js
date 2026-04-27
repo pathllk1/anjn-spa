@@ -9,7 +9,9 @@ import {
   deleteWage,
   deleteWagesBulk,
   getWageById,
-  getWagesHistoryForEmployee
+  getWagesHistoryForEmployee,
+  getWageJobStatus,
+  getWageJobResults
 } from '../../controllers/mongo/wages.controller.js';
 import { exportWagesToExcel } from '../../controllers/mongo/wageExport.controller.js';
 import { authMiddleware } from '../../middleware/mongo/authMiddleware.js';
@@ -82,5 +84,17 @@ router.get('/history/:masterRollId', getWagesHistoryForEmployee);
 // Get wages for a specific month (backward compatibility - deprecated)
 // GET /api/wages/list?month=2025-02
 router.get('/list', getWagesForMonth);
+
+/* --------------------------------------------------
+   JOB STATUS ROUTES (Background Processing)
+-------------------------------------------------- */
+
+// Get job status for background wage processing
+// GET /api/wages/job/:jobId/status
+router.get('/job/:jobId/status', getWageJobStatus);
+
+// Get job results after completion
+// GET /api/wages/job/:jobId/results
+router.get('/job/:jobId/results', getWageJobResults);
 
 export default router;

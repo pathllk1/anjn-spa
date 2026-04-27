@@ -94,8 +94,20 @@ export function renderCreateMode(ctx) {
                   </select>
                </div>
                <div class="flex items-center gap-1.5">
-                  <label class="text-[8px] font-black text-indigo-300 uppercase">Ref</label>
-                  <input type="text" value="${commonPaymentData.cheque_no}" data-action="common-payment" data-field="cheque_no" class="px-1 py-0.5 bg-white border border-indigo-50 rounded text-[10px] font-bold outline-none w-16" />
+                  <label class="text-[8px] font-black text-indigo-300 uppercase">Mode</label>
+                  <select data-action="common-payment" data-field="payment_mode" class="px-1 py-0.5 bg-white border border-indigo-50 rounded text-[9px] font-bold outline-none max-w-[80px]">
+                    <option value="">Select</option>
+                    <option value="CASH" ${commonPaymentData.payment_mode === 'CASH' ? 'selected' : ''}>Cash</option>
+                    <option value="CHEQUE" ${commonPaymentData.payment_mode === 'CHEQUE' ? 'selected' : ''}>Cheque</option>
+                    <option value="NEFT" ${commonPaymentData.payment_mode === 'NEFT' ? 'selected' : ''}>NEFT</option>
+                    <option value="RTGS" ${commonPaymentData.payment_mode === 'RTGS' ? 'selected' : ''}>RTGS</option>
+                    <option value="IMPS" ${commonPaymentData.payment_mode === 'IMPS' ? 'selected' : ''}>IMPS</option>
+                    <option value="UPI" ${commonPaymentData.payment_mode === 'UPI' ? 'selected' : ''}>UPI</option>
+                  </select>
+               </div>
+               <div class="flex items-center gap-1.5">
+                  <label class="text-[8px] font-black text-indigo-300 uppercase">Ref/Cheque</label>
+                  <input type="text" value="${commonPaymentData.cheque_no}" data-action="common-payment" data-field="cheque_no" class="px-1 py-0.5 bg-white border border-indigo-50 rounded text-[10px] font-bold outline-none w-20" placeholder="Cheque/Ref No" />
                </div>
              </div>
           </div>

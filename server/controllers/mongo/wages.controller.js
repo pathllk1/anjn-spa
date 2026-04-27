@@ -11,7 +11,9 @@
  *  - IDs are MongoDB ObjectIds instead of integers
  */
 
-import { Wage, MasterRoll, Advance } from '../../models/index.js';
+import { Wage, MasterRoll, Advance, WageJob } from '../../models/index.js';
+import { postWageLedger, deleteWageLedger, recalculateWageLedger } from '../../utils/mongo/wagesLedgerHelper.js';
+import { processWageJob } from '../../utils/mongo/wageJobProcessor.js';
 
 /* ── HELPER FUNCTIONS ────────────────────────────────────────────────────── */
 
@@ -187,85 +189,132 @@ export async function createWagesBulk(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid month format. Use YYYY-MM' });
     }
 
-    const results = [];
-
-    for (const wage of wages) {
-      try {
-        if (!wage.master_roll_id || wage.gross_salary === undefined || !wage.wage_days) {
-          results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Missing required fields' });
-          continue;
-        }
-
-        // Check for duplicate
-        const existing = await Wage.findOne({ firm_id: firmId, master_roll_id: wage.master_roll_id, salary_month: month }).lean();
-        if (existing) {
-          results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Wage already exists for this employee in this month' });
-          continue;
-        }
-
-        // Verify employee belongs to firm
-        const employee = await MasterRoll.findOne({ _id: wage.master_roll_id, firm_id: firmId })
-          .select('project site')
-          .lean();
-
-        if (!employee) {
-          results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Employee not found' });
-          continue;
-        }
-
-        const doc = await Wage.create({
-          firm_id:          firmId,
-          master_roll_id:   wage.master_roll_id,
-          p_day_wage:       calculatePerDayWage(wage.gross_salary, wage.wage_days),
-          wage_days:        wage.wage_days,
-          project:          employee.project           ?? null,
-          site:             employee.site              ?? null,
-          gross_salary:     wage.gross_salary,
-          epf_deduction:    wage.epf_deduction         ?? 0,
-          esic_deduction:   wage.esic_deduction        ?? 0,
-          other_deduction:  wage.other_deduction       ?? 0,
-          other_benefit:    wage.other_benefit         ?? 0,
-          advance_deduction: wage.advance_deduction     ?? 0,
-          net_salary:       calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit, wage.advance_deduction),
-          salary_month:     month,
-          paid_date:        wage.paid_date             ?? null,
-          cheque_no:        wage.cheque_no             ?? null,
-          paid_from_bank_ac: wage.paid_from_bank_ac    ?? null,
-          created_by:       userId,
-          updated_by:       userId,
-        });
-
-        // If there's an advance deduction, record it in the Advance model
-        if (wage.advance_deduction > 0) {
-          await Advance.create({
-            firm_id: firmId,
-            master_roll_id: wage.master_roll_id,
-            type: 'REPAYMENT',
-            amount: wage.advance_deduction,
-            date: wage.paid_date || new Date().toISOString().split('T')[0],
-            payment_mode: 'WAGE_DEDUCTION',
-            wage_id: doc._id,
-            remarks: `Repayment from wages - ${month}`,
-            created_by: userId,
-            updated_by: userId
-          });
-        }
-
-        results.push({ master_roll_id: wage.master_roll_id, wage_id: doc._id, success: true });
-      } catch (error) {
-        results.push({ master_roll_id: wage.master_roll_id, success: false, message: error.message });
-      }
+    // For batches of 20+, return error asking client to split into smaller batches
+    // This ensures Vercel timeout safety (20 records × ~200ms = ~4 seconds per request)
+    if (wages.length > 20) {
+      return res.status(400).json({
+        success: false,
+        message: `Batch size too large. Maximum 20 records per request. Received ${wages.length}. Please split into multiple requests.`,
+        max_batch_size: 20,
+        required_batches: Math.ceil(wages.length / 20),
+      });
     }
 
-    const successCount = results.filter(r => r.success).length;
-    const failureCount = results.length - successCount;
+    // For small batches (< 10), process synchronously
+    const session = await Wage.startSession();
+    session.startTransaction();
 
-    res.json({
-      success: true,
-      message: `Wages created successfully. Success: ${successCount}, Failed: ${failureCount}`,
-      results,
-      meta:    { total: wages.length, success: successCount, failed: failureCount, month },
-    });
+    try {
+      const results = [];
+
+      for (const wage of wages) {
+        try {
+          if (!wage.master_roll_id || wage.gross_salary === undefined || !wage.wage_days) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Missing required fields' });
+            continue;
+          }
+
+          const existing = await Wage.findOne({ firm_id: firmId, master_roll_id: wage.master_roll_id, salary_month: month }).session(session).lean();
+          if (existing) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Wage already exists for this employee in this month' });
+            continue;
+          }
+
+          const employee = await MasterRoll.findOne({ _id: wage.master_roll_id, firm_id: firmId })
+            .session(session)
+            .select('project site')
+            .lean();
+
+          if (!employee) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Employee not found' });
+            continue;
+          }
+
+          const doc = await Wage.create([{
+            firm_id:          firmId,
+            master_roll_id:   wage.master_roll_id,
+            p_day_wage:       calculatePerDayWage(wage.gross_salary, wage.wage_days),
+            wage_days:        wage.wage_days,
+            project:          employee.project           ?? null,
+            site:             employee.site              ?? null,
+            gross_salary:     wage.gross_salary,
+            epf_deduction:    wage.epf_deduction         ?? 0,
+            esic_deduction:   wage.esic_deduction        ?? 0,
+            other_deduction:  wage.other_deduction       ?? 0,
+            other_benefit:    wage.other_benefit         ?? 0,
+            advance_deduction: wage.advance_deduction     ?? 0,
+            net_salary:       calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit, wage.advance_deduction),
+            salary_month:     month,
+            paid_date:        wage.paid_date             ?? null,
+            cheque_no:        wage.cheque_no             ?? null,
+            bank_account_id:  wage.bank_account_id       ?? null,
+            payment_mode:     wage.payment_mode          ?? null,
+            status:           'DRAFT',
+            created_by:       userId,
+            updated_by:       userId,
+          }], { session });
+
+          const wageDoc = doc[0];
+
+          if ((wage.advance_deduction || 0) > 0) {
+            await Advance.create([{
+              firm_id: firmId,
+              master_roll_id: wage.master_roll_id,
+              type: 'REPAYMENT',
+              amount: wage.advance_deduction,
+              date: wage.paid_date || new Date().toISOString().split('T')[0],
+              payment_mode: 'WAGE_DEDUCTION',
+              wage_id: wageDoc._id,
+              remarks: `Repayment from wages - ${month}`,
+              status: 'PENDING',
+              created_by: userId,
+              updated_by: userId
+            }], { session });
+          }
+
+          try {
+            const voucherId = await postWageLedger(wageDoc, session);
+            
+            wageDoc.voucher_group_id = voucherId;
+            wageDoc.status = 'POSTED';
+            wageDoc.posted_date = new Date();
+            wageDoc.posted_by = userId;
+            await wageDoc.save({ session });
+
+            results.push({ master_roll_id: wage.master_roll_id, wage_id: wageDoc._id, voucher_id: voucherId, success: true });
+          } catch (ledgerError) {
+            await session.abortTransaction();
+            return res.status(500).json({ 
+              success: false, 
+              message: `Ledger posting failed: ${ledgerError.message}`,
+              details: { master_roll_id: wage.master_roll_id }
+            });
+          }
+
+        } catch (error) {
+          results.push({ master_roll_id: wage.master_roll_id, success: false, message: error.message });
+        }
+      }
+
+      await session.commitTransaction();
+
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.length - successCount;
+
+      res.json({
+        success: true,
+        message: `Wages created successfully. Success: ${successCount}, Failed: ${failureCount}`,
+        results,
+        meta:    { total: wages.length, success: successCount, failed: failureCount, month },
+      });
+
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+
   } catch (error) {
     console.error('Error creating wages:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -275,23 +324,45 @@ export async function createWagesBulk(req, res) {
 /* ── UPDATE SINGLE WAGE ──────────────────────────────────────────────────── */
 
 export async function updateWage(req, res) {
+  const session = await Wage.startSession();
+  session.startTransaction();
+
   try {
     const { id }     = req.params;
     const userId     = req.user.id;
     const firmId     = req.user.firm_id;
 
     const { wage_days, gross_salary, epf_deduction, esic_deduction,
-            other_deduction, other_benefit, advance_deduction, paid_date, cheque_no, paid_from_bank_ac } = req.body;
+            other_deduction, other_benefit, advance_deduction, paid_date, cheque_no, bank_account_id, payment_mode } = req.body;
 
     if (!wage_days || gross_salary === undefined) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: 'wage_days and gross_salary are required' });
     }
 
-    const existingWage = await Wage.findOne({ _id: id, firm_id: firmId });
+    const existingWage = await Wage.findOne({ _id: id, firm_id: firmId }).session(session);
     if (!existingWage) {
+      await session.abortTransaction();
       return res.status(404).json({ success: false, message: 'Wage record not found or access denied' });
     }
 
+    // If wage is locked, cannot update
+    if (existingWage.status === 'LOCKED') {
+      await session.abortTransaction();
+      return res.status(403).json({ success: false, message: 'Wage is locked and cannot be updated' });
+    }
+
+    // Delete old ledger entries if wage was posted
+    if (existingWage.status === 'POSTED') {
+      try {
+        await deleteWageLedger(existingWage._id, firmId, session);
+      } catch (error) {
+        await session.abortTransaction();
+        return res.status(500).json({ success: false, message: `Failed to delete old ledger entries: ${error.message}` });
+      }
+    }
+
+    // Update wage fields
     existingWage.p_day_wage       = calculatePerDayWage(gross_salary, wage_days);
     existingWage.wage_days        = wage_days;
     existingWage.gross_salary     = gross_salary;
@@ -300,13 +371,27 @@ export async function updateWage(req, res) {
     existingWage.other_deduction  = other_deduction  ?? 0;
     existingWage.other_benefit    = other_benefit    ?? 0;
     existingWage.advance_deduction = advance_deduction ?? 0;
-    existingWage.net_salary       = calculateNetSalary(gross_salary, epf_deduction, esic_deduction, other_deduction, other_benefit, existingWage.advance_deduction);
+    existingWage.net_salary       = calculateNetSalary(gross_salary, epf_deduction, esic_deduction, other_deduction, other_benefit, advance_deduction);
     existingWage.paid_date        = paid_date        ?? null;
     existingWage.cheque_no        = cheque_no        ?? null;
-    existingWage.paid_from_bank_ac = paid_from_bank_ac ?? null;
+    existingWage.bank_account_id  = bank_account_id  ?? null;
+    existingWage.payment_mode     = payment_mode     ?? null;
     existingWage.updated_by       = userId;
 
-    await existingWage.save();
+    // Post new ledger entries if wage was posted
+    if (existingWage.status === 'POSTED') {
+      try {
+        const voucherId = await postWageLedger(existingWage, session);
+        existingWage.voucher_group_id = voucherId;
+        existingWage.posted_date = new Date();
+        existingWage.posted_by = userId;
+      } catch (error) {
+        await session.abortTransaction();
+        return res.status(500).json({ success: false, message: `Failed to post new ledger entries: ${error.message}` });
+      }
+    }
+
+    await existingWage.save({ session });
 
     // Sync Advance model repayment
     if (existingWage.advance_deduction > 0) {
@@ -324,28 +409,37 @@ export async function updateWage(req, res) {
           updated_by: userId,
           $setOnInsert: { created_by: userId }
         },
-        { upsert: true }
+        { upsert: true, session }
       );
     } else {
-      await Advance.deleteOne({ wage_id: existingWage._id, type: 'REPAYMENT' });
+      await Advance.deleteOne({ wage_id: existingWage._id, type: 'REPAYMENT' }, { session });
     }
+
+    await session.commitTransaction();
 
     res.json({ success: true, message: 'Wage updated successfully', data: existingWage });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error updating wage:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  } finally {
+    await session.endSession();
   }
 }
 
 /* ── BULK UPDATE WAGES ───────────────────────────────────────────────────── */
 
 export async function updateWagesBulk(req, res) {
+  const session = await Wage.startSession();
+  session.startTransaction();
+
   try {
     const { wages } = req.body;
     const userId    = req.user.id;
     const firmId    = req.user.firm_id;
 
     if (!Array.isArray(wages) || wages.length === 0) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: 'Invalid wage data. Provide wages array.' });
     }
 
@@ -358,12 +452,29 @@ export async function updateWagesBulk(req, res) {
           continue;
         }
 
-        const doc = await Wage.findOne({ _id: wage.id, firm_id: firmId });
+        const doc = await Wage.findOne({ _id: wage.id, firm_id: firmId }).session(session);
         if (!doc) {
           results.push({ id: wage.id, success: false, message: 'Wage record not found or access denied' });
           continue;
         }
 
+        // If wage is locked, cannot update
+        if (doc.status === 'LOCKED') {
+          results.push({ id: wage.id, success: false, message: 'Wage is locked and cannot be updated' });
+          continue;
+        }
+
+        // Delete old ledger entries if wage was posted
+        if (doc.status === 'POSTED') {
+          try {
+            await deleteWageLedger(doc._id, firmId, session);
+          } catch (error) {
+            results.push({ id: wage.id, success: false, message: `Failed to delete old ledger: ${error.message}` });
+            continue;
+          }
+        }
+
+        // Update wage
         doc.p_day_wage        = calculatePerDayWage(wage.gross_salary, wage.wage_days);
         doc.wage_days         = wage.wage_days;
         doc.gross_salary      = wage.gross_salary;
@@ -375,14 +486,27 @@ export async function updateWagesBulk(req, res) {
         doc.net_salary        = calculateNetSalary(wage.gross_salary, wage.epf_deduction, wage.esic_deduction, wage.other_deduction, wage.other_benefit, wage.advance_deduction);
         doc.paid_date         = wage.paid_date        ?? null;
         doc.cheque_no         = wage.cheque_no        ?? null;
-        doc.paid_from_bank_ac = wage.paid_from_bank_ac ?? null;
+        doc.bank_account_id   = wage.bank_account_id  ?? null;
+        doc.payment_mode      = wage.payment_mode     ?? null;
         doc.updated_by        = userId;
 
-        await doc.save();
+        // Post new ledger entries if wage was posted
+        if (doc.status === 'POSTED') {
+          try {
+            const voucherId = await postWageLedger(doc, session);
+            doc.voucher_group_id = voucherId;
+            doc.posted_date = new Date();
+            doc.posted_by = userId;
+          } catch (error) {
+            results.push({ id: wage.id, success: false, message: `Failed to post new ledger: ${error.message}` });
+            continue;
+          }
+        }
+
+        await doc.save({ session });
 
         // Sync Advance model repayment
         if (doc.advance_deduction > 0) {
-          // Update or create repayment record
           await Advance.findOneAndUpdate(
             { wage_id: doc._id, type: 'REPAYMENT' },
             {
@@ -397,11 +521,10 @@ export async function updateWagesBulk(req, res) {
               updated_by: userId,
               $setOnInsert: { created_by: userId }
             },
-            { upsert: true }
+            { upsert: true, session }
           );
         } else {
-          // If deduction is now 0, remove any existing repayment record linked to this wage
-          await Advance.deleteOne({ wage_id: doc._id, type: 'REPAYMENT' });
+          await Advance.deleteOne({ wage_id: doc._id, type: 'REPAYMENT' }, { session });
         }
 
         results.push({ id: wage.id, success: true, message: 'Updated' });
@@ -409,6 +532,8 @@ export async function updateWagesBulk(req, res) {
         results.push({ id: wage.id, success: false, message: error.message });
       }
     }
+
+    await session.commitTransaction();
 
     const successCount = results.filter(r => r.success).length;
 
@@ -419,41 +544,67 @@ export async function updateWagesBulk(req, res) {
       meta:    { total: wages.length, success: successCount, failed: results.length - successCount },
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error bulk updating wages:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  } finally {
+    await session.endSession();
   }
 }
 
 /* ── DELETE SINGLE WAGE ──────────────────────────────────────────────────── */
 
 export async function deleteWage(req, res) {
+  const session = await Wage.startSession();
+  session.startTransaction();
+
   try {
     const { id } = req.params;
     const firmId = req.user.firm_id;
 
-    const deleted = await Wage.findOneAndDelete({ _id: id, firm_id: firmId });
+    const deleted = await Wage.findOneAndDelete({ _id: id, firm_id: firmId }, { session });
     if (!deleted) {
+      await session.abortTransaction();
       return res.status(404).json({ success: false, message: 'Wage record not found or access denied' });
     }
 
-    // Also delete any repayment linked to this wage
-    await Advance.deleteMany({ wage_id: id });
+    // Delete ledger entries if wage was posted
+    if (deleted.status === 'POSTED') {
+      try {
+        await deleteWageLedger(deleted._id, firmId, session);
+      } catch (error) {
+        await session.abortTransaction();
+        return res.status(500).json({ success: false, message: `Failed to delete ledger entries: ${error.message}` });
+      }
+    }
+
+    // Delete advance repayment linked to this wage
+    await Advance.deleteMany({ wage_id: id }, { session });
+
+    await session.commitTransaction();
 
     res.json({ success: true, message: 'Wage deleted successfully', deletedId: id });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error deleting wage:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  } finally {
+    await session.endSession();
   }
 }
 
 /* ── BULK DELETE WAGES ───────────────────────────────────────────────────── */
 
 export async function deleteWagesBulk(req, res) {
+  const session = await Wage.startSession();
+  session.startTransaction();
+
   try {
     const { ids } = req.body;
     const firmId  = req.user.firm_id;
 
     if (!Array.isArray(ids) || ids.length === 0) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: 'Invalid data. Provide ids array.' });
     }
 
@@ -461,10 +612,19 @@ export async function deleteWagesBulk(req, res) {
 
     for (const id of ids) {
       try {
-        const deleted = await Wage.findOneAndDelete({ _id: id, firm_id: firmId });
+        const deleted = await Wage.findOneAndDelete({ _id: id, firm_id: firmId }, { session });
         if (deleted) {
-          // Also delete any repayment linked to this wage
-          await Advance.deleteMany({ wage_id: id });
+          // Delete ledger entries if wage was posted
+          if (deleted.status === 'POSTED') {
+            try {
+              await deleteWageLedger(deleted._id, firmId, session);
+            } catch (error) {
+              throw new Error(`Failed to delete ledger entries: ${error.message}`);
+            }
+          }
+
+          // Delete advance repayment
+          await Advance.deleteMany({ wage_id: id }, { session });
           results.push({ id, success: true,  message: 'Deleted' });
         } else {
           results.push({ id, success: false, message: 'Wage record not found or access denied' });
@@ -473,6 +633,8 @@ export async function deleteWagesBulk(req, res) {
         results.push({ id, success: false, message: error.message });
       }
     }
+
+    await session.commitTransaction();
 
     const successCount = results.filter(r => r.success).length;
 
@@ -483,8 +645,11 @@ export async function deleteWagesBulk(req, res) {
       meta:    { total: ids.length, success: successCount, failed: results.length - successCount },
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error bulk deleting wages:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  } finally {
+    await session.endSession();
   }
 }
 
@@ -580,6 +745,74 @@ export async function getWagesForMonth(req, res) {
     res.json({ success: true, data: wages, meta: { total: wages.length, month } });
   } catch (error) {
     console.error('Error fetching wages:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+}
+
+/* ── GET WAGE JOB STATUS ─────────────────────────────────────────────────── */
+
+export async function getWageJobStatus(req, res) {
+  try {
+    const { jobId } = req.params;
+    const firmId = req.user.firm_id;
+
+    const job = await WageJob.findOne({ _id: jobId, firm_id: firmId }).lean();
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Job not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        job_id: job._id,
+        status: job.status,
+        salary_month: job.salary_month,
+        total_wages: job.total_wages,
+        processed_wages: job.processed_wages,
+        failed_wages: job.failed_wages,
+        progress_percentage: job.progress_percentage,
+        started_at: job.started_at,
+        completed_at: job.completed_at,
+        duration_ms: job.duration_ms,
+        error_message: job.error_message,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching job status:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+}
+
+/* ── GET WAGE JOB RESULTS ────────────────────────────────────────────────── */
+
+export async function getWageJobResults(req, res) {
+  try {
+    const { jobId } = req.params;
+    const firmId = req.user.firm_id;
+
+    const job = await WageJob.findOne({ _id: jobId, firm_id: firmId }).lean();
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Job not found' });
+    }
+
+    if (job.status !== 'COMPLETED' && job.status !== 'FAILED') {
+      return res.status(400).json({ success: false, message: 'Job is still processing' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        job_id: job._id,
+        status: job.status,
+        total_wages: job.total_wages,
+        processed_wages: job.processed_wages,
+        failed_wages: job.failed_wages,
+        results: job.results,
+        error_message: job.error_message,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching job results:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 }

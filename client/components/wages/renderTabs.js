@@ -19,6 +19,13 @@ export function renderTabs({ activeTab }) {
         >
           ✔️ Manage
         </button>
+        <button 
+          class="${baseClass} flex-1 ${activeTab === 'report' ? activeClass : inactiveClass}" 
+          data-action="switch-tab"
+          data-tab="report"
+        >
+          📊 Report
+        </button>
       </div>
     `;
 }

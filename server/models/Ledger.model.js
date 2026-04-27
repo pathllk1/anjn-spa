@@ -55,12 +55,24 @@ const ledgerSchema = new Schema(
     },
     ref_type: {
       type: String,
-      enum: ['BILL', 'JOURNAL', 'VOUCHER', 'OPENING_BALANCE', 'MANUAL'],
+      enum: ['BILL', 'JOURNAL', 'VOUCHER', 'OPENING_BALANCE', 'MANUAL', 'WAGE'],
       default: null,
+      index: true,
     },
     ref_id: {
       type: Schema.Types.ObjectId,
       default: null,
+    },
+    master_roll_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'MasterRoll',
+      default: null,
+      index: true,
+    },
+    voucher_group_id: {
+      type: String,
+      default: null,
+      index: true,
     },
 
     tax_type:         { type: String },

@@ -1,7 +1,10 @@
 import { renderTabs } from "../components/wages/renderTabs.js";
 import { renderCreateMode } from "../components/wages/renderCreateMode.js";
 import { renderManageMode } from "../components/wages/renderManageMode.js";
+import { renderReportMode } from "../components/wages/renderReportMode.js";
 import { createAdvanceModal } from "../components/wages/advanceModal.js";
+import { createBatchProgressModal } from "../components/wages/batchProgressModal.js";
+import { submitWagesInBatches } from "../utils/batchWageSubmitter.js";
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { renderLayout } from '../components/layout.js';
 import { api, fetchWithCSRF } from '../utils/api.js';
@@ -41,7 +44,7 @@ export async function renderWagesDashboard(router) {
   // ==========================================
   
   // Tab state
-  let activeTab = 'create'; // 'create' or 'manage'
+  let activeTab = 'create'; // 'create', 'manage', or 'report'
   
   // Create mode state
   let selectedMonth = '';
@@ -56,6 +59,16 @@ export async function renderWagesDashboard(router) {
   let editedWages = {}; // Track edited wages by ID
   let selectedWageIds = new Set(); // For bulk operations
   let isManageLoading = false;
+  
+  // Report mode state
+  let reportMonth = '';
+  let reportWages = [];
+  let uniqueChequeNumbers = [];
+  let isReportLoading = false;
+  let reportFilters = {
+    paymentMode: 'all',
+    chequeNo: 'all'
+  };
   
   // Bulk edit mode
   let isBulkEditMode = false;
@@ -75,6 +88,7 @@ export async function renderWagesDashboard(router) {
   let commonPaymentData = {
     paid_date: '',
     cheque_no: '',
+    payment_mode: '',
     paid_from_bank_ac: '',
     remarks: ''
   };
@@ -583,7 +597,8 @@ function handleCreateFieldChange(empId, field, value) {
         other_benefit: wage.other_benefit || 0,
         paid_date: commonPaymentData.paid_date || null,
         cheque_no: commonPaymentData.cheque_no || null,
-        paid_from_bank_ac: commonPaymentData.paid_from_bank_ac || null
+        payment_mode: commonPaymentData.payment_mode || null,
+        bank_account_id: commonPaymentData.paid_from_bank_ac || null
       };
     }).filter(record => record !== null);
 
@@ -598,21 +613,37 @@ function handleCreateFieldChange(empId, field, value) {
     renderLayout(content, window.wagesDashboard.router);
 
     try {
-      const result = await api.post('/api/wages/create', { month: selectedMonth, wages: wageRecords });
+      // Use batch processor for large submissions
+      const progressModal = createBatchProgressModal();
+      const results = await submitWagesInBatches(selectedMonth, wageRecords, progressModal);
 
-      if (result.success) {
-        showToast(result.message, 'success');
+      // Show final results
+      const successCount = results.successCount || 0;
+      const failureCount = results.failureCount || 0;
+      const totalProcessed = successCount + failureCount;
+
+      if (results.success && successCount > 0) {
+        showToast(
+          `✅ Successfully created ${successCount} wages${failureCount > 0 ? ` (${failureCount} failed)` : ''}`,
+          'success'
+        );
+        
         // Clear form after successful save
         employees = [];
         wageData = {};
         selectedMonth = '';
         selectedEmployeeIds = new Set();
+      } else if (failureCount > 0) {
+        showToast(
+          `⚠️ Partial success: ${successCount} created, ${failureCount} failed`,
+          'warning'
+        );
       } else {
-        showToast(result.message || 'Failed to save wages', 'error');
+        showToast(results.errors?.[0]?.error || 'Failed to save wages', 'error');
       }
     } catch (error) {
       console.error('Error saving wages:', error);
-      showToast('Error saving wages', 'error');
+      showToast('Error saving wages: ' + error.message, 'error');
     } finally {
       isLoading = false;
       const content = render();
@@ -1207,6 +1238,29 @@ function handleManageFieldChange(wageId, field, value) {
       } else if (action === 'open-advance-modal') {
         const empId = e.target.dataset.empId || null;
         window.wagesDashboard.openAdvanceModal(empId);
+      } else if (action === 'export-report') {
+        window.wagesDashboard.exportReport();
+      }
+    });
+
+    // Delegate report filter changes
+    container.addEventListener('change', (e) => {
+      const action = e.target.dataset.action;
+      if (action === 'report-filter') {
+        const field = e.target.dataset.field;
+        window.wagesDashboard.updateReportFilters(field, e.target.value);
+      } else if (action === 'report-month-change') {
+        window.wagesDashboard.loadReportWages(e.target.value);
+      }
+    });
+
+    container.addEventListener('input', (e) => {
+      const action = e.target.dataset.action;
+      if (action === 'report-filter') {
+        const field = e.target.dataset.field;
+        window.wagesDashboard.updateReportFilters(field, e.target.value);
+      } else if (action === 'report-month-change') {
+        window.wagesDashboard.loadReportWages(e.target.value);
       }
     });
   }
@@ -1268,7 +1322,7 @@ function handleManageFieldChange(wageId, field, value) {
           getFilteredCreateEmployees,
           getUniqueValues,
           sortArray
-        }) : renderManageMode({
+        }) : activeTab === 'manage' ? renderManageMode({
           manageMonth,
           existingWages,
           editedWages,
@@ -1290,6 +1344,15 @@ function handleManageFieldChange(wageId, field, value) {
           sortArray,
           inputValue,
           toNumber
+        }) : renderReportMode({
+          reportMonth,
+          reportWages,
+          reportFilters,
+          uniqueChequeNumbers,
+          isReportLoading,
+          onMonthChange: window.wagesDashboard.loadReportWages,
+          onFilterChange: window.wagesDashboard.updateReportFilters,
+          onExport: window.wagesDashboard.exportReport
         })}
       </div>
     `;
@@ -1640,6 +1703,114 @@ function handleManageFieldChange(wageId, field, value) {
         filteredWages.forEach(wage => selectedWageIds.delete(wage.id));
       }
       updateManageSelectionUI(null); // null = select-all path
+    },
+
+    // Report mode - Load wages for selected month
+    loadReportWages: async (month) => {
+      if (month) {
+        reportMonth = month;
+      }
+
+      if (!reportMonth) {
+        showToast('Please select a month', 'warning');
+        return;
+      }
+
+      isReportLoading = true;
+      const content = render();
+      renderLayout(content, window.wagesDashboard.router);
+
+      try {
+        const result = await api.get(`/api/wages/manage?month=${reportMonth}`);
+        if (result.success) {
+          reportWages = result.data || [];
+          
+          // Extract unique cheque numbers from wages for this month
+          uniqueChequeNumbers = [...new Set(
+            reportWages
+              .map(w => w.cheque_no)
+              .filter(Boolean)
+              .sort()
+          )];
+
+          // Reset filters when month changes
+          reportFilters = {
+            paymentMode: 'all',
+            chequeNo: 'all'
+          };
+
+          showToast(`Loaded ${reportWages.length} wage records for ${reportMonth}`, 'success');
+        } else {
+          showToast('Failed to load wages', 'error');
+          reportWages = [];
+          uniqueChequeNumbers = [];
+        }
+      } catch (error) {
+        console.error('Error loading report wages:', error);
+        showToast('Error loading wages', 'error');
+        reportWages = [];
+        uniqueChequeNumbers = [];
+      } finally {
+        isReportLoading = false;
+        const content = render();
+        renderLayout(content, window.wagesDashboard.router);
+      }
+    },
+
+    // Report mode - Update filters
+    updateReportFilters: (field, value) => {
+      reportFilters[field] = value;
+      const content = render();
+      renderLayout(content, window.wagesDashboard.router);
+    },
+
+    // Report mode - Export
+    exportReport: async () => {
+      if (reportWages.length === 0) {
+        showToast('No wages to export', 'warning');
+        return;
+      }
+
+      try {
+        // Filter wages based on current filters
+        const filteredWages = reportWages.filter(wage => {
+          if (reportFilters.paymentMode && reportFilters.paymentMode !== 'all' && wage.payment_mode !== reportFilters.paymentMode) return false;
+          if (reportFilters.chequeNo && reportFilters.chequeNo !== 'all' && wage.cheque_no !== reportFilters.chequeNo) return false;
+          return true;
+        });
+
+        if (filteredWages.length === 0) {
+          showToast('No wages match the selected filters', 'warning');
+          return;
+        }
+
+        // Create workbook
+        const ws_data = [
+          ['Employee', 'Aadhar', 'Paid Date', 'Payment Mode', 'Cheque/Ref', 'Gross', 'EPF', 'ESIC', 'Other', 'Advance', 'Net'],
+          ...filteredWages.map(w => [
+            w.master_roll_id?.employee_name || 'N/A',
+            w.master_roll_id?.aadhar || '',
+            w.paid_date || '-',
+            w.payment_mode || '-',
+            w.cheque_no || '-',
+            w.gross_salary || 0,
+            w.epf_deduction || 0,
+            w.esic_deduction || 0,
+            w.other_deduction || 0,
+            w.advance_deduction || 0,
+            w.net_salary || 0
+          ])
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Wages Report');
+        XLSX.writeFile(wb, `wages-report-${reportMonth}.xlsx`);
+        showToast('Report exported successfully', 'success');
+      } catch (error) {
+        console.error('Error exporting report:', error);
+        showToast('Error exporting report', 'error');
+      }
     },
 
     // Export
