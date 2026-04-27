@@ -9,6 +9,7 @@ import {
   getMasterRollStats,
   getActivityLog,
   bulkImportMasterRolls,
+  bulkUpdateMasterRolls,
   exportMasterRolls,
   bulkCreateMasterRoll,
   bulkDeleteMasterRolls,
@@ -28,6 +29,7 @@ router.use(authMiddleware);
 // Bulk Operations (must come BEFORE /:id routes)
 router.post('/bulk-import', bulkImportMasterRolls);
 router.post("/bulk", bulkCreateMasterRoll);                   // Bulk create (manager/admin only)
+router.put('/bulk-update', bulkUpdateMasterRolls);           // Bulk update
 router.delete('/bulk-delete', bulkDeleteMasterRolls);         // Bulk delete (manager/admin only)
 
 // Specific routes (must come BEFORE /:id routes)

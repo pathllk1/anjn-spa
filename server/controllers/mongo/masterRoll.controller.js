@@ -424,6 +424,62 @@ export const bulkDeleteMasterRolls = async (req, res) => {
   }
 };
 
+/* ── BULK UPDATE ─────────────────────────────────────────────────────────── */
+
+export const bulkUpdateMasterRolls = async (req, res) => {
+  try {
+    const { firm_id, id: user_id } = req.user;
+    const { updates } = req.body; // Expecting array of { id, data }
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'No updates provided' });
+    }
+
+    const UPDATABLE = [
+      'employee_name', 'father_husband_name', 'date_of_birth', 'aadhar', 'pan',
+      'phone_no', 'address', 'bank', 'account_no', 'ifsc', 'branch', 'uan',
+      'esic_no', 's_kalyan_no', 'category', 'p_day_wage', 'project', 'site',
+      'date_of_joining', 'date_of_exit', 'doe_rem', 'status',
+    ];
+
+    let successCount = 0;
+    const errors = [];
+
+    for (const update of updates) {
+      const { id, data } = update;
+      if (!id || !data) continue;
+
+      try {
+        const doc = await MasterRoll.findOne({ _id: id, firm_id });
+        if (!doc) {
+          errors.push(`Employee ${id} not found`);
+          continue;
+        }
+
+        for (const field of UPDATABLE) {
+          if (data[field] !== undefined) doc[field] = data[field];
+        }
+        doc.updated_by = user_id;
+        await doc.save();
+        successCount++;
+      } catch (err) {
+        errors.push(`Error updating ${id}: ${err.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Updated ${successCount} employees`,
+      updated: successCount,
+      failed: errors.length,
+      errors
+    });
+  } catch (err) {
+    console.error('Bulk update error:', err);
+    res.status(500).json({ success: false, error: 'Bulk update failed on server' });
+  }
+};
+
 /* ── EXPORT ──────────────────────────────────────────────────────────────── */
 
 export const exportMasterRolls = async (req, res) => {

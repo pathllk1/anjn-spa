@@ -2,6 +2,7 @@ import { renderLayout } from '../components/layout.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { api, fetchWithCSRF } from '../utils/api.js';
 import { downloadAppointmentLetter } from '../utils/appointmentLetterGenerator.js';
+import { BulkEditModal } from '../components/master-roll-bulk-edit-modal.js';
 
 export async function renderMasterRoll(router) {
   // Check authentication
@@ -103,6 +104,11 @@ function getMasterRollHTML() {
       <button id="export-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Export All
+      </button>
+
+      <button id="bulk-edit-btn" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-bold">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        Bulk Update
       </button>
 
       <button id="open-modal-btn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-xl shadow-lg transition duration-200 flex items-center gap-2 text-sm font-semibold">
@@ -394,6 +400,16 @@ function initMasterRollScripts() {
   // Initialize the Master Roll Dashboard logic
   const masterRollManager = new MasterRollManager();
   masterRollManager.init();
+
+  // Initialize Bulk Edit Modal
+  const bulkEditModal = new BulkEditModal(() => {
+    masterRollManager.fetchMasterRolls(); // Refresh table after save
+  });
+
+  const bulkEditBtn = document.getElementById('bulk-edit-btn');
+  if (bulkEditBtn) {
+    bulkEditBtn.onclick = () => bulkEditModal.open();
+  }
 }
 
 class MasterRollManager {
