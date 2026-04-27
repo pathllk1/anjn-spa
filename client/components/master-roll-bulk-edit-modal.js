@@ -193,9 +193,9 @@ export class BulkEditModal {
           </div>
 
           <!-- Table Container -->
-          <div class="flex-1 overflow-auto bg-slate-100 p-4">
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-              <table class="w-full text-sm border-collapse">
+          <div class="flex-1 overflow-hidden bg-slate-100 p-4">
+            <div class="h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-auto">
+              <table class="w-full text-sm border-collapse table-auto">
                 <thead class="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
                   <tr>
                     <th class="px-4 py-3 text-left font-bold text-slate-700 w-16 bg-slate-50">#</th>
