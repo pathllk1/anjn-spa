@@ -88,7 +88,7 @@ export function renderCreateMode(ctx) {
                </div>
                <div class="flex items-center gap-1.5">
                   <label class="text-[8px] font-black text-indigo-300 uppercase">Bank</label>
-                  <select data-action="common-payment" data-field="paid_from_bank_ac" class="px-1 py-0.5 bg-white border border-indigo-50 rounded text-[9px] font-bold outline-none max-w-[100px]">
+                  <select data-action="common-payment" data-field="paid_from_bank_ac" class="px-1 py-0.5 bg-white border border-indigo-50 rounded text-[9px] font-bold outline-none max-w-[200px]">
                     <option value="">Choose</option>
                     ${firmBankAccounts.map(a => `<option value="${getBankAccountOptionLabel(a)}" ${commonPaymentData.paid_from_bank_ac === getBankAccountOptionLabel(a) ? 'selected' : ''}>${getBankAccountOptionLabel(a)}</option>`).join('')}
                   </select>

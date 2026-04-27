@@ -391,7 +391,7 @@ let createRenderDebounceTimer = null;
     employees.forEach(emp => {
       if (!wageData[emp.master_roll_id]) {
         wageData[emp.master_roll_id] = {
-          p_day_wage: emp.p_day_wage || 0,
+          p_day_wage: emp.last_p_day_wage || emp.p_day_wage || 0,
           wage_days: emp.last_wage_days || 26,
           gross_salary: 0,
           epf_deduction: 0,
@@ -537,7 +537,7 @@ function handleCreateFieldChange(empId, field, value) {
         // Initialize wage data with last values
         employees.forEach(emp => {
           wageData[emp.master_roll_id] = {
-            p_day_wage: emp.p_day_wage || 0,
+            p_day_wage: emp.last_p_day_wage || emp.p_day_wage || 0,
             wage_days: emp.last_wage_days || 26,
             gross_salary: 0,
             epf_deduction: 0,

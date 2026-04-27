@@ -87,6 +87,7 @@ export async function getEmployeesForWages(req, res) {
             bank:             emp.bank,
             account_no:       emp.account_no,
             p_day_wage:       emp.p_day_wage         ?? 0,
+            last_p_day_wage:  lastWage?.p_day_wage   ?? (emp.p_day_wage ?? 0),
             project:          emp.project            ?? '',
             site:             emp.site               ?? '',
             last_wage_days:   lastWage?.wage_days     ?? 26,
