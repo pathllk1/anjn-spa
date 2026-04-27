@@ -23,15 +23,13 @@ export async function renderSuperAdmin(router) {
   }
 
   const content = `
-    <div class="w-full px-3 pt-3 pb-0 space-y-2">
+    <div class="w-full flex flex-col h-[calc(100vh-120px)] px-3 pt-3 pb-0 space-y-2">
 
       <!--
         Compact top bar: title left, stat pills right.
-        Replaces the old 3-block layout (title + section label + 5 tall cards)
-        that consumed ~388px before the iframe even started.
         Total height here: ~44px.
       -->
-      <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
 
         <!-- Left: page identity -->
         <div class="flex items-center gap-2 min-w-0">
@@ -66,10 +64,10 @@ export async function renderSuperAdmin(router) {
 
       </div>
 
-      <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+      <div class="flex-1 flex flex-col bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden min-h-0">
 
         <!-- Tabs -->
-        <div class="border-b border-gray-200 bg-gray-50">
+        <div class="flex-shrink-0 border-b border-gray-200 bg-gray-50">
           <nav class="flex px-1 overflow-x-auto">
 
             <button id="firms-tab"
@@ -101,10 +99,10 @@ export async function renderSuperAdmin(router) {
         </div>
 
         <!-- Tab Content -->
-        <div>
+        <div class="flex-1 min-h-0 relative">
 
           <!-- Tab 1: All Firms iframe -->
-          <div id="firms-content" class="admin-content">
+          <div id="firms-content" class="admin-content h-full">
             <div id="firms-loader" class="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
               <svg class="w-8 h-8 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -114,12 +112,12 @@ export async function renderSuperAdmin(router) {
             </div>
             <iframe
               id="firms-iframe"
-              class="admin-iframe hidden">
+              class="admin-iframe hidden w-full h-full border-none">
             </iframe>
           </div>
 
           <!-- Tab 2: All Users iframe -->
-          <div id="users-content" class="admin-content hidden">
+          <div id="users-content" class="admin-content hidden h-full">
             <div id="users-loader" class="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
               <svg class="w-8 h-8 animate-spin text-teal-400" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -129,12 +127,12 @@ export async function renderSuperAdmin(router) {
             </div>
             <iframe
               id="users-iframe"
-              class="admin-iframe hidden">
+              class="admin-iframe hidden w-full h-full border-none">
             </iframe>
           </div>
 
           <!-- Tab 3: User Assignment iframe -->
-          <div id="assignment-content" class="admin-content hidden">
+          <div id="assignment-content" class="admin-content hidden h-full">
             <div id="assignment-loader" class="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
               <svg class="w-8 h-8 animate-spin text-purple-400" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -144,12 +142,12 @@ export async function renderSuperAdmin(router) {
             </div>
             <iframe
               id="assignment-iframe"
-              class="admin-iframe hidden">
+              class="admin-iframe hidden w-full h-full border-none">
             </iframe>
           </div>
 
           <!-- Tab 4: Password Management iframe -->
-          <div id="passwords-content" class="admin-content hidden">
+          <div id="passwords-content" class="admin-content hidden h-full">
             <div id="passwords-loader" class="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
               <svg class="w-8 h-8 animate-spin text-red-400" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -159,12 +157,12 @@ export async function renderSuperAdmin(router) {
             </div>
             <iframe
               id="passwords-iframe"
-              class="admin-iframe hidden">
+              class="admin-iframe hidden w-full h-full border-none">
             </iframe>
           </div>
 
           <!-- Tab 5: Database Browser iframe -->
-          <div id="database-content" class="admin-content hidden">
+          <div id="database-content" class="admin-content hidden h-full">
             <div id="database-loader" class="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
               <svg class="w-8 h-8 animate-spin text-cyan-400" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -174,7 +172,7 @@ export async function renderSuperAdmin(router) {
             </div>
             <iframe
               id="database-iframe"
-              class="admin-iframe hidden">
+              class="admin-iframe hidden w-full h-full border-none">
             </iframe>
           </div>
 

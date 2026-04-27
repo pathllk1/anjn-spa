@@ -889,3 +889,138 @@ export const generateAppointmentLetter = async (req, res) => {
     });
   }
 };
+
+/* ── TEMPLATE GENERATION (EXCELJS) ─────────────────────────────────────── */
+
+export const generateMasterRollTemplate = async (req, res) => {
+  try {
+    let ExcelJS;
+    try {
+      ExcelJS = await import('exceljs');
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        error: 'Excel generation library not installed. Run: npm install exceljs',
+      });
+    }
+
+    const { Workbook } = ExcelJS.default;
+
+    // Field definitions: name, header, isRequired
+    const FIELDS = [
+      { name: 'employee_name', header: 'Employee Name', isRequired: true },
+      { name: 'father_husband_name', header: 'Father/Husband Name', isRequired: true },
+      { name: 'date_of_birth', header: 'Date of Birth', isRequired: true },
+      { name: 'aadhar', header: 'Aadhar', isRequired: true },
+      { name: 'phone_no', header: 'Phone No', isRequired: true },
+      { name: 'address', header: 'Address', isRequired: true },
+      { name: 'bank', header: 'Bank', isRequired: true },
+      { name: 'account_no', header: 'Account No', isRequired: true },
+      { name: 'ifsc', header: 'IFSC', isRequired: true },
+      { name: 'date_of_joining', header: 'Date of Joining', isRequired: true },
+      { name: 'status', header: 'Status', isRequired: true },
+      { name: 'pan', header: 'PAN', isRequired: false },
+      { name: 'branch', header: 'Branch', isRequired: false },
+      { name: 'uan', header: 'UAN', isRequired: false },
+      { name: 'esic_no', header: 'ESIC No', isRequired: false },
+      { name: 's_kalyan_no', header: 'S. Kalyan No', isRequired: false },
+      { name: 'category', header: 'Category', isRequired: false },
+      { name: 'p_day_wage', header: 'Daily Wage', isRequired: false },
+      { name: 'project', header: 'Project', isRequired: false },
+      { name: 'site', header: 'Site', isRequired: false },
+      { name: 'date_of_exit', header: 'Date of Exit', isRequired: false },
+      { name: 'doe_rem', header: 'Remarks', isRequired: false },
+    ];
+
+    // Demo data
+    const DEMO_ROW = {
+      employee_name: 'Rajesh Kumar Singh',
+      father_husband_name: 'Vikram Singh',
+      date_of_birth: '1990-05-15',
+      aadhar: '123456789012',
+      phone_no: '9876543210',
+      address: '123 Main Street, Delhi, 110001',
+      bank: 'HDFC Bank',
+      account_no: '10019875432109',
+      ifsc: 'HDFC0000001',
+      date_of_joining: '2024-01-15',
+      status: 'Active',
+      pan: 'ABCDE1234F',
+      branch: 'Delhi Main',
+      uan: '100050001234',
+      esic_no: '12345678901234',
+      s_kalyan_no: 'KL123456',
+      category: 'Skilled',
+      p_day_wage: '500',
+      project: 'Project A',
+      site: 'Site 1',
+      date_of_exit: '',
+      doe_rem: 'Sample employee record for reference',
+    };
+
+    const wb = new Workbook();
+    const ws = wb.addWorksheet('Template');
+
+    // Create header row
+    FIELDS.forEach((field, index) => {
+      const cell = ws.getCell(1, index + 1);
+      cell.value = field.header;
+      
+      // Professional styling
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      cell.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+      
+      // Color based on required/optional
+      if (field.isRequired) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF4444' } }; // Red
+      } else {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4488FF' } }; // Blue
+      }
+      
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+    });
+
+    // Add demo row
+    FIELDS.forEach((field, index) => {
+      const cell = ws.getCell(2, index + 1);
+      cell.value = DEMO_ROW[field.name] || '';
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' },
+      };
+      cell.alignment = { vertical: 'center' };
+    });
+
+    // Set column widths
+    FIELDS.forEach((field, index) => {
+      const col = ws.getColumn(index + 1);
+      col.width = field.header.length > 15 ? field.header.length + 2 : 15;
+    });
+
+    // Freeze header row
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Generate buffer and send
+    const buffer = await wb.xlsx.writeBuffer();
+    const filename = `MasterRoll_Template_${Date.now()}.xlsx`;
+
+    res.setHeader('Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('[TEMPLATE GENERATION] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate template: ' + error.message,
+    });
+  }
+};

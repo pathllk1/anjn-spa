@@ -89,6 +89,11 @@ function getMasterRollHTML() {
         </div>
       </div>
 
+      <button id="download-template-btn" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Download Template
+      </button>
+
       <button id="import-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
         Import Excel
@@ -460,20 +465,24 @@ class MasterRollManager {
       "Employee Name": "employee_name",
       "Status": "status",
       "Father/Husband": "father_husband_name",
+      "Father/Husband Name": "father_husband_name",
       "Father Name": "father_husband_name",
       "Aadhar": "aadhar",
       "PAN": "pan",
       "Phone": "phone_no",
+      "Phone No": "phone_no",
       "Mobile": "phone_no",
       "Address": "address",
       "Bank": "bank",
       "Account No": "account_no",
       "IFSC": "ifsc",
       "BRANCH": "branch",
+      "Branch": "branch",
       "UAN": "uan",
       "ESIC": "esic_no",
       "ESIC No": "esic_no",
       "S Kalyan": "s_kalyan_no",
+      "S. Kalyan No": "s_kalyan_no",
       "Category": "category",
       "Wage": "p_day_wage",
       "Daily Wage": "p_day_wage",
@@ -517,6 +526,7 @@ class MasterRollManager {
       searchInput: document.getElementById("search-input"),
       generateLetterBtn: document.getElementById("generate-letter-btn"),
       exportBtn: document.getElementById("export-btn"),
+      downloadTemplateBtn: document.getElementById("download-template-btn"),
       paginationContainer: document.getElementById("pagination"),
       selectAllCheckbox: document.getElementById("select-all"),
       bulkActionsBtn: document.getElementById("bulk-actions-btn"),
@@ -537,7 +547,7 @@ class MasterRollManager {
       openModalBtn, closeModalBtn, cancelBtn, modal, form, 
       searchInput, generateLetterBtn, exportBtn, filtersBtn, filtersPanel,
       columnsBtn, columnsPanel, bulkActionsBtn, bulkActionsMenu,
-      importBtn, fileInput
+      importBtn, fileInput, downloadTemplateBtn
     } = this.elements;
 
     // Modal
@@ -565,6 +575,9 @@ class MasterRollManager {
 
     // Export
     exportBtn.addEventListener("click", () => this.exportToExcel(this.filteredRolls, `MasterRoll_${new Date().toISOString().split('T')[0]}.xlsx`));
+
+    // Download Template
+    downloadTemplateBtn.addEventListener("click", () => this.downloadTemplateFromAPI());
 
     // Filters
     filtersBtn.addEventListener("click", () => {
@@ -999,6 +1012,39 @@ class MasterRollManager {
     XLSX.utils.book_append_sheet(wb, ws, "Master Roll");
     XLSX.writeFile(wb, filename);
     this.showToast(`Excel file exported successfully! (${data.length} records)`);
+  }
+
+  async downloadTemplateFromAPI() {
+    try {
+      const response = await fetch('/api/master-rolls/template', {
+        method: 'GET',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to download template' }));
+        this.showToast(error.error || 'Failed to download template', 'error');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MasterRoll_Template_${Date.now()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      this.showToast('Template downloaded successfully!');
+    } catch (err) {
+      console.error('Template download error:', err);
+      this.showToast('Error downloading template: ' + err.message, 'error');
+    }
   }
 
   async handleFileImport(e) {

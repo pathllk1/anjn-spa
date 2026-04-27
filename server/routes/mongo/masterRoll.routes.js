@@ -13,7 +13,8 @@ import {
   bulkCreateMasterRoll,
   bulkDeleteMasterRolls,
   lookupIFSC,
-  generateAppointmentLetter
+  generateAppointmentLetter,
+  generateMasterRollTemplate
 } from '../../controllers/mongo/masterRoll.controller.js';
 import { authMiddleware } from '../../middleware/mongo/authMiddleware.js';
 
@@ -33,6 +34,7 @@ router.delete('/bulk-delete', bulkDeleteMasterRolls);         // Bulk delete (ma
 router.get('/stats', getMasterRollStats);                     // Get statistics
 router.get('/search', searchMasterRolls);                     // Search
 router.get('/export', exportMasterRolls);                     // Export
+router.get('/template', generateMasterRollTemplate);          // Download template
 router.get('/lookup-ifsc/:ifsc', lookupIFSC);                 // IFSC lookup using Razorpay API
 
 // CRUD Operations
