@@ -21,6 +21,7 @@ import inventoryPurchaseRoutes                  from './routes/mongo/inventory/p
 import ledgerRoutes                             from './routes/mongo/ledger.routes.js';
 import adminRoutes                              from './routes/mongo/admin.js';
 import databaseRoutes                           from './routes/mongo/database.routes.js';
+import toolsRoutes                              from './routes/mongo/toolsRoutes.js';
 import cronRoutes                               from './routes/mongo/cron.routes.js';
 import { cleanupExpiredTokens }                 from './utils/mongo/tokenRevocationUtils.js';
 import { cleanupRateLimitEntries }              from './middleware/mongo/rateLimitMiddleware.js';
@@ -107,6 +108,7 @@ app.use('/api/inventory/purchase', inventoryPurchaseRoutes);
 app.use('/api/ledger',          ledgerRoutes);
 app.use('/api/admin',           adminRoutes);
 app.use('/api/admin/database',  databaseRoutes);
+app.use('/api/tools',           toolsRoutes);
 
 // ── Health check — reflects real DB state ─────────────────────────────────
 // FIX: was always returning 200 "ok" even with no DB connection
