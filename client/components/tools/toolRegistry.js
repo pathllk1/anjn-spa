@@ -4,6 +4,7 @@ import { createNotepadToolModal } from './notepadToolModal.js';
 import { createStopwatchToolModal } from './stopwatchToolModal.js';
 import { createUnitConverterToolModal } from './unitConverterToolModal.js';
 import { createTextStudioToolModal } from './textStudioToolModal.js';
+import { createSettingsToolModal } from './settingsToolModal.js';
 
 const TOOL_DEFINITIONS = [
   createCalendarToolModal(),
@@ -12,6 +13,7 @@ const TOOL_DEFINITIONS = [
   createStopwatchToolModal(),
   createUnitConverterToolModal(),
   createTextStudioToolModal(),
+  createSettingsToolModal(),
 ];
 
 let toolRegistryState = null;

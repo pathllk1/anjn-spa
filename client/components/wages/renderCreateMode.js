@@ -10,7 +10,9 @@ export function renderCreateMode(ctx) {
     commonPaymentData,
     firmBankAccounts,
     employeeAdvances,
+    sessionMetadata,
     openAdvanceModal,
+    clearSession,
     formatMonthDisplay,
     formatCurrency,
     calculateNetSalary,
@@ -37,6 +39,22 @@ export function renderCreateMode(ctx) {
   
   return `
       <div class="w-full flex flex-col gap-2">
+        <!-- SESSION INDICATOR (if active) -->
+        ${sessionMetadata && !sessionMetadata.isStale ? `
+          <div class="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 flex items-center justify-between animate-in slide-in-from-top-2">
+            <div class="flex items-center gap-3">
+              <span class="text-lg">📦</span>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-xs font-black text-blue-900 uppercase tracking-widest">Session Active</span>
+                <span class="text-[10px] text-blue-700 font-bold">${sessionMetadata.selectedCount}/${sessionMetadata.employeeCount} employees • ${sessionMetadata.editCount} edits • ${sessionMetadata.ageDisplay}</span>
+              </div>
+            </div>
+            <button data-action="clear-session" class="px-3 py-1 bg-blue-100 text-blue-600 text-[9px] font-black rounded hover:bg-blue-200 transition-colors">
+              ✕ Clear
+            </button>
+          </div>
+        ` : ''}
+        
         <!-- 1. TOOLBAR -->
         <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between shrink-0">
           <div class="flex items-center gap-4">

@@ -14,6 +14,8 @@ import {
   getWageJobResults
 } from '../../controllers/mongo/wages.controller.js';
 import { exportWagesToExcel } from '../../controllers/mongo/wageExport.controller.js';
+import { generateBankReport, generateEPFESICReport } from '../../controllers/mongo/wageExportReports.controller.js';
+import { generateIndividualWageSlip, generateBulkWageSlips } from '../../controllers/mongo/wageSlip.controller.js';
 import { authMiddleware } from '../../middleware/mongo/authMiddleware.js';
 
 const router = express.Router();
@@ -96,5 +98,29 @@ router.get('/job/:jobId/status', getWageJobStatus);
 // Get job results after completion
 // GET /api/wages/job/:jobId/results
 router.get('/job/:jobId/results', getWageJobResults);
+
+/* --------------------------------------------------
+   EXPORT REPORTS ROUTES
+-------------------------------------------------- */
+
+// Generate Bank Report (for bank submission)
+// GET /api/wages/reports/bank?month=YYYY-MM&chequeNo=CHQ001
+router.get('/reports/bank', generateBankReport);
+
+// Generate EPF/ESIC Report (for statutory filing)
+// GET /api/wages/reports/epf-esic?month=YYYY-MM
+router.get('/reports/epf-esic', generateEPFESICReport);
+
+/* --------------------------------------------------
+   WAGE SLIP ROUTES (must come BEFORE /:id routes)
+-------------------------------------------------- */
+
+// Generate bulk wage slips as ZIP (must come BEFORE /:wageId/slip)
+// GET /api/wages/slips/bulk?month=YYYY-MM
+router.get('/slips/bulk', generateBulkWageSlips);
+
+// Generate individual wage slip PDF
+// GET /api/wages/:wageId/slip
+router.get('/:wageId/slip', generateIndividualWageSlip);
 
 export default router;

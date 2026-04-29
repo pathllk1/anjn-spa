@@ -142,6 +142,7 @@ export function renderManageMode(ctx) {
                   <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-20 shrink-0">Adv Pay</th>
                   <th class="px-4 py-2 text-right text-[9px] font-black text-emerald-400 uppercase bg-white/5 italic w-28 shrink-0">Net</th>
                   <th class="px-4 py-2 text-left text-[9px] font-black text-slate-500 uppercase w-64 shrink-0">Settlement Details</th>
+                  <th class="px-2 py-2 text-center text-[9px] font-black text-slate-500 uppercase w-16 shrink-0">Action</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-50">
@@ -181,6 +182,11 @@ export function renderManageMode(ctx) {
                            </select>
                            <input type="text" value="${edited.cheque_no || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="cheque_no" placeholder="Ref" class="w-16 px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" title="Cheque No / Ref" />
                         </div>
+                      </td>
+                      <td class="px-2 py-1.5 text-center border-l border-slate-50">
+                        <button data-action="download-wage-slip" data-wage-id="${String(wage.id)}" class="px-2 py-1 bg-blue-50 text-blue-600 text-[8px] font-black rounded hover:bg-blue-100 transition-colors" title="Download Wage Slip">
+                          📄 Slip
+                        </button>
                       </td>
                     </tr>
                   `;

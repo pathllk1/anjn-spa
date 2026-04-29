@@ -5,6 +5,8 @@ import { renderReportMode } from "../components/wages/renderReportMode.js";
 import { createAdvanceModal } from "../components/wages/advanceModal.js";
 import { createBatchProgressModal } from "../components/wages/batchProgressModal.js";
 import { submitWagesInBatches } from "../utils/batchWageSubmitter.js";
+import { exportBankReport, exportEPFESICReport } from "../utils/wageReportExporter.js";
+import { saveWageSession, loadWageSession, clearWageSession, hasValidWageSession, getWageSessionMetadata, getWageSessionSummary } from "../utils/wageSessionStorage.js";
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { renderLayout } from '../components/layout.js';
 import { api, fetchWithCSRF } from '../utils/api.js';
@@ -45,6 +47,10 @@ export async function renderWagesDashboard(router) {
   
   // Tab state
   let activeTab = 'create'; // 'create', 'manage', or 'report'
+  
+  // Session restoration flag
+  let sessionRestored = false;
+  let sessionMetadata = null;
   
   // Create mode state
   let selectedMonth = '';
@@ -122,7 +128,11 @@ export async function renderWagesDashboard(router) {
   let listenersAttached = false;
 
   let manageRenderDebounceTimer = null;
-let createRenderDebounceTimer = null;
+  let createRenderDebounceTimer = null;
+  
+  // Session save debounce timer
+  let sessionSaveDebounceTimer = null;
+  const SESSION_SAVE_DEBOUNCE_MS = 500;
 
   /* --------------------------------------------------
      UTILITY FUNCTIONS
@@ -201,6 +211,91 @@ let createRenderDebounceTimer = null;
   }
 
   /* --------------------------------------------------
+     SESSION MANAGEMENT FUNCTIONS
+  -------------------------------------------------- */
+
+  /**
+   * Attempt to restore session on page load
+   */
+  function attemptSessionRestore() {
+    if (sessionRestored) return; // Only restore once per page load
+
+    const session = loadWageSession();
+    if (!session) {
+      sessionRestored = true;
+      return;
+    }
+
+    try {
+      // Restore all state from session
+      selectedMonth = session.selectedMonth || '';
+      employees = session.employees || [];
+      wageData = session.wageData || {};
+      selectedEmployeeIds = new Set(session.selectedEmployeeIds || []);
+      commonPaymentData = session.commonPaymentData || {};
+      createFilters = session.createFilters || {};
+      createSort = session.createSort || {};
+
+      sessionRestored = true;
+      sessionMetadata = getWageSessionMetadata();
+
+      // Show restoration notification
+      const summary = getWageSessionSummary();
+      if (summary && !sessionMetadata.isStale) {
+        showToast(`📦 Session Restored: ${summary}`, 'success');
+      }
+    } catch (error) {
+      console.error('Error restoring session:', error);
+      sessionRestored = true;
+      clearWageSession();
+    }
+  }
+
+  /**
+   * Save current state to session (debounced)
+   */
+  function scheduleSessionSave() {
+    // Only save if in create mode and have data
+    if (activeTab !== 'create') return;
+    if (!selectedMonth && employees.length === 0) return;
+
+    // Clear existing debounce timer
+    if (sessionSaveDebounceTimer) {
+      clearTimeout(sessionSaveDebounceTimer);
+    }
+
+    // Schedule new save
+    sessionSaveDebounceTimer = setTimeout(() => {
+      try {
+        const saved = saveWageSession({
+          selectedMonth,
+          employees,
+          wageData,
+          selectedEmployeeIds,
+          commonPaymentData,
+          createFilters,
+          createSort
+        });
+
+        if (saved) {
+          sessionMetadata = getWageSessionMetadata();
+        }
+      } catch (error) {
+        console.error('Error saving session:', error);
+      }
+    }, SESSION_SAVE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Clear session and show notification
+   */
+  function clearSessionWithNotification() {
+    clearWageSession();
+    sessionMetadata = null;
+    showToast('Session cleared', 'success');
+  }
+
+  /* --------------------------------------------------
      CREATE MODE - WAGE CALCULATION FUNCTIONS
   -------------------------------------------------- */
 
@@ -223,6 +318,9 @@ let createRenderDebounceTimer = null;
 
     // Update UI immediately
     updateWageRowDisplay(empId);
+    
+    // Schedule session save
+    scheduleSessionSave();
   }
 
   function updateWageRowDisplay(empId) {
@@ -464,6 +562,21 @@ function handleCreateFieldChange(empId, field, value) {
     parsedValue = 1800;
   }
   
+  // ✅ FIX BUG #2: Validation - Advance deduction cannot exceed outstanding balance
+  if (field === 'advance_deduction') {
+    const outstandingAdvance = employeeAdvances[empId] || 0;
+    if (parsedValue > outstandingAdvance) {
+      showToast(`Cannot deduct more than outstanding advance (₹${outstandingAdvance})`, 'error');
+      parsedValue = outstandingAdvance;
+    }
+  }
+  
+  // ✅ FIX BUG #9: Validation - Wage days must be at least 1
+  if (field === 'wage_days' && parsedValue === 0) {
+    showToast('Wage days must be at least 1', 'error');
+    parsedValue = 1;
+  }
+  
   // Update the field value
   wageData[empId][field] = parsedValue;
   
@@ -513,6 +626,9 @@ function handleCreateFieldChange(empId, field, value) {
 
   // Always update global summary
   updateCreateSummaryTotals();
+  
+  // Schedule session save
+  scheduleSessionSave();
 }
 
   /* --------------------------------------------------
@@ -581,6 +697,9 @@ function handleCreateFieldChange(empId, field, value) {
         calculateBulkForAllEmployees();
 
         showToast(`Loaded ${employees.length} employees (${result.meta.already_paid} already paid)`, 'success');
+        
+        // Schedule session save
+        scheduleSessionSave();
       } else {
         showToast(result.message || 'Failed to load employees', 'error');
       }
@@ -662,6 +781,10 @@ function handleCreateFieldChange(empId, field, value) {
         wageData = {};
         selectedMonth = '';
         selectedEmployeeIds = new Set();
+        
+        // Clear session after successful save
+        clearWageSession();
+        sessionMetadata = null;
       } else if (failureCount > 0) {
         showToast(
           `⚠️ Partial success: ${successCount} created, ${failureCount} failed`,
@@ -1244,6 +1367,8 @@ function handleManageFieldChange(wageId, field, value) {
         }
       } else if (action === 'load-employees') {
         window.wagesDashboard.loadEmployees();
+      } else if (action === 'clear-session') {
+        window.wagesDashboard.clearSession();
       } else if (action === 'load-manage-wages' || action === 'load-wages') {
         window.wagesDashboard.loadManageWages();
       } else if (action === 'calculate-bulk') {
@@ -1274,6 +1399,15 @@ function handleManageFieldChange(wageId, field, value) {
         window.wagesDashboard.openAdvanceModal(empId);
       } else if (action === 'export-report') {
         window.wagesDashboard.exportReport();
+      } else if (action === 'export-bank-report') {
+        window.wagesDashboard.exportBankReport();
+      } else if (action === 'export-epf-esic-report') {
+        window.wagesDashboard.exportEPFESICReport();
+      } else if (action === 'download-wage-slip') {
+        const wageId = e.target.dataset.wageId;
+        window.wagesDashboard.downloadWageSlip(wageId);
+      } else if (action === 'download-bulk-wage-slips') {
+        window.wagesDashboard.downloadBulkWageSlips();
       }
     });
 
@@ -1349,7 +1483,9 @@ function handleManageFieldChange(wageId, field, value) {
           commonPaymentData,
           firmBankAccounts,
           employeeAdvances,
+          sessionMetadata,
           openAdvanceModal: window.wagesDashboard.openAdvanceModal,
+          clearSession: window.wagesDashboard.clearSession,
           formatMonthDisplay,
           formatCurrency,
           calculateNetSalary,
@@ -1547,6 +1683,13 @@ function handleManageFieldChange(wageId, field, value) {
       renderLayout(content, window.wagesDashboard.router);
     },
 
+    // Session management
+    clearSession: () => {
+      clearSessionWithNotification();
+      const content = render();
+      renderLayout(content, window.wagesDashboard.router);
+    },
+
      // Create mode - Data loading
      setMonth: (month) => {
        selectedMonth = month;
@@ -1570,6 +1713,7 @@ function handleManageFieldChange(wageId, field, value) {
         selectedEmployeeIds.delete(empId);
       }
       updateCreateSelectionUI(empId); // surgical patch — no full re-render
+      scheduleSessionSave(); // Save session on selection change
     },
     toggleSelectAllCreate: (checked) => {
       const filteredEmployees = getFilteredCreateEmployees();
@@ -1579,17 +1723,20 @@ function handleManageFieldChange(wageId, field, value) {
         filteredEmployees.forEach(emp => selectedEmployeeIds.delete(emp.master_roll_id));
       }
       updateCreateSelectionUI(null); // null = select-all path
+      scheduleSessionSave(); // Save session on selection change
     },
     
     // Create mode - Filters
     setCreateFilter: (field, value) => {
       createFilters[field] = value;
+      scheduleSessionSave(); // Save session on filter change
       const content = render();
       renderLayout(content, window.wagesDashboard.router);
     },
     
     setCreateFilterDebounced: (field, value) => {
       createFilters[field] = value;
+      scheduleSessionSave(); // Save session on filter change
       clearTimeout(createSearchDebounceTimer);
       createSearchDebounceTimer = setTimeout(() => {
         const content = render();
@@ -1625,6 +1772,7 @@ function handleManageFieldChange(wageId, field, value) {
     saveWages: saveWages,
     setCommonPayment: (field, value) => {
       commonPaymentData[field] = value;
+      scheduleSessionSave(); // Save session on payment data change
       // Browser already updated the input — no re-render needed
     },
 
@@ -1847,9 +1995,131 @@ function handleManageFieldChange(wageId, field, value) {
       }
     },
 
+    // Report mode - Export Bank Report
+    exportBankReport: async () => {
+      if (!reportMonth) {
+        showToast('Please select a month first', 'warning');
+        return;
+      }
+
+      try {
+        const chequeNo = reportFilters.chequeNo || 'all';
+        const result = await exportBankReport(reportMonth, chequeNo);
+        showToast(result.message, 'success');
+      } catch (error) {
+        console.error('Error exporting bank report:', error);
+        showToast(`Error: ${error.message}`, 'error');
+      }
+    },
+
+    // Report mode - Export EPF/ESIC Report
+    exportEPFESICReport: async () => {
+      if (!reportMonth) {
+        showToast('Please select a month first', 'warning');
+        return;
+      }
+
+      try {
+        const result = await exportEPFESICReport(reportMonth);
+        showToast(result.message, 'success');
+      } catch (error) {
+        console.error('Error exporting EPF/ESIC report:', error);
+        showToast(`Error: ${error.message}`, 'error');
+      }
+    },
+
+    // Wage Slip - Download individual slip
+    downloadWageSlip: async (wageId) => {
+      if (!wageId) {
+        showToast('Invalid wage record', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/wages/${wageId}/slip`, {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to download wage slip');
+        }
+
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('content-disposition');
+        let filename = 'wage-slip.pdf';
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+          if (filenameMatch) filename = filenameMatch[1];
+        }
+
+        // Download the PDF
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showToast('Wage slip downloaded successfully', 'success');
+      } catch (error) {
+        console.error('Error downloading wage slip:', error);
+        showToast(`Error: ${error.message}`, 'error');
+      }
+    },
+
+    // Wage Slip - Download bulk slips as ZIP
+    downloadBulkWageSlips: async () => {
+      if (!reportMonth) {
+        showToast('Please select a month first', 'warning');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/wages/slips/bulk?month=${reportMonth}`, {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to download wage slips');
+        }
+
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('content-disposition');
+        let filename = `wage-slips-${reportMonth}.zip`;
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+          if (filenameMatch) filename = filenameMatch[1];
+        }
+
+        // Download the ZIP
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showToast('Wage slips downloaded successfully', 'success');
+      } catch (error) {
+        console.error('Error downloading wage slips:', error);
+        showToast(`Error: ${error.message}`, 'error');
+      }
+    },
+
     // Export
     exportToExcel: exportToExcel
   };
+
+  // Attempt to restore session from previous navigation
+  attemptSessionRestore();
 
   // Initial render
   const content = render();

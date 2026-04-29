@@ -94,13 +94,25 @@ export function renderReportMode({
           </div>
         </div>
 
-        <!-- Export Button -->
+        <!-- Export Buttons -->
         <div class="flex justify-end gap-2 mt-4">
           <button
-            data-action="export-report"
-            class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors"
+            data-action="export-bank-report"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors"
           >
-            📊 Export to Excel
+            🏦 Bank Report
+          </button>
+          <button
+            data-action="export-epf-esic-report"
+            class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors"
+          >
+            📋 EPF/ESIC Report
+          </button>
+          <button
+            data-action="download-bulk-wage-slips"
+            class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 transition-colors"
+          >
+            📦 Download All Slips
           </button>
         </div>
       </div>
@@ -153,6 +165,7 @@ export function renderReportMode({
                 <th class="px-4 py-3 text-right text-xs font-black text-slate-300 uppercase">Other</th>
                 <th class="px-4 py-3 text-right text-xs font-black text-slate-300 uppercase">Advance</th>
                 <th class="px-4 py-3 text-right text-xs font-black text-emerald-400 uppercase">Net</th>
+                <th class="px-4 py-3 text-center text-xs font-black text-slate-300 uppercase">Action</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
@@ -181,6 +194,11 @@ export function renderReportMode({
                       <td class="px-4 py-3 text-right text-sm font-bold text-slate-700 font-mono">₹${(wage.other_deduction || 0).toLocaleString('en-IN')}</td>
                       <td class="px-4 py-3 text-right text-sm font-bold text-rose-700 font-mono">₹${(wage.advance_deduction || 0).toLocaleString('en-IN')}</td>
                       <td class="px-4 py-3 text-right text-sm font-black text-emerald-700 font-mono bg-emerald-50">₹${(wage.net_salary || 0).toLocaleString('en-IN')}</td>
+                      <td class="px-4 py-3 text-center">
+                        <button data-action="download-wage-slip" data-wage-id="${wage._id}" class="px-2 py-1 bg-blue-50 text-blue-600 text-xs font-black rounded hover:bg-blue-100 transition-colors">
+                          📄 Slip
+                        </button>
+                      </td>
                     </tr>
                   `
                       )
@@ -203,6 +221,7 @@ export function renderReportMode({
                 <td class="px-4 py-3 text-right text-sm font-black text-slate-700 font-mono">₹${(totals.otherDeduction).toLocaleString('en-IN')}</td>
                 <td class="px-4 py-3 text-right text-sm font-black text-rose-700 font-mono">₹${(totals.advanceDeduction).toLocaleString('en-IN')}</td>
                 <td class="px-4 py-3 text-right text-sm font-black text-emerald-700 font-mono bg-emerald-100">₹${(totals.netSalary).toLocaleString('en-IN')}</td>
+                <td></td>
               </tr>
             </tfoot>
           </table>

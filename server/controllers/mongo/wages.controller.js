@@ -66,6 +66,55 @@ function validatePaymentFields(wage) {
   return null;
 }
 
+/**
+ * Validate advance deduction against outstanding balance
+ */
+async function validateAdvanceDeduction(firmId, masterRollId, advanceDeduction) {
+  if (!advanceDeduction || advanceDeduction === 0) return null;
+
+  // Get outstanding advance balance
+  const advances = await Advance.find({
+    firm_id: firmId,
+    master_roll_id: masterRollId,
+    status: { $in: ['PENDING', 'POSTED'] }
+  }).lean();
+
+  const totalAdvance = advances.reduce((sum, a) => {
+    if (a.type === 'ADVANCE') return sum + (a.amount || 0);
+    if (a.type === 'REPAYMENT') return sum - (a.amount || 0);
+    return sum;
+  }, 0);
+
+  if (advanceDeduction > totalAdvance) {
+    return `Advance deduction (₹${advanceDeduction}) exceeds outstanding balance (₹${totalAdvance})`;
+  }
+
+  return null;
+}
+
+/**
+ * Validate wage days is positive
+ */
+function validateWageDays(wageDays) {
+  if (!wageDays || wageDays <= 0) {
+    return 'Wage days must be greater than 0';
+  }
+  if (wageDays > 31) {
+    return 'Wage days cannot exceed 31';
+  }
+  return null;
+}
+
+/**
+ * Validate gross salary is positive
+ */
+function validateGrossSalary(grossSalary) {
+  if (!grossSalary || grossSalary <= 0) {
+    return 'Gross salary must be greater than 0';
+  }
+  return null;
+}
+
 const MONTH_REGEX = /^\d{4}-\d{2}$/;
 
 /* ── GET EMPLOYEES FOR WAGES ─────────────────────────────────────────────── */
@@ -234,15 +283,37 @@ export async function createWagesBulk(req, res) {
             continue;
           }
 
-          const paymentError = validatePaymentFields(wage);
-          if (paymentError) {
-            results.push({ master_roll_id: wage.master_roll_id, success: false, message: paymentError });
-            continue;
-          }
-
           const existing = await Wage.findOne({ firm_id: firmId, master_roll_id: wage.master_roll_id, salary_month: month }).session(session).lean();
           if (existing) {
             results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Wage already exists for this employee in this month' });
+            continue;
+          }
+
+          // Validate wage days
+          const wageDaysError = validateWageDays(wage.wage_days);
+          if (wageDaysError) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: wageDaysError });
+            continue;
+          }
+
+          // Validate gross salary
+          const grossSalaryError = validateGrossSalary(wage.gross_salary);
+          if (grossSalaryError) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: grossSalaryError });
+            continue;
+          }
+
+          // Validate advance deduction
+          const advanceError = await validateAdvanceDeduction(firmId, wage.master_roll_id, wage.advance_deduction);
+          if (advanceError) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: advanceError });
+            continue;
+          }
+
+          // Validate payment fields
+          const paymentError = validatePaymentFields(wage);
+          if (paymentError) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: paymentError });
             continue;
           }
 

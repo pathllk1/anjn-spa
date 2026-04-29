@@ -552,6 +552,9 @@
   .z-\[100\] {
     z-index: 100;
   }
+  .z-\[9998\] {
+    z-index: 9998;
+  }
   .z-\[9999\] {
     z-index: 9999;
   }
@@ -713,6 +716,9 @@
   }
   .mb-6 {
     margin-bottom: calc(var(--spacing) * 6);
+  }
+  .mb-8 {
+    margin-bottom: calc(var(--spacing) * 8);
   }
   .-ml-1 {
     margin-left: calc(var(--spacing) * -1);
@@ -1193,6 +1199,9 @@
   }
   .min-w-0 {
     min-width: calc(var(--spacing) * 0);
+  }
+  .min-w-\[3rem\] {
+    min-width: 3rem;
   }
   .min-w-\[60px\] {
     min-width: 60px;
@@ -3478,6 +3487,9 @@
   .pt-16 {
     padding-top: calc(var(--spacing) * 16);
   }
+  .pt-\[5vh\] {
+    padding-top: 5vh;
+  }
   .pt-\[10vh\] {
     padding-top: 10vh;
   }
@@ -4132,6 +4144,9 @@
   }
   .accent-indigo-600 {
     accent-color: var(--color-indigo-600);
+  }
+  .accent-purple-600 {
+    accent-color: var(--color-purple-600);
   }
   .opacity-0 {
     opacity: 0%;
@@ -6272,6 +6287,11 @@
   .focus\:ring-pink-500 {
     &:focus {
       --tw-ring-color: var(--color-pink-500);
+    }
+  }
+  .focus\:ring-purple-100 {
+    &:focus {
+      --tw-ring-color: var(--color-purple-100);
     }
   }
   .focus\:ring-purple-500 {
