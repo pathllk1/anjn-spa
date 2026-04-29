@@ -70,9 +70,18 @@ export function renderManageMode(ctx) {
         <!-- 2. BULK EDIT -->
         ${isBulkEditMode ? `
           <div class="bg-indigo-900/5 border-2 border-indigo-100 p-4 rounded-2xl animate-in slide-in-from-top-4 duration-300">
-             <div class="grid grid-cols-5 gap-4">
+             <div class="grid grid-cols-6 gap-4">
                 <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Wage Days</label><input type="number" value="${bulkEditData.wage_days}" data-action="set-bulk-edit" data-field="wage_days" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-xs font-bold" /></div>
                 <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Paid Date</label><input type="date" value="${bulkEditData.paid_date}" data-action="set-bulk-edit" data-field="paid_date" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-xs font-bold" /></div>
+                <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Payment Mode</label><select data-action="set-bulk-edit" data-field="payment_mode" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-[10px] font-bold">
+                    <option value="">Skip</option>
+                    <option value="CASH" ${bulkEditData.payment_mode === 'CASH' ? 'selected' : ''}>Cash</option>
+                    <option value="CHEQUE" ${bulkEditData.payment_mode === 'CHEQUE' ? 'selected' : ''}>Cheque</option>
+                    <option value="NEFT" ${bulkEditData.payment_mode === 'NEFT' ? 'selected' : ''}>NEFT</option>
+                    <option value="RTGS" ${bulkEditData.payment_mode === 'RTGS' ? 'selected' : ''}>RTGS</option>
+                    <option value="IMPS" ${bulkEditData.payment_mode === 'IMPS' ? 'selected' : ''}>IMPS</option>
+                    <option value="UPI" ${bulkEditData.payment_mode === 'UPI' ? 'selected' : ''}>UPI</option>
+                </select></div>
                 <div class="space-y-1"><label class="text-[8px] font-black text-indigo-400 uppercase">Funding Account</label><select data-action="set-bulk-edit" data-field="paid_from_bank_ac" class="w-full px-2 py-1.5 rounded-lg border-none bg-white text-[10px] font-bold">
                     <option value="">Skip</option>
                     ${firmBankAccounts.map(a => `<option value="${getBankAccountOptionLabel(a)}" ${bulkEditData.paid_from_bank_ac === getBankAccountOptionLabel(a) ? 'selected' : ''}>${getBankAccountOptionLabel(a)}</option>`).join('')}
@@ -156,12 +165,21 @@ export function renderManageMode(ctx) {
                       <td class="px-4 py-1.5 text-right border-r border-slate-50 font-black text-emerald-600 font-mono text-xs italic"><span id="wage-${String(wage.id)}-net-display" data-wage-id="${String(wage.id)}" data-field="net_salary">${formatCurrency(netSalary)}</span></td>
                       <td class="px-4 py-1.5">
                         <div class="flex items-center gap-2">
-                           <input type="date" value="${edited.paid_date || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="paid_date" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" />
-                           <select data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="paid_from_bank_ac" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold max-w-[110px]">
+                           <input type="date" value="${edited.paid_date || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="paid_date" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" title="Paid Date" />
+                           <select data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="payment_mode" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold w-12" title="Payment Mode">
+                              <option value="">Mode</option>
+                              <option value="CASH" ${edited.payment_mode === 'CASH' ? 'selected' : ''}>CASH</option>
+                              <option value="CHEQUE" ${edited.payment_mode === 'CHEQUE' ? 'selected' : ''}>CHQ</option>
+                              <option value="NEFT" ${edited.payment_mode === 'NEFT' ? 'selected' : ''}>NEFT</option>
+                              <option value="RTGS" ${edited.payment_mode === 'RTGS' ? 'selected' : ''}>RTGS</option>
+                              <option value="IMPS" ${edited.payment_mode === 'IMPS' ? 'selected' : ''}>IMPS</option>
+                              <option value="UPI" ${edited.payment_mode === 'UPI' ? 'selected' : ''}>UPI</option>
+                           </select>
+                           <select data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="paid_from_bank_ac" class="px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold max-w-[110px]" title="Bank Account">
                               <option value="">Choose Bank</option>
                               ${firmBankAccounts.map(a => `<option value="${getBankAccountOptionLabel(a)}" ${edited.paid_from_bank_ac === getBankAccountOptionLabel(a) ? 'selected' : ''}>${getBankAccountOptionLabel(a)}</option>`).join('')}
                            </select>
-                           <input type="text" value="${edited.cheque_no || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="cheque_no" placeholder="Ref" class="w-16 px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" />
+                           <input type="text" value="${edited.cheque_no || ''}" data-action="edit-wage" data-wage-id="${String(wage.id)}" data-field="cheque_no" placeholder="Ref" class="w-16 px-1 py-0.5 bg-slate-50 border-none rounded text-[9px] font-bold" title="Cheque No / Ref" />
                         </div>
                       </td>
                     </tr>

@@ -80,6 +80,7 @@ export async function renderWagesDashboard(router) {
     other_benefit: '',
     paid_date: '',
     cheque_no: '',
+    payment_mode: '',
     paid_from_bank_ac: '',
     remarks: ''
   };
@@ -126,6 +127,22 @@ let createRenderDebounceTimer = null;
   /* --------------------------------------------------
      UTILITY FUNCTIONS
   -------------------------------------------------- */
+
+  function getBankAccountOptionLabel(account) {
+    if (!account) return '';
+    const parts = [
+      account.account_name || account.bank_name || 'Bank Account',
+      account.bank_name || null,
+      account.account_number ? `A/C ${account.account_number}` : null,
+    ].filter(Boolean);
+    return parts.join(' • ');
+  }
+
+  function getSelectedBankAccountId(bankLabel) {
+    if (!bankLabel) return null;
+    const account = firmBankAccounts.find(a => getBankAccountOptionLabel(a) === bankLabel);
+    return account ? account._id : null;
+  }
 
   function formatDateDisplay(dateStr) {
     if (!dateStr) return '-';
@@ -513,6 +530,17 @@ function handleCreateFieldChange(empId, field, value) {
     }
   }
 
+  async function loadAllAdvanceBalances() {
+    try {
+      const res = await api.get('/api/advances/bulk-balances');
+      if (res.success) {
+        employeeAdvances = res.balances;
+      }
+    } catch (e) {
+      console.error('Failed to load bulk advance balances', e);
+    }
+  }
+
   async function loadEmployeesForWages() {
     if (!selectedMonth) {
       showToast('Please select a month', 'error');
@@ -530,9 +558,10 @@ function handleCreateFieldChange(empId, field, value) {
         employees = result.data;
         wageData = {};
         selectedEmployeeIds = new Set(); // Clear selections
+        employeeAdvances = {}; // Reset balances
 
-        // Fetch balances for all loaded employees
-        await Promise.all(employees.map(emp => loadAdvanceBalance(emp.master_roll_id)));
+        // Fetch balances for all employees in one call
+        await loadAllAdvanceBalances();
 
         // Initialize wage data with last values
         employees.forEach(emp => {
@@ -598,7 +627,7 @@ function handleCreateFieldChange(empId, field, value) {
         paid_date: commonPaymentData.paid_date || null,
         cheque_no: commonPaymentData.cheque_no || null,
         payment_mode: commonPaymentData.payment_mode || null,
-        bank_account_id: commonPaymentData.paid_from_bank_ac || null
+        bank_account_id: getSelectedBankAccountId(commonPaymentData.paid_from_bank_ac)
       };
     }).filter(record => record !== null);
 
@@ -674,9 +703,8 @@ function handleCreateFieldChange(empId, field, value) {
         selectedWageIds = new Set();
         isBulkEditMode = false;
 
-        // Fetch balances for all employees in existing wages
-        const masterRollIds = [...new Set(existingWages.map(w => w.master_roll_id?._id).filter(id => id))];
-        await Promise.all(masterRollIds.map(id => loadAdvanceBalance(id)));
+        // Fetch balances for all employees in one call (optimized)
+        await loadAllAdvanceBalances();
         
         showToast(`Loaded ${existingWages.length} wage records for ${formatMonthDisplay(manageMonth)}`, 'success');
       } else {
@@ -718,7 +746,8 @@ function handleCreateFieldChange(empId, field, value) {
         other_benefit: toNumber(edited.other_benefit),
         paid_date: edited.paid_date || null,
         cheque_no: edited.cheque_no || null,
-        paid_from_bank_ac: edited.paid_from_bank_ac || null
+        payment_mode: edited.payment_mode || null,
+        bank_account_id: getSelectedBankAccountId(edited.paid_from_bank_ac)
       };
     });
 
@@ -848,6 +877,10 @@ function handleCreateFieldChange(empId, field, value) {
         editedWages[wageId].paid_from_bank_ac = bulkEditData.paid_from_bank_ac;
       }
 
+      if (bulkEditData.payment_mode !== '') {
+        editedWages[wageId].payment_mode = bulkEditData.payment_mode;
+      }
+
       if (bulkEditData.remarks !== '') {
         editedWages[wageId].remarks = bulkEditData.remarks;
       }
@@ -863,6 +896,7 @@ function handleCreateFieldChange(empId, field, value) {
       advance_deduction: '',
       paid_date: '',
       cheque_no: '',
+      payment_mode: '',
       paid_from_bank_ac: '',
       remarks: ''
     };

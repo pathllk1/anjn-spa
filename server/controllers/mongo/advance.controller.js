@@ -1,5 +1,6 @@
 import { Advance, MasterRoll } from '../../models/index.js';
 import mongoose from 'mongoose';
+import { postAdvanceLedger, deleteAdvanceLedger } from '../../utils/mongo/advanceLedgerHelper.js';
 
 /**
  * Get active advance balance for an employee
@@ -105,16 +106,20 @@ export async function getAllEmployeeBalances(req, res) {
  * Record a new advance (Disbursement)
  */
 export async function recordAdvance(req, res) {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
+
     const { masterRollId, amount, date, paymentMode, remarks, bankDetails } = req.body;
     const firmId = req.user.firm_id;
     const userId = req.user.id;
 
     if (!masterRollId || !amount || !date) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
-    const doc = await Advance.create({
+    const doc = new Advance({
       firm_id: firmId,
       master_roll_id: masterRollId,
       type: 'ADVANCE',
@@ -127,10 +132,28 @@ export async function recordAdvance(req, res) {
       updated_by: userId
     });
 
-    res.status(201).json({ success: true, message: 'Advance recorded successfully', data: doc });
+    // Save advance document
+    await doc.save({ session });
+
+    // Post to ledger
+    try {
+      const voucherGroupId = await postAdvanceLedger(doc, session);
+      doc.voucher_group_id = voucherGroupId;
+      await doc.save({ session });
+    } catch (ledgerError) {
+      console.error('Ledger posting failed for advance:', ledgerError);
+      await session.abortTransaction();
+      return res.status(500).json({ success: false, message: `Ledger posting failed: ${ledgerError.message}` });
+    }
+
+    await session.commitTransaction();
+    res.status(201).json({ success: true, message: 'Advance recorded and posted to ledger', data: doc });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error recording advance:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  } finally {
+    session.endSession();
   }
 }
 
@@ -138,26 +161,40 @@ export async function recordAdvance(req, res) {
  * Delete an advance record
  */
 export async function deleteAdvanceRecord(req, res) {
+  const session = await mongoose.startSession();
   try {
+    session.startTransaction();
+
     const { id } = req.params;
     const firmId = req.user.firm_id;
 
-    const record = await Advance.findOne({ _id: id, firm_id: firmId });
+    const record = await Advance.findOne({ _id: id, firm_id: firmId }).session(session);
     if (!record) {
+      await session.abortTransaction();
       return res.status(404).json({ success: false, message: 'Record not found' });
     }
 
     if (record.payment_mode === 'WAGE_DEDUCTION' && record.wage_id) {
+      await session.abortTransaction();
       return res.status(400).json({ 
         success: false, 
         message: 'Cannot delete a wage deduction repayment from here. Edit the wage record instead.' 
       });
     }
 
-    await Advance.deleteOne({ _id: id });
-    res.json({ success: true, message: 'Record deleted successfully' });
+    // Delete ledger entries
+    await deleteAdvanceLedger(record._id, firmId, session);
+
+    // Delete advance record
+    await record.deleteOne({ session });
+
+    await session.commitTransaction();
+    res.json({ success: true, message: 'Record deleted and ledger cleaned' });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error deleting advance record:', error);
     res.status(500).json({ success: false, message: 'Server error' });
+  } finally {
+    session.endSession();
   }
 }

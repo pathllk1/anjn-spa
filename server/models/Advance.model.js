@@ -45,6 +45,9 @@ const advanceSchema = new Schema(
     remarks: {
       type: String,
     },
+    voucher_group_id: {
+      type: String,
+    },
     created_by: {
       type: Schema.Types.ObjectId,
       ref: 'User',

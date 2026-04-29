@@ -47,6 +47,25 @@ function calculatePerDayWage(gross, wageDays) {
   return wageDays > 0 ? parseFloat((gross / wageDays).toFixed(2)) : 0;
 }
 
+function validatePaymentFields(wage) {
+  const validModes = ['CASH', 'CHEQUE', 'NEFT', 'RTGS', 'IMPS', 'UPI'];
+  if (wage.payment_mode && !validModes.includes(wage.payment_mode)) {
+    return 'Invalid payment mode';
+  }
+  
+  // If payment details are provided, validation rules apply
+  if (wage.payment_mode === 'CHEQUE') {
+    if (!wage.cheque_no) return 'Cheque number is required for CHEQUE payment';
+    if (!wage.bank_account_id) return 'Bank account is required for CHEQUE payment';
+  }
+  
+  if (['NEFT', 'RTGS', 'IMPS', 'UPI'].includes(wage.payment_mode)) {
+    if (!wage.bank_account_id) return `Bank account is required for ${wage.payment_mode} payment`;
+  }
+
+  return null;
+}
+
 const MONTH_REGEX = /^\d{4}-\d{2}$/;
 
 /* ── GET EMPLOYEES FOR WAGES ─────────────────────────────────────────────── */
@@ -215,6 +234,12 @@ export async function createWagesBulk(req, res) {
             continue;
           }
 
+          const paymentError = validatePaymentFields(wage);
+          if (paymentError) {
+            results.push({ master_roll_id: wage.master_roll_id, success: false, message: paymentError });
+            continue;
+          }
+
           const existing = await Wage.findOne({ firm_id: firmId, master_roll_id: wage.master_roll_id, salary_month: month }).session(session).lean();
           if (existing) {
             results.push({ master_roll_id: wage.master_roll_id, success: false, message: 'Wage already exists for this employee in this month' });
@@ -341,6 +366,12 @@ export async function updateWage(req, res) {
       return res.status(400).json({ success: false, message: 'wage_days and gross_salary are required' });
     }
 
+    const paymentError = validatePaymentFields(req.body);
+    if (paymentError) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: paymentError });
+    }
+
     const existingWage = await Wage.findOne({ _id: id, firm_id: firmId }).session(session);
     if (!existingWage) {
       await session.abortTransaction();
@@ -450,6 +481,12 @@ export async function updateWagesBulk(req, res) {
       try {
         if (!wage.id || !wage.wage_days || wage.gross_salary === undefined) {
           results.push({ id: wage.id, success: false, message: 'Missing required fields: id, wage_days, gross_salary' });
+          continue;
+        }
+
+        const paymentError = validatePaymentFields(wage);
+        if (paymentError) {
+          results.push({ id: wage.id, success: false, message: paymentError });
           continue;
         }
 
