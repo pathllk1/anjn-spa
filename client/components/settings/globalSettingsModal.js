@@ -288,12 +288,12 @@ function applySettingToUI(key, value) {
       applyThemeMode(value);
       break;
 
-    case 'primary_color':
-      document.documentElement.style.setProperty('--color-primary', value);
+    case 'accent_color':
+      applyAccentColor(value);
       break;
 
     case 'animations_enabled':
-      document.documentElement.style.setProperty('--animations', value ? '1' : '0');
+      applyAnimations(value);
       break;
   }
 }
@@ -306,6 +306,29 @@ function applyThemeMode(mode) {
     html.classList.toggle('dark', prefersDark);
   } else {
     html.classList.toggle('dark', mode === 'dark');
+  }
+}
+
+function applyAccentColor(color) {
+  const html = document.documentElement;
+  
+  // Remove all accent color classes
+  html.classList.remove('accent-indigo', 'accent-blue', 'accent-purple', 'accent-emerald');
+  
+  // Add the new accent color class
+  html.classList.add(`accent-${color}`);
+  
+  // Store for use in Tailwind classes
+  html.dataset.accentColor = color;
+}
+
+function applyAnimations(enabled) {
+  const html = document.documentElement;
+  
+  if (enabled) {
+    html.classList.remove('no-animations');
+  } else {
+    html.classList.add('no-animations');
   }
 }
 

@@ -17,6 +17,7 @@ import {
   getAllCategories,
   getCategoryLabel
 } from '../settings/settingsRegistry.js';
+import { applySettingToUI } from '../../utils/settingsApplier.js';
 
 let currentSettings = { ...DEFAULT_SETTINGS };
 
@@ -109,53 +110,6 @@ function renderSettingControl(setting) {
       </div>
     </div>
   `;
-}
-
-function applySettingToUI(key, value) {
-  switch (key) {
-    case 'font_size':
-      // Apply to body only, not root (to preserve rem-based sizing)
-      document.body.style.fontSize = `${value}px`;
-      // Also set CSS variable for components that need it
-      document.documentElement.style.setProperty('--app-font-size', `${value}px`);
-      break;
-
-    case 'font_family':
-      const fontMap = {
-        'system': 'system-ui, -apple-system, sans-serif',
-        'serif': 'Georgia, serif',
-        'mono': 'Courier New, monospace'
-      };
-      document.body.style.fontFamily = fontMap[value] || 'system-ui';
-      break;
-
-    case 'line_height':
-      document.body.style.lineHeight = value;
-      break;
-
-    case 'theme_mode':
-      applyThemeMode(value);
-      break;
-
-    case 'primary_color':
-      document.documentElement.style.setProperty('--color-primary', value);
-      break;
-
-    case 'animations_enabled':
-      document.documentElement.style.setProperty('--animations', value ? '1' : '0');
-      break;
-  }
-}
-
-function applyThemeMode(mode) {
-  const html = document.documentElement;
-  
-  if (mode === 'auto') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    html.classList.toggle('dark', prefersDark);
-  } else {
-    html.classList.toggle('dark', mode === 'dark');
-  }
 }
 
 async function loadSettings() {

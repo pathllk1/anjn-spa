@@ -19,7 +19,6 @@ export const DEFAULT_SETTINGS = {
   // Theme
   'theme_mode': 'light',     // light, dark, auto
   'accent_color': 'indigo',  // indigo, blue, purple, emerald
-  'primary_color': '#1F2937', // Hex color
   
   // Layout
   'sidebar_width': 'normal', // compact, normal, wide
@@ -94,13 +93,6 @@ export const SETTINGS_DEFINITIONS = [
       { value: 'emerald', label: 'Emerald' }
     ],
     description: 'Primary accent color for UI elements'
-  },
-  {
-    key: 'primary_color',
-    category: SETTINGS_CATEGORIES.THEME,
-    label: 'Primary Color',
-    type: 'color',
-    description: 'Custom primary color (hex format)'
   },
 
   // Layout Category

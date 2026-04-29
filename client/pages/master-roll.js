@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { api, fetchWithCSRF } from '../utils/api.js';
 import { downloadAppointmentLetter } from '../utils/appointmentLetterGenerator.js';
 import { BulkEditModal } from '../components/master-roll-bulk-edit-modal.js';
+import { IcardExportModal } from '../components/icard-export-modal.js';
 
 export async function renderMasterRoll(router) {
   // Check authentication
@@ -55,7 +56,7 @@ function getMasterRollHTML() {
         </svg>
       </div>
 
-      <button id="filters-btn" class="relative bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium border border-gray-300">
+      <button id="filters-btn" class="relative bg-white hover:bg-gray-50 text-gray-700 px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium border border-gray-300">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
         </svg>
@@ -63,7 +64,7 @@ function getMasterRollHTML() {
         <span id="filter-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
       </button>
 
-      <button id="columns-btn" class="bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium border border-gray-300">
+      <button id="columns-btn" class="bg-white hover:bg-gray-50 text-gray-700 px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium border border-gray-300">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
         </svg>
@@ -71,7 +72,7 @@ function getMasterRollHTML() {
       </button>
 
       <div class="relative">
-        <button id="bulk-actions-btn" disabled class="bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button id="bulk-actions-btn" disabled class="bg-white hover:bg-gray-50 text-gray-700 px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
           </svg>
@@ -90,30 +91,35 @@ function getMasterRollHTML() {
         </div>
       </div>
 
-      <button id="download-template-btn" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
+      <button id="download-template-btn" class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        Download Template
+        Template
       </button>
 
-      <button id="import-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
+      <button id="import-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-        Import Excel
+        Import
       </button>
       <input type="file" id="import-file-input" accept=".xlsx, .xls, .csv" class="hidden" />
 
-      <button id="export-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
+      <button id="export-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        Export All
+        Export
       </button>
 
-      <button id="bulk-edit-btn" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-4 py-2.5 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-bold">
+      <button id="icards-btn" class="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"/></svg>
+        I-Cards
+      </button>
+
+      <button id="bulk-edit-btn" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-bold">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
         Bulk Update
       </button>
 
-      <button id="open-modal-btn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-xl shadow-lg transition duration-200 flex items-center gap-2 text-sm font-semibold">
+      <button id="open-modal-btn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-3.5 py-2 rounded-xl shadow-lg transition duration-200 flex items-center gap-2 text-sm font-semibold">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Add Employee
+        Add
       </button>
     </div>
   </div>
@@ -409,6 +415,13 @@ function initMasterRollScripts() {
   const bulkEditBtn = document.getElementById('bulk-edit-btn');
   if (bulkEditBtn) {
     bulkEditBtn.onclick = () => bulkEditModal.open();
+  }
+
+  // Initialize I-Card Export Modal
+  const icardModal = new IcardExportModal();
+  const icardsBtn = document.getElementById('icards-btn');
+  if (icardsBtn) {
+    icardsBtn.onclick = () => icardModal.open();
   }
 }
 
@@ -1901,6 +1914,6 @@ class MasterRollManager {
     } finally {
       this.elements.generateLetterBtn.disabled = !this.editingId;
       this.elements.generateLetterBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Download Letter';
-    }
-  }
-}
+      }
+      }
+      }

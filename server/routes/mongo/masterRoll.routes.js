@@ -11,6 +11,7 @@ import {
   bulkImportMasterRolls,
   bulkUpdateMasterRolls,
   exportMasterRolls,
+  exportICards,
   bulkCreateMasterRoll,
   bulkDeleteMasterRolls,
   lookupIFSC,
@@ -36,6 +37,7 @@ router.delete('/bulk-delete', bulkDeleteMasterRolls);         // Bulk delete (ma
 router.get('/stats', getMasterRollStats);                     // Get statistics
 router.get('/search', searchMasterRolls);                     // Search
 router.get('/export', exportMasterRolls);                     // Export
+router.get('/export-icards', exportICards);              // Export I-Cards
 router.get('/template', generateMasterRollTemplate);          // Download template
 router.get('/lookup-ifsc/:ifsc', lookupIFSC);                 // IFSC lookup using Razorpay API
 

@@ -1,4 +1,7 @@
-import { MasterRoll } from '../../models/index.js';
+import { MasterRoll, Firm } from '../../models/index.js';
+import PDFDocument from 'pdfkit';
+import ExcelJS from 'exceljs';
+import QRCode from 'qrcode';
 
 /* ── REQUIRED FIELDS ────────────────────────────────────────────────────── */
 
@@ -507,6 +510,165 @@ export const exportMasterRolls = async (req, res) => {
 
     res.json({ success: true, count: rows.length, data: rows });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+/* ── EXPORT I-CARDS ─────────────────────────────────────────────────────── */
+
+export const exportICards = async (req, res) => {
+  try {
+    const { firm_id } = req.user;
+    const { project, site, format } = req.query;
+
+    const filter = { firm_id };
+    if (project) filter.project = project;
+    if (site) filter.site = site;
+
+    const employees = await MasterRoll.find(filter).sort({ employee_name: 1 }).lean();
+    const firm = await Firm.findById(firm_id).lean();
+    const firmName = firm ? firm.name : 'Your Firm Name';
+
+    if (format === 'xlsx') {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('I-Cards Data');
+
+      worksheet.columns = [
+        { header: 'Employee Name', key: 'employee_name', width: 25 },
+        { header: 'Father Name', key: 'father_husband_name', width: 25 },
+        { header: 'Phone', key: 'phone_no', width: 15 },
+        { header: 'Aadhar', key: 'aadhar', width: 20 },
+        { header: 'Project', key: 'project', width: 20 },
+        { header: 'Site', key: 'site', width: 20 },
+        { header: 'Address', key: 'address', width: 30 },
+      ];
+
+      employees.forEach(emp => worksheet.addRow(emp));
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=ICards_${project || 'All'}.xlsx`);
+      await workbook.xlsx.write(res);
+      return res.end();
+    }
+
+    // PDF Export
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 18, // 0.25 inch
+      bufferPages: true
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=ICards_${project || 'All'}.pdf`);
+    doc.pipe(res);
+
+    const margin = 18;
+    const cardWidth = (595.28 - 2 * margin) / 2;
+    const cardHeight = (841.89 - 2 * margin) / 4;
+    const cardsPerPage = 8;
+
+    for (let i = 0; i < employees.length; i++) {
+      if (i > 0 && i % cardsPerPage === 0) {
+        doc.addPage();
+      }
+
+      const emp = employees[i];
+      const pageIdx = i % cardsPerPage;
+      const col = pageIdx % 2;
+      const row = Math.floor(pageIdx / 2);
+
+      const x = margin + col * cardWidth;
+      const y = margin + row * cardHeight;
+      const icardNo = emp._id.toString().slice(-8).toUpperCase();
+
+      // Card Border - Red and thicker
+      doc.rect(x + 5, y + 5, cardWidth - 10, cardHeight - 10)
+         .lineWidth(1.5)
+         .strokeColor('#DC2626')
+         .stroke();
+
+      // Firm Name (Top) - Larger Red Text
+      doc.fillColor('#DC2626')
+         .fontSize(14)
+         .font('Helvetica-Bold')
+         .text(firmName.toUpperCase(), x + 10, y + 12, {
+           width: cardWidth - 20,
+           align: 'center'
+         });
+
+      // Horizontal Line below firm name - Red
+      doc.moveTo(x + 10, y + 28)
+         .lineTo(x + cardWidth - 10, y + 28)
+         .lineWidth(1)
+         .strokeColor('#DC2626')
+         .stroke();
+
+      // Photo Box
+      doc.rect(x + 12, y + 35, 55, 65)
+         .strokeColor('#9CA3AF')
+         .stroke();
+      doc.fontSize(7)
+         .fillColor('#9CA3AF')
+         .text('PHOTO', x + 12, y + 65, { width: 55, align: 'center' });
+
+      // QR Code (Below Photo)
+      const qrData = `I-CARD: ${icardNo}\nNAME: ${emp.employee_name}\nDOB: ${emp.date_of_birth}\nJOIN: ${emp.date_of_joining}\nPROJ: ${emp.project}\nSITE: ${emp.site}\nFIRM: ${firmName}`;
+      const qrBuffer = await QRCode.toBuffer(qrData, { 
+        margin: 0, 
+        scale: 3,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#000000', light: '#FFFFFF' }
+      });
+      doc.image(qrBuffer, x + 12, y + 105, { width: 55 });
+
+      // Employee Details
+      const textX = x + 75;
+      let currentTextY = y + 35;
+
+      const drawField = (label, value, fontSize = 9, isBoldValue = true) => {
+        doc.fontSize(fontSize - 1).fillColor('#DC2626').font('Helvetica-Bold').text(`${label}:`, textX, currentTextY);
+        doc.fontSize(fontSize).fillColor('#111827').font(isBoldValue ? 'Helvetica-Bold' : 'Helvetica').text(value || 'N/A', textX + 55, currentTextY, {
+          width: cardWidth - 140,
+          wrap: true
+        });
+        currentTextY += 13;
+      };
+
+      // Primary Fields
+      drawField('I-CARD NO', icardNo, 10);
+      drawField('NAME', emp.employee_name, 11);
+      drawField('FATHER', emp.father_husband_name, 9);
+      drawField('JOINING', emp.date_of_joining, 9, false);
+      drawField('PROJECT', emp.project, 8, false);
+      drawField('SITE', emp.site, 8, false);
+      
+      // Address
+      doc.fontSize(7).fillColor('#DC2626').font('Helvetica-Bold').text('ADDRESS:', textX, currentTextY);
+      doc.fontSize(8).fillColor('#111827').font('Helvetica').text(emp.address || 'N/A', textX + 55, currentTextY, {
+        width: cardWidth - 140,
+        height: 45,
+        lineBreak: true
+      });
+
+      // Signature Boxes
+      const sigY = y + cardHeight - 35;
+      
+      // Employee Signature Box
+      doc.rect(x + 12, sigY, 65, 20).strokeColor('#DC2626').stroke();
+      doc.fontSize(6).fillColor('#DC2626').text('EMPLOYEE SIGN', x + 12, sigY + 22, { width: 65, align: 'center' });
+
+      // Authorized Signature Box
+      doc.rect(x + 85, sigY, 65, 20).strokeColor('#DC2626').stroke();
+      doc.fontSize(6).fillColor('#DC2626').text('AUTHORIZED SIGN', x + 85, sigY + 22, { width: 65, align: 'center' });
+      
+      // Seal Box
+      doc.rect(x + 160, sigY, 35, 20).strokeColor('#DC2626').stroke();
+      doc.fontSize(6).fillColor('#DC2626').text('SEAL', x + 160, sigY + 22, { width: 35, align: 'center' });
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('ICard Export Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

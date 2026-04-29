@@ -5,6 +5,9 @@
 // ─────────────────────────────────────────────
 
 import { initGlobalToolModal } from './components/tools/globalToolModal.js';
+import { getAllSettings } from './utils/appSettingsDB.js';
+import { DEFAULT_SETTINGS } from './components/settings/settingsRegistry.js';
+import { applySettingToUI } from './utils/settingsApplier.js';
 
 const loadHome = () => import('./pages/home.js').then(m => m.renderHome);
 const loadAbout = () => import('./pages/about.js').then(m => m.renderAbout);
@@ -115,6 +118,27 @@ const navigate = (loadFn) => async (match) => {
 // ─────────────────────────────────────────────
 
 const router = new Navigo('/', { hash: false });
+
+// ─────────────────────────────────────────────
+//  Initialize app settings on startup
+// ─────────────────────────────────────────────
+
+async function initializeAppSettings() {
+  try {
+    const settings = await getAllSettings();
+    const mergedSettings = { ...DEFAULT_SETTINGS, ...settings };
+
+    // Apply each setting to the UI
+    Object.entries(mergedSettings).forEach(([key, value]) => {
+      applySettingToUI(key, value);
+    });
+  } catch (error) {
+    console.error('Error initializing app settings:', error);
+  }
+}
+
+// Initialize settings before tool modal
+initializeAppSettings();
 
 initGlobalToolModal();
 
