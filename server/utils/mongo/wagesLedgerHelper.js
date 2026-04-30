@@ -66,7 +66,7 @@ export async function validateWageForPosting(wage) {
  * Validate ledger entries before posting
  * @throws {Error} If validation fails
  */
-export async function validateLedgerEntries(entries, firmId) {
+export async function validateLedgerEntries(entries, firmId, session = null) {
   const errors = [];
 
   // Total debits = total credits
@@ -83,7 +83,7 @@ export async function validateLedgerEntries(entries, firmId) {
       firm_id: firmId,
       account_name: entry.account_head,
       is_active: true,
-    }).lean();
+    }).session(session).lean();
 
     if (!account) {
       errors.push(`Account head not found or inactive: ${entry.account_head}`);
@@ -384,7 +384,7 @@ export async function postWageLedger(wage, session) {
     }
 
     // Validate ledger entries
-    await validateLedgerEntries(entries, firmId);
+    await validateLedgerEntries(entries, firmId, session);
 
     // Insert ledger entries atomically
     await Ledger.insertMany(entries, { session });
