@@ -26,7 +26,7 @@ export async function exportBankReport(month, chequeNo = 'all') {
 
     // Create workbook
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data, { header: 1 });
+    const ws = XLSX.utils.json_to_sheet(data);
 
     // Apply formatting
     applyBankReportFormatting(ws, data, meta);
@@ -65,7 +65,7 @@ export async function exportEPFESICReport(month) {
 
     // Create workbook
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data, { header: 1 });
+    const ws = XLSX.utils.json_to_sheet(data);
 
     // Apply formatting
     applyEPFESICReportFormatting(ws, data, meta);

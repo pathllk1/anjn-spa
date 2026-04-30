@@ -519,156 +519,489 @@ export const exportMasterRolls = async (req, res) => {
 export const exportICards = async (req, res) => {
   try {
     const { firm_id } = req.user;
-    const { project, site, format } = req.query;
+    const { project, site, category, format } = req.query;
 
+    /* ── Filter employees ─────────────────────────────────────────────── */
     const filter = { firm_id };
-    if (project) filter.project = project;
-    if (site) filter.site = site;
+    if (project)  filter.project  = project;
+    if (site)     filter.site     = site;
+    if (category) filter.category = category;
 
     const employees = await MasterRoll.find(filter).sort({ employee_name: 1 }).lean();
-    const firm = await Firm.findById(firm_id).lean();
-    const firmName = firm ? firm.name : 'Your Firm Name';
+    const firm      = await Firm.findById(firm_id).lean();
+    const firmName  = firm?.name ?? 'Your Company';
 
+    if (!employees.length) {
+      return res.status(404).json({ success: false, error: 'No employees found for the given filters' });
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       XLSX  —  Card layout using merged cells, 2 cards per row
+    ════════════════════════════════════════════════════════════════════ */
     if (format === 'xlsx') {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('I-Cards Data');
+      const wb = new ExcelJS.Workbook();
+      wb.creator = firmName;
+      wb.created = new Date();
 
-      worksheet.columns = [
-        { header: 'Employee Name', key: 'employee_name', width: 25 },
-        { header: 'Father Name', key: 'father_husband_name', width: 25 },
-        { header: 'Phone', key: 'phone_no', width: 15 },
-        { header: 'Aadhar', key: 'aadhar', width: 20 },
-        { header: 'Project', key: 'project', width: 20 },
-        { header: 'Site', key: 'site', width: 20 },
-        { header: 'Address', key: 'address', width: 30 },
-      ];
+      const ws = wb.addWorksheet('I-Cards', {
+        pageSetup: {
+          paperSize:   9,     // A4
+          orientation: 'landscape',
+          fitToPage:   true,
+          fitToWidth:  1,
+          fitToHeight: 0,
+          margins: { left: 0.3, right: 0.3, top: 0.3, bottom: 0.3, header: 0, footer: 0 },
+        },
+        views: [{ showGridLines: false }],
+      });
 
-      employees.forEach(emp => worksheet.addRow(emp));
+      /* ── Palette ────────────────────────────────────────────────────── */
+      const C = {
+        RED:       'FFDC2626',
+        RED_L:     'FFFEF2F2',
+        RED_M:     'FFFECACA',
+        WHITE:     'FFFFFFFF',
+        DARK:      'FF111827',
+        GRAY:      'FF6B7280',
+        GRAY_L:    'FFF9FAFB',
+        AMBER:     'FFFEF3C7',
+        AMBER_D:   'FF92400E',
+      };
 
+      /* ── Card geometry ──────────────────────────────────────────────── */
+      // 10 data columns × 22 rows per card; 2 cards per pair, separated by 1 gap col
+      const CARD_COLS = 10;
+      const CARD_ROWS = 22;
+      const GAP_ROWS  = 1;
+
+      // Cols 1-10: Card 1 | Col 11: gap | Cols 12-21: Card 2
+      const widths = [7, 7, 7, 5, 8, 5, 7, 7, 7, 7, 2, 7, 7, 7, 5, 8, 5, 7, 7, 7, 7];
+      widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+      const setRowHeights = (sr) => {
+        const h = [
+          22,  // 0  firm header
+          12,  // 1  IDENTITY CARD subtitle
+          11,  // 2  card no bar
+          3,   // 3  spacer
+          14,  // 4  name
+          12,  // 5  father
+          12,  // 6  category
+          12,  // 7  phone
+          12,  // 8  project
+          12,  // 9  site
+          12,  // 10 doj
+          12,  // 11 photo lower filler
+          3,   // 12 spacer
+          13,  // 13 address line 1
+          13,  // 14 address line 2
+          12,  // 15 aadhar
+          12,  // 16 uan / esic
+          3,   // 17 spacer
+          18,  // 18 sig boxes
+          10,  // 19 sig labels
+          10,  // 20 footer
+          0,   // 21 (padding row, 0-height)
+        ];
+        h.forEach((v, i) => { ws.getRow(sr + i).height = v; });
+      };
+
+      /* ── Helper: merge-and-style ────────────────────────────────────── */
+      const mc = (r1, c1, r2, c2, opts = {}) => {
+        ws.mergeCells(r1, c1, r2, c2);
+        const cell = ws.getCell(r1, c1);
+        if (opts.value  !== undefined) cell.value = opts.value;
+        if (opts.fill)   cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+        if (opts.font)   cell.font      = { name: 'Arial', ...opts.font };
+        if (opts.align)  cell.alignment = { wrapText: true, ...opts.align };
+        if (opts.border) cell.border    = opts.border;
+        return cell;
+      };
+
+      const thick = (argb) => ({ top: { style: 'medium', color: { argb } }, left: { style: 'medium', color: { argb } }, bottom: { style: 'medium', color: { argb } }, right: { style: 'medium', color: { argb } } });
+      const thin  = (argb) => ({ top: { style: 'thin',   color: { argb } }, left: { style: 'thin',   color: { argb } }, bottom: { style: 'thin',   color: { argb } }, right: { style: 'thin',   color: { argb } } });
+
+      /* ── Draw one card ──────────────────────────────────────────────── */
+      const drawCard = (emp, sr, sc) => {
+        const ec = sc + CARD_COLS - 1;
+        const iNo = emp._id.toString().slice(-8).toUpperCase();
+        setRowHeights(sr);
+
+        // Row 0: firm header
+        mc(sr+0, sc, sr+0, ec, { value: firmName.toUpperCase(), fill: C.RED, border: thick(C.RED),
+          font:  { bold: true, color: { argb: C.WHITE }, size: 12 },
+          align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+
+        // Row 1: IDENTITY CARD
+        mc(sr+1, sc, sr+1, ec, { value: 'IDENTITY CARD', fill: C.RED_L, border: thick(C.RED),
+          font:  { bold: true, color: { argb: C.RED }, size: 7.5 },
+          align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+
+        // Row 2: card no
+        mc(sr+2, sc, sr+2, ec, { value: `CARD NO: ${iNo}`, fill: C.RED_M, border: thick(C.RED),
+          font:  { bold: true, color: { argb: C.RED }, size: 7 },
+          align: { horizontal: 'right', vertical: 'middle', wrapText: false } });
+
+        // Row 3: spacer
+        mc(sr+3, sc, sr+3, ec, { fill: C.RED_L, border: thin(C.RED) });
+
+        // Photo placeholder rows 4-11, cols sc to sc+2
+        mc(sr+4, sc, sr+11, sc+2, { value: '[ PHOTO ]', fill: C.GRAY_L, border: thin('FFD1D5DB'),
+          font:  { italic: true, color: { argb: C.GRAY }, size: 8 },
+          align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+
+        // Fields rows 4-10
+        const fields = [
+          { label: 'Name',     value: emp.employee_name,        bold: true,  size: 10 },
+          { label: "Father's", value: emp.father_husband_name,  bold: false, size: 9  },
+          { label: 'Category', value: emp.category || 'N/A',    bold: false, size: 9  },
+          { label: 'Phone',    value: emp.phone_no || 'N/A',    bold: false, size: 9  },
+          { label: 'Project',  value: emp.project || 'N/A',     bold: false, size: 9  },
+          { label: 'Site',     value: emp.site || 'N/A',        bold: false, size: 9  },
+          { label: 'D.O.J.',   value: emp.date_of_joining || 'N/A', bold: false, size: 9 },
+        ];
+        fields.forEach(({ label, value, bold, size }, idx) => {
+          const r = sr + 4 + idx;
+          mc(r, sc+3, r, sc+4, { value: label, fill: C.RED_L, border: thin(C.RED),
+            font:  { bold: true, color: { argb: C.RED }, size: 7 },
+            align: { horizontal: 'left', vertical: 'middle', wrapText: false } });
+          mc(r, sc+5, r, ec, { value: value || '—', fill: C.WHITE, border: thin(C.RED),
+            font:  { bold, color: { argb: C.DARK }, size },
+            align: { horizontal: 'left', vertical: 'middle', wrapText: false } });
+        });
+
+        // Row 11: filler right of photo
+        mc(sr+11, sc+3, sr+11, ec, { fill: C.WHITE, border: thin(C.RED) });
+
+        // Row 12: spacer
+        mc(sr+12, sc, sr+12, ec, { fill: C.WHITE, border: thin(C.RED) });
+
+        // Rows 13-14: Address (2 rows, wrap)
+        mc(sr+13, sc, sr+14, ec, {
+          value: `Address: ${emp.address || 'N/A'}`, fill: C.RED_L, border: thick(C.RED),
+          font:  { color: { argb: C.DARK }, size: 8 },
+          align: { horizontal: 'left', vertical: 'middle', wrapText: true } });
+
+        // Row 15: Aadhar
+        mc(sr+15, sc, sr+15, ec, {
+          value: `Aadhar No: ${emp.aadhar || '—'}`, fill: C.AMBER, border: thin(C.RED),
+          font:  { bold: true, color: { argb: C.AMBER_D }, size: 8 },
+          align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+
+        // Row 16: UAN / ESIC  ← split line for visibility
+        mc(sr+16, sc, sr+16, ec, {
+          value: `UAN: ${emp.uan || '—'}        ESIC No: ${emp.esic_no || '—'}`,
+          fill: C.AMBER, border: thin(C.RED),
+          font:  { bold: true, color: { argb: C.AMBER_D }, size: 8 },
+          align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+
+        // Row 17: spacer
+        mc(sr+17, sc, sr+17, ec, { fill: C.WHITE, border: thin(C.RED) });
+
+        // Rows 18-19: 3 signature sections
+        const sigs = [
+          { c1: sc,   c2: sc+2,  label: 'Employee Signature'  },
+          { c1: sc+3, c2: sc+6,  label: 'Authorized Signatory' },
+          { c1: sc+7, c2: ec,    label: 'Official Seal'       },
+        ];
+        sigs.forEach(({ c1, c2, label }) => {
+          mc(sr+18, c1, sr+18, c2, { fill: C.WHITE, border: thin(C.RED) });
+          mc(sr+19, c1, sr+19, c2, { value: label, fill: C.GRAY_L, border: thin(C.RED),
+            font:  { color: { argb: C.GRAY }, size: 6.5 },
+            align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+        });
+
+        // Row 20: footer strip
+        mc(sr+20, sc, sr+20, ec, {
+          value: 'If found, please return to the issuing authority.', fill: C.RED, border: thick(C.RED),
+          font:  { italic: true, color: { argb: C.WHITE }, size: 6.5 },
+          align: { horizontal: 'center', vertical: 'middle', wrapText: false } });
+      };
+
+      /* ── Lay out all cards (2 per row) ──────────────────────────────── */
+      const TOTAL_CARD_ROWS = CARD_ROWS + GAP_ROWS;
+      const CARD2_COL = 1 + CARD_COLS + 1 + 1; // col 12 (after gap col 11)
+
+      employees.forEach((emp, i) => {
+        const pairRow  = Math.floor(i / 2);
+        const isRight  = (i % 2 === 1);
+        const startRow = 1 + pairRow * TOTAL_CARD_ROWS;
+        const startCol = isRight ? CARD2_COL : 1;
+        drawCard(emp, startRow, startCol);
+      });
+
+      const fname = `ICards_${project || 'All'}_${site || 'AllSites'}_${Date.now()}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=ICards_${project || 'All'}.xlsx`);
-      await workbook.xlsx.write(res);
+      res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+      await wb.xlsx.write(res);
       return res.end();
     }
 
-    // PDF Export
-    const doc = new PDFDocument({
-      size: 'A4',
-      margin: 18, // 0.25 inch
-      bufferPages: true
-    });
+    /* ════════════════════════════════════════════════════════════════════
+       PDF  —  6 cards per A4 page (2 cols × 3 rows)
+    ════════════════════════════════════════════════════════════════════ */
+    const pdfDoc = new PDFDocument({ size: 'A4', margin: 14, bufferPages: true });
 
+    const fname = `ICards_${project || 'All'}_${site || 'AllSites'}_${Date.now()}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=ICards_${project || 'All'}.pdf`);
-    doc.pipe(res);
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    pdfDoc.pipe(res);
 
-    const margin = 18;
-    const cardWidth = (595.28 - 2 * margin) / 2;
-    const cardHeight = (841.89 - 2 * margin) / 4;
-    const cardsPerPage = 8;
+    /* ── Page / card geometry ─────────────────────────────────────────── */
+    const PW       = 595.28;
+    const PH       = 841.89;
+    const PAGE_M   = 14;
+    const COL_GAP  = 8;
+    const ROW_GAP  = 8;
+    const COLS     = 2;
+    const ROWS     = 3;
+    const CARDS_PP = COLS * ROWS;                                                    // 6
+    const CARD_W   = (PW - 2 * PAGE_M - (COLS - 1) * COL_GAP) / COLS;              // ≈ 276.64
+    const CARD_H   = (PH - 2 * PAGE_M - (ROWS - 1) * ROW_GAP) / ROWS;              // ≈ 265.96
 
+    /* ── Palette ──────────────────────────────────────────────────────── */
+    const RED    = '#DC2626';
+    const RED_L  = '#FEF2F2';
+    const RED_M  = '#FECACA';
+    const WHITE  = '#FFFFFF';
+    const DARK   = '#111827';
+    const GRAY   = '#6B7280';
+    const GRAY_L = '#F3F4F6';
+    const AMBER  = '#FEF3C7';
+    const AMB_D  = '#92400E';
+
+    /* ── Sub-zone heights (all must sum to exactly CARD_H) ───────────── */
+    //
+    //  ┌───────────────────────────────────┐  ← cy
+    //  │  Header (firm name)          22pt │
+    //  │  Subtitle                    11pt │
+    //  │  Card-no bar                 10pt │
+    //  │  Separator gap                4pt │
+    //  ├──────────┬────────────────────────┤  ← bodyY  (47pt from cy)
+    //  │ Photo    │ Fields × 7             │  ← flexible: CARD_H - 47 - bottomH
+    //  │ QR code  │                        │
+    //  ├──────────┴────────────────────────┤
+    //  │  Address band                22pt │
+    //  │  Aadhar strip                11pt │
+    //  │  UAN / ESIC strip            11pt │
+    //  │  Sig boxes                   22pt │
+    //  │  Sig labels                   9pt │
+    //  │  Footer strip                10pt │
+    //  └───────────────────────────────────┘  ← cy + CARD_H
+    //
+    const HDR_H    = 22;
+    const SUB_H    = 11;
+    const CNUM_H   = 10;
+    const SEP_H    =  4;
+    const BODY_TOP = HDR_H + SUB_H + CNUM_H + SEP_H;   // 47
+
+    const ADDR_H   = 22;
+    const AADH_H   = 11;   // Aadhar strip
+    const UANE_H   = 11;   // UAN / ESIC strip  ← separate row, always visible
+    const SIG_H    = 22;
+    const SIGL_H   =  9;
+    const FOOT_H   = 10;
+    const BOT_H    = ADDR_H + AADH_H + UANE_H + SIG_H + SIGL_H + FOOT_H;  // 85
+
+    // Body area (photo + fields)
+    const BODY_H   = CARD_H - BODY_TOP - BOT_H;          // ≈ 133.96
+    const PHOTO_W  = 50;
+    const PHOTO_H  = Math.floor(BODY_H * 0.49);          // ~65
+    const QR_W     = 50;
+    const QR_H     = Math.floor(BODY_H * 0.47);          // ~63
+    const LEFT_W   = PHOTO_W + 5;                        // 55
+    const FX_OFF   = LEFT_W + 4;                         // field text x-offset from cx
+    const FIELD_W  = CARD_W - FX_OFF - 4;
+    const FIELD_N  = 7;
+    const FIELD_H  = Math.floor(BODY_H / FIELD_N);       // ~19 per row
+
+    /* ── Draw one card ────────────────────────────────────────────────── */
+    const drawCard = async (emp, cx, cy) => {
+      const iNo  = emp._id.toString().slice(-8).toUpperCase();
+
+      /* Card outer border */
+      pdfDoc.rect(cx, cy, CARD_W, CARD_H)
+            .lineWidth(1.2).strokeColor(RED).stroke();
+
+      /* Header band */
+      pdfDoc.rect(cx, cy, CARD_W, HDR_H).fillColor(RED).fill();
+      pdfDoc.fillColor(WHITE).fontSize(10).font('Helvetica-Bold')
+            .text(firmName.toUpperCase(), cx + 4, cy + 6,
+              { width: CARD_W - 8, align: 'center', lineBreak: false });
+
+      /* Subtitle + card-no */
+      pdfDoc.rect(cx, cy + HDR_H, CARD_W, SUB_H).fillColor(RED_L).fill();
+      pdfDoc.fillColor(RED).fontSize(7).font('Helvetica-Bold')
+            .text('IDENTITY CARD', cx + 4, cy + HDR_H + 2,
+              { width: CARD_W / 2, align: 'center', lineBreak: false });
+      pdfDoc.fillColor(GRAY).fontSize(6).font('Helvetica')
+            .text(`#${iNo}`, cx + CARD_W / 2, cy + HDR_H + 2,
+              { width: CARD_W / 2 - 4, align: 'right', lineBreak: false });
+
+      /* Card-no bar */
+      pdfDoc.rect(cx, cy + HDR_H + SUB_H, CARD_W, CNUM_H).fillColor(RED_M).fill();
+      pdfDoc.fillColor(RED).fontSize(5.5).font('Helvetica-Bold')
+            .text(
+              `${firmName.toUpperCase()}  •  EMPLOYEE IDENTITY CARD  •  CARD NO: ${iNo}`,
+              cx + 4, cy + HDR_H + SUB_H + 2,
+              { width: CARD_W - 8, align: 'center', lineBreak: false });
+
+      /* Separator */
+      pdfDoc.moveTo(cx + 4, cy + BODY_TOP - 1)
+            .lineTo(cx + CARD_W - 4, cy + BODY_TOP - 1)
+            .lineWidth(0.4).strokeColor(RED_M).stroke();
+
+      const bodyY = cy + BODY_TOP;
+
+      /* Photo box */
+      pdfDoc.rect(cx + 4, bodyY + 2, PHOTO_W, PHOTO_H)
+            .fillColor(GRAY_L).fill()
+            .strokeColor('#D1D5DB').lineWidth(0.5).stroke();
+      pdfDoc.fillColor(GRAY).fontSize(7).font('Helvetica')
+            .text('PHOTO', cx + 4, bodyY + 2 + PHOTO_H / 2 - 4,
+              { width: PHOTO_W, align: 'center', lineBreak: false });
+
+      /* QR code
+       * FIX: plain human-readable text — renders cleanly in any QR reader
+       */
+      const qrText = [
+        `${firmName.toUpperCase()}`,
+        `Card No : ${iNo}`,
+        `Name    : ${emp.employee_name}`,
+        `Category: ${emp.category || 'N/A'}`,
+        `Project : ${emp.project || 'N/A'}`,
+        `Site    : ${emp.site || 'N/A'}`,
+        `D.O.J.  : ${emp.date_of_joining || 'N/A'}`,
+        `Aadhar  : ${emp.aadhar || 'N/A'}`,
+      ].join('\n');
+
+      const qrBuf = await QRCode.toBuffer(qrText, {
+        margin: 0, scale: 3, errorCorrectionLevel: 'M',
+        color: { dark: '#000000', light: '#FFFFFF' },
+      });
+      const qrY = bodyY + 2 + PHOTO_H + 3;
+      pdfDoc.image(qrBuf, cx + 4, qrY, { width: QR_W, height: QR_H });
+      pdfDoc.fillColor(GRAY).fontSize(5).font('Helvetica')
+            .text('Scan to verify', cx + 4, qrY + QR_H + 1,
+              { width: QR_W, align: 'center', lineBreak: false });
+
+      /* Employee fields (right of photo) */
+      const fX = cx + FX_OFF;
+      const fields = [
+        { label: 'NAME',     value: emp.employee_name,           bold: true,  sz: 9.5 },
+        { label: "FATHER'S", value: emp.father_husband_name,     bold: false, sz: 8   },
+        { label: 'CATEGORY', value: emp.category || 'N/A',       bold: false, sz: 8   },
+        { label: 'PHONE',    value: emp.phone_no || 'N/A',       bold: false, sz: 8   },
+        { label: 'PROJECT',  value: emp.project || 'N/A',        bold: false, sz: 8   },
+        { label: 'SITE',     value: emp.site || 'N/A',           bold: false, sz: 8   },
+        { label: 'D.O.J.',   value: emp.date_of_joining || 'N/A', bold: false, sz: 8  },
+      ];
+
+      fields.forEach(({ label, value, bold, sz }, idx) => {
+        const rY = bodyY + 2 + idx * FIELD_H;
+        if (idx % 2 === 0) {
+          pdfDoc.rect(fX, rY, FIELD_W, FIELD_H - 1).fillColor(RED_L).fill();
+        }
+        pdfDoc.fillColor(RED).fontSize(5.5).font('Helvetica-Bold')
+              .text(label, fX + 2, rY + 2,
+                { width: 38, lineBreak: false });
+        pdfDoc.fillColor(bold ? DARK : '#374151')
+              .fontSize(sz).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+              .text(value || '—', fX + 42, rY + 2,
+                { width: FIELD_W - 44, lineBreak: false, ellipsis: true });
+      });
+
+      /* ── Bottom section ───────────────────────────────────────────────
+       * FIX: bottomY is computed from CARD bottom minus the exact sum
+       *      of all bottom-section heights — no extra offset that causes overflow.
+       * ────────────────────────────────────────────────────────────────── */
+      const botY  = cy + CARD_H - BOT_H;   // exact start of bottom section
+
+      // Address band
+      pdfDoc.rect(cx, botY, CARD_W, ADDR_H).fillColor(RED_L).fill();
+      pdfDoc.fillColor(RED).fontSize(6).font('Helvetica-Bold')
+            .text('ADDRESS:', cx + 4, botY + 3, { lineBreak: false });
+      pdfDoc.fillColor(DARK).fontSize(7).font('Helvetica')
+            .text(emp.address || 'N/A', cx + 44, botY + 3,
+              { width: CARD_W - 48, height: ADDR_H - 5, lineBreak: true, ellipsis: true });
+
+      // Aadhar strip  ← own row, clearly visible
+      const aadY = botY + ADDR_H;
+      pdfDoc.rect(cx, aadY, CARD_W, AADH_H).fillColor(AMBER).fill();
+      pdfDoc.fillColor(AMB_D).fontSize(6.5).font('Helvetica-Bold')
+            .text(`Aadhar No: ${emp.aadhar || '—'}`,
+              cx + 4, aadY + 2,
+              { width: CARD_W - 8, align: 'center', lineBreak: false });
+
+      // UAN / ESIC strip  ← FIX: separate row so neither gets clipped
+      const uanY = aadY + AADH_H;
+      pdfDoc.rect(cx, uanY, CARD_W, UANE_H).fillColor('#FEF9C3').fill();
+      pdfDoc.fillColor(AMB_D).fontSize(6.5).font('Helvetica-Bold')
+            .text(
+              `UAN: ${emp.uan || '—'}      ESIC No: ${emp.esic_no || '—'}`,
+              cx + 4, uanY + 2,
+              { width: CARD_W - 8, align: 'center', lineBreak: false });
+
+      // Signature boxes (3 equal sections)
+      const sigY  = uanY + UANE_H;
+      const sigW  = (CARD_W - 10) / 3;
+      const lbls  = ['EMPLOYEE SIGN', 'AUTHORIZED SIGN', 'OFFICIAL SEAL'];
+      lbls.forEach((lbl, k) => {
+        const sx = cx + 3 + k * (sigW + 2);
+        // Box
+        pdfDoc.rect(sx, sigY, sigW, SIG_H)
+              .lineWidth(0.5).strokeColor(RED).stroke();
+        // Label strip below box
+        pdfDoc.rect(sx, sigY + SIG_H, sigW, SIGL_H)
+              .fillColor(GRAY_L).fill()
+              .strokeColor('#D1D5DB').lineWidth(0.3).stroke();
+        pdfDoc.fillColor(GRAY).fontSize(5.5).font('Helvetica')
+              .text(lbl, sx, sigY + SIG_H + 2,
+                { width: sigW, align: 'center', lineBreak: false });
+      });
+
+      // Footer strip (flush to card bottom)
+      const footY = sigY + SIG_H + SIGL_H;
+      pdfDoc.rect(cx, footY, CARD_W, FOOT_H).fillColor(RED).fill();
+      pdfDoc.fillColor(WHITE).fontSize(5.5).font('Helvetica-Oblique')
+            .text('If found, please return to the issuing authority.',
+              cx + 4, footY + 2,
+              { width: CARD_W - 8, align: 'center', lineBreak: false });
+
+      /*
+       * FIX: Reset PDFKit cursor after each card.
+       * PDFKit's internal y-cursor advances with every text() call.
+       * For cards in row 3 (near page bottom ~y=830), the cursor ends
+       * beyond PH, causing PDFKit to auto-add a page before the next
+       * card renders — even when explicit coordinates are supplied.
+       * Resetting x/y to PAGE_M (top-left safe zone) prevents this.
+       */
+      pdfDoc.x = PAGE_M;
+      pdfDoc.y = PAGE_M;
+    };
+
+    /* ── Render loop ──────────────────────────────────────────────────── */
     for (let i = 0; i < employees.length; i++) {
-      if (i > 0 && i % cardsPerPage === 0) {
-        doc.addPage();
+      if (i > 0 && i % CARDS_PP === 0) {
+        pdfDoc.addPage();
+        // Also reset cursor on new page
+        pdfDoc.x = PAGE_M;
+        pdfDoc.y = PAGE_M;
       }
 
-      const emp = employees[i];
-      const pageIdx = i % cardsPerPage;
-      const col = pageIdx % 2;
-      const row = Math.floor(pageIdx / 2);
+      const pos = i % CARDS_PP;
+      const col = pos % COLS;
+      const row = Math.floor(pos / COLS);
+      const cx  = PAGE_M + col * (CARD_W + COL_GAP);
+      const cy  = PAGE_M + row * (CARD_H + ROW_GAP);
 
-      const x = margin + col * cardWidth;
-      const y = margin + row * cardHeight;
-      const icardNo = emp._id.toString().slice(-8).toUpperCase();
-
-      // Card Border - Red and thicker
-      doc.rect(x + 5, y + 5, cardWidth - 10, cardHeight - 10)
-         .lineWidth(1.5)
-         .strokeColor('#DC2626')
-         .stroke();
-
-      // Firm Name (Top) - Larger Red Text
-      doc.fillColor('#DC2626')
-         .fontSize(14)
-         .font('Helvetica-Bold')
-         .text(firmName.toUpperCase(), x + 10, y + 12, {
-           width: cardWidth - 20,
-           align: 'center'
-         });
-
-      // Horizontal Line below firm name - Red
-      doc.moveTo(x + 10, y + 28)
-         .lineTo(x + cardWidth - 10, y + 28)
-         .lineWidth(1)
-         .strokeColor('#DC2626')
-         .stroke();
-
-      // Photo Box
-      doc.rect(x + 12, y + 35, 55, 65)
-         .strokeColor('#9CA3AF')
-         .stroke();
-      doc.fontSize(7)
-         .fillColor('#9CA3AF')
-         .text('PHOTO', x + 12, y + 65, { width: 55, align: 'center' });
-
-      // QR Code (Below Photo)
-      const qrData = `I-CARD: ${icardNo}\nNAME: ${emp.employee_name}\nDOB: ${emp.date_of_birth}\nJOIN: ${emp.date_of_joining}\nPROJ: ${emp.project}\nSITE: ${emp.site}\nFIRM: ${firmName}`;
-      const qrBuffer = await QRCode.toBuffer(qrData, { 
-        margin: 0, 
-        scale: 3,
-        errorCorrectionLevel: 'M',
-        color: { dark: '#000000', light: '#FFFFFF' }
-      });
-      doc.image(qrBuffer, x + 12, y + 105, { width: 55 });
-
-      // Employee Details
-      const textX = x + 75;
-      let currentTextY = y + 35;
-
-      const drawField = (label, value, fontSize = 9, isBoldValue = true) => {
-        doc.fontSize(fontSize - 1).fillColor('#DC2626').font('Helvetica-Bold').text(`${label}:`, textX, currentTextY);
-        doc.fontSize(fontSize).fillColor('#111827').font(isBoldValue ? 'Helvetica-Bold' : 'Helvetica').text(value || 'N/A', textX + 55, currentTextY, {
-          width: cardWidth - 140,
-          wrap: true
-        });
-        currentTextY += 13;
-      };
-
-      // Primary Fields
-      drawField('I-CARD NO', icardNo, 10);
-      drawField('NAME', emp.employee_name, 11);
-      drawField('FATHER', emp.father_husband_name, 9);
-      drawField('JOINING', emp.date_of_joining, 9, false);
-      drawField('PROJECT', emp.project, 8, false);
-      drawField('SITE', emp.site, 8, false);
-      
-      // Address
-      doc.fontSize(7).fillColor('#DC2626').font('Helvetica-Bold').text('ADDRESS:', textX, currentTextY);
-      doc.fontSize(8).fillColor('#111827').font('Helvetica').text(emp.address || 'N/A', textX + 55, currentTextY, {
-        width: cardWidth - 140,
-        height: 45,
-        lineBreak: true
-      });
-
-      // Signature Boxes
-      const sigY = y + cardHeight - 35;
-      
-      // Employee Signature Box
-      doc.rect(x + 12, sigY, 65, 20).strokeColor('#DC2626').stroke();
-      doc.fontSize(6).fillColor('#DC2626').text('EMPLOYEE SIGN', x + 12, sigY + 22, { width: 65, align: 'center' });
-
-      // Authorized Signature Box
-      doc.rect(x + 85, sigY, 65, 20).strokeColor('#DC2626').stroke();
-      doc.fontSize(6).fillColor('#DC2626').text('AUTHORIZED SIGN', x + 85, sigY + 22, { width: 65, align: 'center' });
-      
-      // Seal Box
-      doc.rect(x + 160, sigY, 35, 20).strokeColor('#DC2626').stroke();
-      doc.fontSize(6).fillColor('#DC2626').text('SEAL', x + 160, sigY + 22, { width: 35, align: 'center' });
+      await drawCard(employees[i], cx, cy);
     }
 
-    doc.end();
+    pdfDoc.end();
+
   } catch (err) {
-    console.error('ICard Export Error:', err);
+    console.error('[ICARD EXPORT] Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 };

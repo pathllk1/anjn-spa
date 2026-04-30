@@ -99,8 +99,8 @@ export function createBatchProgressModal() {
             <!-- Progress Bar -->
             <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
               <div
+                id="batch-progress-bar"
                 class="bg-blue-600 h-full transition-all duration-300 ease-out"
-                style="width: ${progressPercentage}%"
               ></div>
             </div>
             
@@ -169,6 +169,12 @@ export function createBatchProgressModal() {
     `;
 
     modal.innerHTML = content;
+
+    // Programmatically set progress bar width to comply with CSP
+    const progressBar = document.getElementById('batch-progress-bar');
+    if (progressBar) {
+      progressBar.style.width = `${progressPercentage}%`;
+    }
 
     // Attach event listeners
     const closeBtn = document.getElementById('close-batch-modal-btn');
