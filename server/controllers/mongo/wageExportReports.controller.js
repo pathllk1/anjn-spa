@@ -5,6 +5,7 @@
  */
 
 import { Wage, MasterRoll, BankAccount } from '../../models/index.js';
+import { formatDate } from '../../utils/dateFormatter.js';
 import ExcelJS from 'exceljs';
 
 /**
@@ -45,7 +46,7 @@ export async function generateBankReport(req, res) {
       }
     }
 
-    const chequeDate = wages[0].paid_date || new Date().toISOString().split('T')[0];
+    const chequeDate = formatDate(wages[0].paid_date || new Date());
     const displayChequeNo = chequeNo && chequeNo !== 'all' ? chequeNo : (wages[0].cheque_no || '');
 
     // Create Excel Workbook
@@ -104,6 +105,18 @@ export async function generateBankReport(req, res) {
     const totalsRow = worksheet.addRow(['', '', totalAmount]);
     totalsRow.font = { bold: true };
     totalsRow.getCell(3).numFmt = '#,##0.00';
+
+    // Apply Borders to all cells with data
+    worksheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+    });
 
     // Set Column Widths
     worksheet.columns.forEach((column, i) => {
@@ -202,7 +215,7 @@ export async function generateEPFESICReport(req, res) {
         total_employer: totalEmployer,
         grand_total: grandTotal,
         net: wage.net_salary || 0,
-        date: wage.paid_date || '',
+        date: formatDate(wage.paid_date),
       });
 
       row.getCell('acc').numFmt = '@';
@@ -230,6 +243,18 @@ export async function generateEPFESICReport(req, res) {
       net: wages.reduce((sum, w) => sum + (w.net_salary || 0), 0),
     });
     totalsRow.font = { bold: true };
+
+    // Apply Borders to all cells with data
+    worksheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+    });
 
     // Generate Excel buffer before setting response headers
     const buffer = await workbook.xlsx.writeBuffer();

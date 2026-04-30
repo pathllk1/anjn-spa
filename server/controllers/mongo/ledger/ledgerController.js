@@ -63,10 +63,11 @@ export const getLedgerAccounts = async (req, res) => {
                 ],
               },
               {
-                $ifNull: [
-                  { $arrayElemAt: ['$bank_account.bank_name', 0] },
-                  '$_id.account_head',
-                ],
+                $concat: [
+                  { $ifNull: [{ $arrayElemAt: ['$bank_account.bank_name', 0] }, '$_id.account_head'] },
+                  ' - ',
+                  { $ifNull: [{ $arrayElemAt: ['$bank_account.account_number', 0] }, 'N/A'] }
+                ]
               },
               '$_id.account_head',
             ],
@@ -109,14 +110,35 @@ export const getAccountDetails = async (req, res) => {
 
     const firmId = req.user.firm_id;
 
+    // FIX: Account detail query must be smart for BANK accounts.
+    // Try to find bank by full name (Bank - Acc) OR just bank name
+    let bankAc = await BankAccount.findOne({ firm_id: firmId, bank_name: account_head }).lean();
+
+    if (!bankAc && account_head.includes(' - ')) {
+      const parts = account_head.split(' - ');
+      const accNo = parts.pop();
+      const bName = parts.join(' - ');
+      bankAc = await BankAccount.findOne({ 
+        firm_id: firmId, 
+        bank_name: bName.trim(),
+        account_number: accNo.trim()
+      }).lean();
+    }
+    
     // FIX: Calculate opening balance (all transactions before start_date)
     let openingBalance = 0;
     if (start_date) {
       const openingFilter = { 
         firm_id: firmId, 
-        account_head,
         transaction_date: { $lt: start_date }
       };
+      
+      if (bankAc) {
+        openingFilter.$or = [ { account_head }, { bank_account_id: bankAc._id } ];
+      } else {
+        openingFilter.account_head = account_head;
+      }
+
       const openingRecords = await Ledger.find(openingFilter).lean();
       openingBalance = openingRecords.reduce((sum, r) => {
         return sum + (r.debit_amount || 0) - (r.credit_amount || 0);
@@ -124,7 +146,13 @@ export const getAccountDetails = async (req, res) => {
     }
 
     // Get transactions within the period (or all if no start_date)
-    const filter = { firm_id: firmId, account_head };
+    const filter = { firm_id: firmId };
+    if (bankAc) {
+      filter.$or = [ { account_head }, { bank_account_id: bankAc._id } ];
+    } else {
+      filter.account_head = account_head;
+    }
+
     if (start_date) filter.transaction_date = { ...filter.transaction_date, $gte: start_date };
     if (end_date)   filter.transaction_date = { ...filter.transaction_date, $lte: end_date };
 
