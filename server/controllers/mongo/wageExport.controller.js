@@ -159,11 +159,13 @@ export async function exportWagesToExcel(req, res) {
     });
 
     // 7. Send response
+    // Generate Excel buffer before setting response headers
+    const buffer = await workbook.xlsx.writeBuffer();
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=Wages_${month}.xlsx`);
-
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
 
   } catch (error) {
     console.error('Excel Export Error:', error);

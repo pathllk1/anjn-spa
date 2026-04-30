@@ -18,8 +18,23 @@ async function downloadFile(url, defaultFilename) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || 'Failed to download report');
+    // Check content-type to determine how to parse error
+    const contentType = response.headers.get('Content-Type') || '';
+    let errorMessage = 'Failed to download report';
+
+    if (contentType.includes('application/json')) {
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        // If JSON parsing fails, use default error message
+      }
+    } else {
+      // For non-JSON responses with error status, log and use generic message
+      console.warn('Server returned error response with content-type:', contentType);
+    }
+
+    throw new Error(errorMessage);
   }
 
   // Get filename from header if available

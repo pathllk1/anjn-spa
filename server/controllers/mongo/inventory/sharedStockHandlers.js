@@ -689,13 +689,16 @@ export const exportStockMovementsToExcel = async (req, res) => {
     ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
     ws.views               = [{ state: 'frozen', ySplit: 1 }];
 
+    // Generate Excel buffer before setting response headers
+    const buffer = await workbook.xlsx.writeBuffer();
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=stock-movements-${new Date().toISOString().split('T')[0]}.xlsx`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
   } catch (err) {
     console.error('[EXPORT_EXCEL] Error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });

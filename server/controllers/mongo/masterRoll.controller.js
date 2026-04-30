@@ -522,7 +522,7 @@ export const exportICards = async (req, res) => {
     const { project, site, category, format } = req.query;
 
     /* ── Filter employees ─────────────────────────────────────────────── */
-    const filter = { firm_id };
+    const filter = { firm_id, status: 'Active' };
     if (project)  filter.project  = project;
     if (site)     filter.site     = site;
     if (category) filter.category = category;
@@ -731,10 +731,15 @@ export const exportICards = async (req, res) => {
       });
 
       const fname = `ICards_${project || 'All'}_${site || 'AllSites'}_${Date.now()}.xlsx`;
+      
+      // Generate Excel buffer before setting response headers
+      const buffer = await wb.xlsx.writeBuffer();
+      
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
-      await wb.xlsx.write(res);
-      return res.end();
+      res.setHeader('Content-Length', buffer.length);
+      res.send(buffer);
+      return;
     }
 
     /* ════════════════════════════════════════════════════════════════════

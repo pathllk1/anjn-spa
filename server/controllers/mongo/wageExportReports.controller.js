@@ -110,12 +110,14 @@ export async function generateBankReport(req, res) {
       column.width = [15, 20, 15, 20, 20, 25, 25, 25, 15, 20][i];
     });
 
-    // Finalize response
+    // Generate Excel buffer before setting response headers
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // Only now set response headers and send
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=bank-report-${month}.xlsx`);
-
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
 
   } catch (error) {
     console.error('Error generating bank report:', error);
@@ -156,7 +158,11 @@ export async function generateEPFESICReport(req, res) {
       { header: 'Gross Salary', key: 'gross', width: 15 },
       { header: 'EPF (12%)', key: 'epf', width: 18 },
       { header: 'ESIC (0.75%)', key: 'esic', width: 18 },
-      { header: 'Total Statutory', key: 'stat', width: 18 },
+      { header: 'Emp. Statutory', key: 'stat', width: 18 },
+      { header: 'Employer EPF (12%)', key: 'employer_epf', width: 18 },
+      { header: 'Employer ESIC (3.25%)', key: 'employer_esic', width: 20 },
+      { header: 'Total Employer', key: 'total_employer', width: 18 },
+      { header: 'Total Contribution', key: 'grand_total', width: 18 },
       { header: 'Net Salary', key: 'net', width: 15 },
       { header: 'Paid Date', key: 'date', width: 12 },
     ];
@@ -170,21 +176,37 @@ export async function generateEPFESICReport(req, res) {
     };
 
     wages.forEach((wage, index) => {
+      const epf = wage.epf_deduction || 0;
+      const esic = wage.esic_deduction || 0;
+      const gross = wage.gross_salary || 0;
+      
+      // Calculate Employer Part
+      // Employer EPF matches employee EPF (usually capped at 1800)
+      const employerEpf = epf; 
+      // Employer ESIC is 3.25% of gross
+      const employerEsic = Math.ceil(gross * 0.0325);
+      const totalEmployer = employerEpf + employerEsic;
+      const grandTotal = (epf + esic) + totalEmployer;
+
       const row = worksheet.addRow({
         sno: index + 1,
         name: wage.master_roll_id?.employee_name || 'N/A',
         aadhar: wage.master_roll_id?.aadhar || '',
         acc: wage.master_roll_id?.account_no || '',
-        gross: wage.gross_salary || 0,
-        epf: wage.epf_deduction || 0,
-        esic: wage.esic_deduction || 0,
-        stat: (wage.epf_deduction || 0) + (wage.esic_deduction || 0),
+        gross: gross,
+        epf: epf,
+        esic: esic,
+        stat: epf + esic,
+        employer_epf: employerEpf,
+        employer_esic: employerEsic,
+        total_employer: totalEmployer,
+        grand_total: grandTotal,
         net: wage.net_salary || 0,
         date: wage.paid_date || '',
       });
 
       row.getCell('acc').numFmt = '@';
-      ['gross', 'epf', 'esic', 'stat', 'net'].forEach(key => {
+      ['gross', 'epf', 'esic', 'stat', 'employer_epf', 'employer_esic', 'total_employer', 'grand_total', 'net'].forEach(key => {
         row.getCell(key).numFmt = '₹#,##0.00';
       });
     });
@@ -195,15 +217,28 @@ export async function generateEPFESICReport(req, res) {
       epf: wages.reduce((sum, w) => sum + (w.epf_deduction || 0), 0),
       esic: wages.reduce((sum, w) => sum + (w.esic_deduction || 0), 0),
       stat: wages.reduce((sum, w) => sum + (w.epf_deduction || 0) + (w.esic_deduction || 0), 0),
+      employer_epf: wages.reduce((sum, w) => sum + (w.epf_deduction || 0), 0),
+      employer_esic: wages.reduce((sum, w) => sum + Math.ceil((w.gross_salary || 0) * 0.0325), 0),
+      total_employer: wages.reduce((sum, w) => sum + (w.epf_deduction || 0) + Math.ceil((w.gross_salary || 0) * 0.0325), 0),
+      grand_total: wages.reduce((sum, w) => {
+        const epf = w.epf_deduction || 0;
+        const esic = w.esic_deduction || 0;
+        const empEpf = epf;
+        const empEsic = Math.ceil((w.gross_salary || 0) * 0.0325);
+        return sum + epf + esic + empEpf + empEsic;
+      }, 0),
       net: wages.reduce((sum, w) => sum + (w.net_salary || 0), 0),
     });
     totalsRow.font = { bold: true };
 
+    // Generate Excel buffer before setting response headers
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    // Only now set response headers and send
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=epf-esic-report-${month}.xlsx`);
-
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
 
   } catch (error) {
     console.error('Error generating EPF/ESIC report:', error);

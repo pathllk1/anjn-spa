@@ -30,7 +30,7 @@ export class IcardExportModal {
 
   async fetchData() {
     try {
-      const response = await fetch('/api/master-rolls', {
+      const response = await fetch('/api/master-rolls?activeOnly=true', {
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
       });
