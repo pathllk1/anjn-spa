@@ -17,18 +17,38 @@ import { Ledger, ChartOfAccounts, BankAccount } from '../../models/index.js';
 
 /**
  * Resolve account head from ChartOfAccounts
- * @throws {Error} If account not found
+ * Automatically creates the account head if it doesn't exist
+ * @param {ObjectId} firmId
+ * @param {string} accountName
+ * @param {string} accountType
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
  */
-async function resolveAccountHead(firmId, accountName, accountType) {
-  const account = await ChartOfAccounts.findOne({
+async function resolveAccountHead(firmId, accountName, accountType, userId, session = null) {
+  let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: accountName,
     account_type: accountType,
     is_active: true,
-  }).lean();
+  }).session(session).lean();
 
   if (!account) {
-    throw new Error(`Account head not found: ${accountName} (${accountType})`);
+    console.log(`⚠️ Account head not found: ${accountName} (${accountType}). Creating auto...`);
+    
+    const newAccountData = {
+      firm_id: firmId,
+      account_name: accountName,
+      account_type: accountType,
+      is_system: true,
+      is_active: true,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+    account = createdAccounts[0].toObject();
+    
+    console.log(`✅ Created auto account head: ${accountName} (${accountType})`);
   }
 
   return account;
@@ -38,43 +58,72 @@ async function resolveAccountHead(firmId, accountName, accountType) {
  * Resolve bank account and get its ledger account head
  * @param {ObjectId} firmId
  * @param {string} bankLabel - "Bank Name • Account Number"
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
  */
-async function resolveBankAccountFromLabel(firmId, bankLabel) {
+async function resolveBankAccountFromLabel(firmId, bankLabel, userId, session = null) {
   if (!bankLabel) throw new Error('Bank label is required');
 
-  // Attempt to find the account head by name directly first
-  // Bank labels are formatted as: "Account Name • Bank Name • A/C 1234"
-  // But ChartOfAccounts often stores them slightly differently.
-  // We'll try to match by the label itself or look up in BankAccount model.
-  
-  const account = await ChartOfAccounts.findOne({
+  let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: bankLabel,
     account_type: 'BANK',
     is_active: true,
-  }).lean();
+  }).session(session).lean();
 
   if (account) return account;
 
-  // If not found by name, try parsing the label or searching BankAccount
-  // For now, we assume the label matches the account_name in ChartOfAccounts
-  // because that's how the system is designed to work for other modules.
-  throw new Error(`Bank ledger account not found for label: ${bankLabel}`);
+  // If not found, create it as a bank account
+  console.log(`⚠️ Bank ledger account not found for label: ${bankLabel}. Creating auto...`);
+  
+  const newAccountData = {
+    firm_id: firmId,
+    account_name: bankLabel,
+    account_type: 'BANK',
+    is_system: true,
+    is_active: true,
+    created_by: userId,
+    updated_by: userId,
+  };
+
+  const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+  account = createdAccounts[0].toObject();
+  
+  console.log(`✅ Created auto bank ledger account: ${bankLabel}`);
+  return account;
 }
 
 /**
  * Get default cash account
+ * @param {ObjectId} firmId
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
  */
-async function getDefaultCashAccount(firmId) {
-  const account = await ChartOfAccounts.findOne({
+async function getDefaultCashAccount(firmId, userId, session = null) {
+  let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: 'Cash in Hand',
     account_type: 'CASH',
     is_active: true,
-  }).lean();
+  }).session(session).lean();
 
   if (!account) {
-    throw new Error('Default cash account not found. Please create "Cash in Hand" account.');
+    console.log(`⚠️ Default cash account not found. Creating "Cash in Hand"...`);
+    
+    const newAccountData = {
+      firm_id: firmId,
+      account_name: 'Cash in Hand',
+      account_type: 'CASH',
+      is_system: true,
+      is_active: true,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+    account = createdAccounts[0].toObject();
+    
+    console.log(`✅ Created default cash account: Cash in Hand`);
   }
 
   return account;
@@ -103,17 +152,18 @@ export async function postAdvanceLedger(advance, session) {
   const voucherId = uuidv4();
   const entries = [];
   const firmId = advance.firm_id;
+  const userId = advance.created_by || advance.updated_by;
   const transactionDate = advance.date;
   const amount = advance.amount;
 
   try {
-    const advanceAccount = await resolveAccountHead(firmId, 'Advance to Employees', 'ASSET');
+    const advanceAccount = await resolveAccountHead(firmId, 'Advance to Employees', 'ASSET', userId, session);
     let paymentAccount;
 
     if (advance.payment_mode === 'BANK' && advance.bank_account_details) {
-      paymentAccount = await resolveBankAccountFromLabel(firmId, advance.bank_account_details);
+      paymentAccount = await resolveBankAccountFromLabel(firmId, advance.bank_account_details, userId, session);
     } else {
-      paymentAccount = await getDefaultCashAccount(firmId);
+      paymentAccount = await getDefaultCashAccount(firmId, userId, session);
     }
 
     if (advance.type === 'ADVANCE') {

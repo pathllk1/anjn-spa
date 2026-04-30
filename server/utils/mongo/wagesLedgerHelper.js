@@ -108,18 +108,39 @@ export async function validateLedgerEntries(entries, firmId) {
 
 /**
  * Resolve account head from ChartOfAccounts
- * @throws {Error} If account not found
+ * Automatically creates the account head if it doesn't exist
+ * @param {ObjectId} firmId
+ * @param {string} accountName
+ * @param {string} accountType
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
  */
-export async function resolveAccountHead(firmId, accountName, accountType) {
-  const account = await ChartOfAccounts.findOne({
+export async function resolveAccountHead(firmId, accountName, accountType, userId, session = null) {
+  let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: accountName,
     account_type: accountType,
     is_active: true,
-  }).lean();
+  }).session(session).lean();
 
   if (!account) {
-    throw new Error(`Account head not found: ${accountName} (${accountType})`);
+    console.log(`⚠️ Account head not found: ${accountName} (${accountType}). Creating auto...`);
+    
+    const newAccountData = {
+      firm_id: firmId,
+      account_name: accountName,
+      account_type: accountType,
+      is_system: true,
+      is_active: true,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    // Use create with array to support sessions correctly in Mongoose
+    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+    account = createdAccounts[0].toObject();
+    
+    console.log(`✅ Created auto account head: ${accountName} (${accountType})`);
   }
 
   return account;
@@ -127,14 +148,18 @@ export async function resolveAccountHead(firmId, accountName, accountType) {
 
 /**
  * Resolve bank account and get its ledger account head
- * @throws {Error} If bank account not found
+ * Automatically creates the bank ledger account if it doesn't exist
+ * @param {ObjectId} firmId
+ * @param {ObjectId} bankAccountId
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
  */
-export async function resolveBankAccount(firmId, bankAccountId) {
+export async function resolveBankAccount(firmId, bankAccountId, userId, session = null) {
   const bankAccount = await BankAccount.findOne({
     _id: bankAccountId,
     firm_id: firmId,
     status: 'ACTIVE',
-  }).lean();
+  }).session(session).lean();
 
   if (!bankAccount) {
     throw new Error(`Bank account not found or inactive: ${bankAccountId}`);
@@ -149,10 +174,25 @@ export async function resolveBankAccount(firmId, bankAccountId) {
     account_name: accountHeadName,
     account_type: 'BANK',
     is_active: true,
-  }).lean();
+  }).session(session).lean();
 
   if (!account) {
-    throw new Error(`Bank ledger account not found: ${accountHeadName}`);
+    console.log(`⚠️ Bank ledger account not found: ${accountHeadName}. Creating auto...`);
+    
+    const newAccountData = {
+      firm_id: firmId,
+      account_name: accountHeadName,
+      account_type: 'BANK',
+      is_system: true,
+      is_active: true,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+    account = createdAccounts[0].toObject();
+    
+    console.log(`✅ Created auto bank ledger account: ${accountHeadName}`);
   }
 
   return account;
@@ -160,17 +200,35 @@ export async function resolveBankAccount(firmId, bankAccountId) {
 
 /**
  * Get or create default cash account
+ * @param {ObjectId} firmId
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
  */
-export async function getDefaultCashAccount(firmId) {
+export async function getDefaultCashAccount(firmId, userId, session = null) {
   let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: 'Cash in Hand',
     account_type: 'CASH',
     is_active: true,
-  }).lean();
+  }).session(session).lean();
 
   if (!account) {
-    throw new Error('Default cash account not found. Please create "Cash in Hand" account.');
+    console.log(`⚠️ Default cash account not found. Creating "Cash in Hand"...`);
+    
+    const newAccountData = {
+      firm_id: firmId,
+      account_name: 'Cash in Hand',
+      account_type: 'CASH',
+      is_system: true,
+      is_active: true,
+      created_by: userId,
+      updated_by: userId,
+    };
+
+    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+    account = createdAccounts[0].toObject();
+    
+    console.log(`✅ Created default cash account: Cash in Hand`);
   }
 
   return account;
@@ -203,11 +261,12 @@ export async function postWageLedger(wage, session) {
   const voucherId = uuidv4();
   const entries = [];
   const firmId = wage.firm_id;
+  const userId = wage.created_by || wage.updated_by;
   const transactionDate = wage.paid_date || new Date().toISOString().split('T')[0];
 
   try {
     // 1. DEBIT: Salaries & Wages (Expense)
-    const expenseAccount = await resolveAccountHead(firmId, 'Salaries & Wages', 'EXPENSE');
+    const expenseAccount = await resolveAccountHead(firmId, 'Salaries & Wages', 'EXPENSE', userId, session);
     entries.push({
       firm_id: firmId,
       account_head: expenseAccount.account_name,
@@ -226,9 +285,9 @@ export async function postWageLedger(wage, session) {
     // 2. CREDIT: Bank/Cash (Asset)
     let bankAccount;
     if (wage.paid_date && wage.bank_account_id) {
-      bankAccount = await resolveBankAccount(firmId, wage.bank_account_id);
+      bankAccount = await resolveBankAccount(firmId, wage.bank_account_id, userId, session);
     } else {
-      bankAccount = await getDefaultCashAccount(firmId);
+      bankAccount = await getDefaultCashAccount(firmId, userId, session);
     }
 
     entries.push({
@@ -250,7 +309,7 @@ export async function postWageLedger(wage, session) {
 
     // 3. CREDIT: EPF Payable (if deduction > 0)
     if ((wage.epf_deduction || 0) > 0) {
-      const epfAccount = await resolveAccountHead(firmId, 'EPF Payable', 'PAYABLE');
+      const epfAccount = await resolveAccountHead(firmId, 'EPF Payable', 'PAYABLE', userId, session);
       entries.push({
         firm_id: firmId,
         account_head: epfAccount.account_name,
@@ -269,7 +328,7 @@ export async function postWageLedger(wage, session) {
 
     // 4. CREDIT: ESIC Payable (if deduction > 0)
     if ((wage.esic_deduction || 0) > 0) {
-      const esicAccount = await resolveAccountHead(firmId, 'ESIC Payable', 'PAYABLE');
+      const esicAccount = await resolveAccountHead(firmId, 'ESIC Payable', 'PAYABLE', userId, session);
       entries.push({
         firm_id: firmId,
         account_head: esicAccount.account_name,
@@ -288,7 +347,7 @@ export async function postWageLedger(wage, session) {
 
     // 5. CREDIT: Other Deductions (if deduction > 0)
     if ((wage.other_deduction || 0) > 0) {
-      const otherAccount = await resolveAccountHead(firmId, 'Other Deductions', 'PAYABLE');
+      const otherAccount = await resolveAccountHead(firmId, 'Other Deductions', 'PAYABLE', userId, session);
       entries.push({
         firm_id: firmId,
         account_head: otherAccount.account_name,
@@ -307,7 +366,7 @@ export async function postWageLedger(wage, session) {
 
     // 6. CREDIT: Advance to Employees (if advance_deduction > 0)
     if ((wage.advance_deduction || 0) > 0) {
-      const advanceAccount = await resolveAccountHead(firmId, 'Advance to Employees', 'ASSET');
+      const advanceAccount = await resolveAccountHead(firmId, 'Advance to Employees', 'ASSET', userId, session);
       entries.push({
         firm_id: firmId,
         account_head: advanceAccount.account_name,
