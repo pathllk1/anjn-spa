@@ -1,13 +1,48 @@
 /**
  * Wage Slip Controller
- * Generates individual and bulk wage slips as PDF
- * Professional format with color scheme
+ * Generates individual and bulk wage slips as PDF using pdfmake
+ * Professional format with proper Unicode support for rupee symbol
  */
 
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { Wage, MasterRoll, Firm } from '../../models/index.js';
-import PDFDocument from 'pdfkit';
+import PrinterModule from 'pdfmake/js/Printer.js';
 import archiver from 'archiver';
-import { Readable } from 'stream';
+
+const PdfPrinter = PrinterModule.default;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Function to resolve font paths properly on different platforms
+const getFontPath = (fileName) => {
+  return path.join(process.cwd(), 'client', 'public', 'fonts', fileName);
+};
+
+// Font definitions - DejaVuSans supports Unicode including rupee symbol
+const fonts = {
+  DejaVuSans: {
+    normal: getFontPath('DejaVuSans.ttf'),
+    bold: getFontPath('DejaVuSans-Bold.ttf'),
+    italics: getFontPath('DejaVuSans-Oblique.ttf'),
+    bolditalics: getFontPath('DejaVuSans-BoldOblique.ttf')
+  }
+};
+
+const printer = new PdfPrinter(fonts);
+
+/**
+ * Helper function to format currency with proper rupee symbol
+ * Uses Unicode \u20B9 (₹) which is properly supported by DejaVuSans
+ */
+function formatCurrency(amount) {
+  return '\u20B9\u00A0' + new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number(amount) || 0);
+}
 
 /**
  * Generate individual wage slip PDF
@@ -94,41 +129,20 @@ export async function generateBulkWageSlips(req, res) {
 }
 
 /**
- * Generate wage slip PDF document
+ * Generate wage slip PDF document using pdfmake
  */
 async function generateWageSlipPDF(wage, firm) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const docDefinition = buildWageSlipDocument(wage, firm);
+      const pdfDoc = await printer.createPdfKitDocument(docDefinition);
+
       const chunks = [];
+      pdfDoc.on('data', chunk => chunks.push(chunk));
+      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+      pdfDoc.on('error', reject);
 
-      doc.on('data', chunk => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      // Color scheme
-      const colors = {
-        primary: '#1F4E78',      // Dark blue
-        secondary: '#4472C4',    // Light blue
-        accent: '#70AD47',       // Green
-        text: '#333333',         // Dark gray
-        lightBg: '#E7E6E6',      // Light gray
-        border: '#CCCCCC'        // Border gray
-      };
-
-      // Header
-      drawHeader(doc, firm, colors);
-
-      // Employee Info
-      drawEmployeeInfo(doc, wage, colors);
-
-      // Salary Details
-      drawSalaryDetails(doc, wage, colors);
-
-      // Footer
-      drawFooter(doc, wage, colors);
-
-      doc.end();
+      pdfDoc.end();
     } catch (error) {
       reject(error);
     }
@@ -136,136 +150,215 @@ async function generateWageSlipPDF(wage, firm) {
 }
 
 /**
- * Draw header section
+ * Build pdfmake document definition for wage slip
  */
-function drawHeader(doc, firm, colors) {
-  // Background
-  doc.rect(0, 0, doc.page.width, 80).fill(colors.primary);
+function buildWageSlipDocument(wage, firm) {
+  const employeeName = wage.master_roll_id?.employee_name || 'N/A';
+  const aadhar = wage.master_roll_id?.aadhar || 'N/A';
+  const bank = wage.master_roll_id?.bank || 'N/A';
+  const accountNo = wage.master_roll_id?.account_no || 'N/A';
+  const salaryMonth = wage.salary_month || 'N/A';
+  const paidDate = wage.paid_date || 'N/A';
+  const paymentMode = wage.payment_mode || 'N/A';
+  const chequeNo = wage.cheque_no || 'N/A';
 
-  // Firm name
-  doc.fontSize(20).font('Helvetica-Bold').fillColor('#FFFFFF').text(firm?.name || 'Company Name', 40, 20);
+  const grossSalary = wage.gross_salary || 0;
+  const otherBenefit = wage.other_benefit || 0;
+  const epfDeduction = wage.epf_deduction || 0;
+  const esicDeduction = wage.esic_deduction || 0;
+  const otherDeduction = wage.other_deduction || 0;
+  const advanceDeduction = wage.advance_deduction || 0;
+  const netSalary = wage.net_salary || 0;
 
-  // Wage Slip title
-  doc.fontSize(14).font('Helvetica-Bold').fillColor(colors.secondary).text('WAGE SLIP', doc.page.width - 150, 30);
+  const totalEarnings = grossSalary + otherBenefit;
+  const totalDeductions = epfDeduction + esicDeduction + otherDeduction + advanceDeduction;
 
-  // Reset
-  doc.fillColor(colors.text);
-}
+  return {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 40],
+    defaultStyle: {
+      font: 'DejaVuSans',
+      fontSize: 10
+    },
+    content: [
+      // Header
+      {
+        table: {
+          widths: ['*', 'auto'],
+          body: [
+            [
+              { text: firm?.name || 'Company Name', style: 'headerTitle' },
+              { text: 'WAGE SLIP', style: 'headerSubtitle' }
+            ]
+          ]
+        },
+        layout: 'noBorders',
+        margin: [0, 0, 0, 20]
+      },
 
-/**
- * Draw employee information section
- */
-function drawEmployeeInfo(doc, wage, colors) {
-  const startY = 100;
-  const lineHeight = 20;
+      // Employee Information Section
+      {
+        text: 'EMPLOYEE INFORMATION',
+        style: 'sectionTitle',
+        margin: [0, 0, 0, 10]
+      },
+      {
+        table: {
+          widths: ['*', '*'],
+          body: [
+            [
+              { text: `Employee Name: ${employeeName}`, fontSize: 10 },
+              { text: `Aadhar: ${aadhar}`, fontSize: 10 }
+            ],
+            [
+              { text: `Bank: ${bank}`, fontSize: 10 },
+              { text: `Account No: ${accountNo}`, fontSize: 10 }
+            ],
+            [
+              { text: `Salary Month: ${salaryMonth}`, fontSize: 10 },
+              { text: `Paid Date: ${paidDate}`, fontSize: 10 }
+            ],
+            [
+              { text: `Payment Mode: ${paymentMode}`, fontSize: 10 },
+              { text: `Cheque/Ref No: ${chequeNo}`, fontSize: 10 }
+            ]
+          ]
+        },
+        layout: {
+          hLineWidth: () => 1,
+          vLineWidth: () => 1,
+          hLineColor: () => '#CCCCCC',
+          vLineColor: () => '#CCCCCC',
+          paddingLeft: () => 8,
+          paddingRight: () => 8,
+          paddingTop: () => 6,
+          paddingBottom: () => 6
+        },
+        margin: [0, 0, 0, 20]
+      },
 
-  // Section title
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(colors.primary).text('EMPLOYEE INFORMATION', 40, startY);
+      // Salary Details Section
+      {
+        text: 'SALARY DETAILS',
+        style: 'sectionTitle',
+        margin: [0, 0, 0, 10]
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: ['*', 'auto'],
+          body: [
+            // Header
+            [
+              { text: 'Particulars', style: 'tableHeader', fillColor: '#4472C4', color: '#FFFFFF' },
+              { text: 'Amount', style: 'tableHeader', fillColor: '#4472C4', color: '#FFFFFF', alignment: 'right' }
+            ],
+            // Earnings
+            [
+              { text: 'Gross Salary', fontSize: 9 },
+              { text: formatCurrency(grossSalary), fontSize: 9, alignment: 'right' }
+            ],
+            [
+              { text: 'Other Benefits', fontSize: 9 },
+              { text: formatCurrency(otherBenefit), fontSize: 9, alignment: 'right' }
+            ],
+            // Deductions Header
+            [
+              { text: 'DEDUCTIONS', colSpan: 2, style: 'deductionsHeader', margin: [0, 10, 0, 5] },
+              {}
+            ],
+            // Deductions
+            [
+              { text: 'EPF Deduction', fontSize: 9 },
+              { text: formatCurrency(epfDeduction), fontSize: 9, alignment: 'right' }
+            ],
+            [
+              { text: 'ESIC Deduction', fontSize: 9 },
+              { text: formatCurrency(esicDeduction), fontSize: 9, alignment: 'right' }
+            ],
+            [
+              { text: 'Other Deduction', fontSize: 9 },
+              { text: formatCurrency(otherDeduction), fontSize: 9, alignment: 'right' }
+            ],
+            [
+              { text: 'Advance Deduction', fontSize: 9 },
+              { text: formatCurrency(advanceDeduction), fontSize: 9, alignment: 'right' }
+            ],
+            // Net Salary
+            [
+              { text: 'NET SALARY', style: 'netSalary', fillColor: '#70AD47', color: '#FFFFFF' },
+              { text: formatCurrency(netSalary), style: 'netSalary', fillColor: '#70AD47', color: '#FFFFFF', alignment: 'right' }
+            ]
+          ]
+        },
+        layout: {
+          hLineWidth: () => 0.5,
+          vLineWidth: () => 0.5,
+          hLineColor: () => '#CCCCCC',
+          vLineColor: () => '#CCCCCC',
+          paddingLeft: () => 8,
+          paddingRight: () => 8,
+          paddingTop: () => 5,
+          paddingBottom: () => 5
+        },
+        margin: [0, 0, 0, 20]
+      },
 
-  // Background for info section
-  doc.rect(40, startY + 20, doc.page.width - 80, 100).fill(colors.lightBg);
+      // Summary
+      {
+        columns: [
+          { text: `Total Earnings: ${formatCurrency(totalEarnings)}`, fontSize: 9, bold: true },
+          { text: `Total Deductions: ${formatCurrency(totalDeductions)}`, fontSize: 9, bold: true, alignment: 'right' }
+        ],
+        margin: [0, 0, 0, 30]
+      },
 
-  // Employee details
-  const infoY = startY + 30;
-  const col1X = 50;
-  const col2X = 300;
-
-  doc.fontSize(10).font('Helvetica').fillColor(colors.text);
-
-  doc.text(`Employee Name: ${wage.master_roll_id?.employee_name || 'N/A'}`, col1X, infoY);
-  doc.text(`Aadhar: ${wage.master_roll_id?.aadhar || 'N/A'}`, col2X, infoY);
-
-  doc.text(`Bank: ${wage.master_roll_id?.bank || 'N/A'}`, col1X, infoY + lineHeight);
-  doc.text(`Account No: ${wage.master_roll_id?.account_no || 'N/A'}`, col2X, infoY + lineHeight);
-
-  doc.text(`Salary Month: ${wage.salary_month}`, col1X, infoY + lineHeight * 2);
-  doc.text(`Paid Date: ${wage.paid_date || 'N/A'}`, col2X, infoY + lineHeight * 2);
-
-  doc.text(`Payment Mode: ${wage.payment_mode || 'N/A'}`, col1X, infoY + lineHeight * 3);
-  doc.text(`Cheque/Ref No: ${wage.cheque_no || 'N/A'}`, col2X, infoY + lineHeight * 3);
-}
-
-/**
- * Draw salary details section
- */
-function drawSalaryDetails(doc, wage, colors) {
-  const startY = 240;
-  const lineHeight = 18;
-  const col1X = 50;
-  const col2X = 350;
-
-  // Section title
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(colors.primary).text('SALARY DETAILS', col1X, startY);
-
-  // Table header
-  const tableY = startY + 25;
-  doc.rect(col1X, tableY, doc.page.width - 100, lineHeight).fill(colors.secondary);
-
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
-  doc.text('Particulars', col1X + 10, tableY + 4);
-  doc.text('Amount (₹)', col2X + 50, tableY + 4);
-
-  // Earnings
-  let currentY = tableY + lineHeight;
-  doc.fontSize(9).font('Helvetica').fillColor(colors.text);
-
-  const earnings = [
-    { label: 'Gross Salary', value: wage.gross_salary || 0 },
-    { label: 'Other Benefits', value: wage.other_benefit || 0 }
-  ];
-
-  earnings.forEach(item => {
-    doc.rect(col1X, currentY, doc.page.width - 100, lineHeight).stroke(colors.border);
-    doc.text(item.label, col1X + 10, currentY + 4);
-    doc.text(`₹ ${item.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, col2X + 50, currentY + 4);
-    currentY += lineHeight;
-  });
-
-  // Deductions header
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(colors.primary).text('DEDUCTIONS', col1X, currentY + 10);
-  currentY += 25;
-
-  const deductions = [
-    { label: 'EPF Deduction', value: wage.epf_deduction || 0 },
-    { label: 'ESIC Deduction', value: wage.esic_deduction || 0 },
-    { label: 'Other Deduction', value: wage.other_deduction || 0 },
-    { label: 'Advance Deduction', value: wage.advance_deduction || 0 }
-  ];
-
-  deductions.forEach(item => {
-    doc.rect(col1X, currentY, doc.page.width - 100, lineHeight).stroke(colors.border);
-    doc.fontSize(9).font('Helvetica').fillColor(colors.text);
-    doc.text(item.label, col1X + 10, currentY + 4);
-    doc.text(`₹ ${item.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, col2X + 50, currentY + 4);
-    currentY += lineHeight;
-  });
-
-  // Net Salary (highlighted)
-  doc.rect(col1X, currentY, doc.page.width - 100, lineHeight).fill(colors.accent);
-  doc.fontSize(10).font('Helvetica-Bold').fillColor('#FFFFFF');
-  doc.text('NET SALARY', col1X + 10, currentY + 4);
-  doc.text(`₹ ${(wage.net_salary || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, col2X + 50, currentY + 4);
-
-  // Summary
-  currentY += lineHeight + 20;
-  doc.fontSize(9).font('Helvetica').fillColor(colors.text);
-  doc.text(`Total Earnings: ₹ ${((wage.gross_salary || 0) + (wage.other_benefit || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, col1X, currentY);
-  currentY += lineHeight;
-  doc.text(`Total Deductions: ₹ ${((wage.epf_deduction || 0) + (wage.esic_deduction || 0) + (wage.other_deduction || 0) + (wage.advance_deduction || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, col1X, currentY);
-}
-
-/**
- * Draw footer section
- */
-function drawFooter(doc, wage, colors) {
-  const footerY = doc.page.height - 60;
-
-  // Border line
-  doc.moveTo(40, footerY).lineTo(doc.page.width - 40, footerY).stroke(colors.border);
-
-  // Footer text
-  doc.fontSize(8).font('Helvetica').fillColor(colors.text);
-  doc.text('This is a computer-generated wage slip. No signature is required.', 40, footerY + 10);
-  doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN')}`, 40, footerY + 20);
-  doc.text(`Wage ID: ${wage._id}`, 40, footerY + 30);
+      // Footer
+      {
+        text: 'This is a computer-generated wage slip. No signature is required.',
+        fontSize: 8,
+        alignment: 'center',
+        italics: true,
+        margin: [0, 0, 0, 5]
+      },
+      {
+        columns: [
+          { text: `Generated on: ${new Date().toLocaleDateString('en-IN')}`, fontSize: 8 },
+          { text: `Wage ID: ${wage._id}`, fontSize: 8, alignment: 'right' }
+        ]
+      }
+    ],
+    styles: {
+      headerTitle: {
+        fontSize: 18,
+        bold: true,
+        color: '#1F4E78'
+      },
+      headerSubtitle: {
+        fontSize: 12,
+        bold: true,
+        color: '#4472C4'
+      },
+      sectionTitle: {
+        fontSize: 11,
+        bold: true,
+        color: '#1F4E78'
+      },
+      tableHeader: {
+        fontSize: 10,
+        bold: true,
+        alignment: 'left'
+      },
+      deductionsHeader: {
+        fontSize: 10,
+        bold: true,
+        color: '#1F4E78'
+      },
+      netSalary: {
+        fontSize: 10,
+        bold: true,
+        alignment: 'left'
+      }
+    }
+  };
 }
