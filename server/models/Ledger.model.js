@@ -20,7 +20,8 @@ const ledgerSchema = new Schema(
         'ASSET', 'LIABILITY', 'CASH', 'BANK',
         'DEBTOR', 'CREDITOR', 'CAPITAL', 'RETAINED_EARNINGS',
         'LOAN', 'PREPAID_EXPENSE', 'ACCUMULATED_DEPRECIATION',
-        'ALLOWANCE_FOR_DOUBTFUL_DEBTS', 'DISCOUNT_RECEIVED', 'DISCOUNT_GIVEN'
+        'ALLOWANCE_FOR_DOUBTFUL_DEBTS', 'DISCOUNT_RECEIVED', 'DISCOUNT_GIVEN',
+        'PAYABLE'
       ],
     },
     debit_amount:     { type: Number, default: 0 },

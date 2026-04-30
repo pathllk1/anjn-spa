@@ -116,33 +116,46 @@ export async function validateLedgerEntries(entries, firmId, session = null) {
  * @param {Session} session - MongoDB session
  */
 export async function resolveAccountHead(firmId, accountName, accountType, userId, session = null) {
+  // Search by name first to avoid duplicate key errors
   let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: accountName,
-    account_type: accountType,
-    is_active: true,
   }).session(session).lean();
 
-  if (!account) {
-    console.log(`⚠️ Account head not found: ${accountName} (${accountType}). Creating auto...`);
+  if (account) {
+    if (account.account_type !== accountType) {
+      console.log(`⚠️ Account "${accountName}" found with type ${account.account_type}, expected ${accountType}. Using existing.`);
+    }
     
-    const newAccountData = {
-      firm_id: firmId,
-      account_name: accountName,
-      account_type: accountType,
-      is_system: true,
-      is_active: true,
-      created_by: userId,
-      updated_by: userId,
-    };
-
-    // Use create with array to support sessions correctly in Mongoose
-    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
-    account = createdAccounts[0].toObject();
+    if (!account.is_active) {
+      console.log(`⚠️ Account "${accountName}" is inactive. Reactivating...`);
+      await ChartOfAccounts.updateOne(
+        { _id: account._id },
+        { $set: { is_active: true, updated_by: userId } },
+        { session }
+      );
+      account.is_active = true;
+    }
     
-    console.log(`✅ Created auto account head: ${accountName} (${accountType})`);
+    return account;
   }
 
+  console.log(`⚠️ Account head not found: ${accountName} (${accountType}). Creating auto...`);
+  
+  const newAccountData = {
+    firm_id: firmId,
+    account_name: accountName,
+    account_type: accountType,
+    is_system: true,
+    is_active: true,
+    created_by: userId,
+    updated_by: userId,
+  };
+
+  const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+  account = createdAccounts[0].toObject();
+  
+  console.log(`✅ Created auto account head: ${accountName} (${accountType})`);
   return account;
 }
 
@@ -172,29 +185,42 @@ export async function resolveBankAccount(firmId, bankAccountId, userId, session 
   let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: accountHeadName,
-    account_type: 'BANK',
-    is_active: true,
   }).session(session).lean();
 
-  if (!account) {
-    console.log(`⚠️ Bank ledger account not found: ${accountHeadName}. Creating auto...`);
+  if (account) {
+    if (account.account_type !== 'BANK') {
+      console.log(`⚠️ Account "${accountHeadName}" found with type ${account.account_type}, expected BANK. Using existing.`);
+    }
     
-    const newAccountData = {
-      firm_id: firmId,
-      account_name: accountHeadName,
-      account_type: 'BANK',
-      is_system: true,
-      is_active: true,
-      created_by: userId,
-      updated_by: userId,
-    };
-
-    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
-    account = createdAccounts[0].toObject();
+    if (!account.is_active) {
+      console.log(`⚠️ Account "${accountHeadName}" is inactive. Reactivating...`);
+      await ChartOfAccounts.updateOne(
+        { _id: account._id },
+        { $set: { is_active: true, updated_by: userId } },
+        { session }
+      );
+      account.is_active = true;
+    }
     
-    console.log(`✅ Created auto bank ledger account: ${accountHeadName}`);
+    return account;
   }
 
+  console.log(`⚠️ Bank ledger account not found: ${accountHeadName}. Creating auto...`);
+  
+  const newAccountData = {
+    firm_id: firmId,
+    account_name: accountHeadName,
+    account_type: 'BANK',
+    is_system: true,
+    is_active: true,
+    created_by: userId,
+    updated_by: userId,
+  };
+
+  const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+  account = createdAccounts[0].toObject();
+  
+  console.log(`✅ Created auto bank ledger account: ${accountHeadName}`);
   return account;
 }
 
@@ -208,29 +234,42 @@ export async function getDefaultCashAccount(firmId, userId, session = null) {
   let account = await ChartOfAccounts.findOne({
     firm_id: firmId,
     account_name: 'Cash in Hand',
-    account_type: 'CASH',
-    is_active: true,
   }).session(session).lean();
 
-  if (!account) {
-    console.log(`⚠️ Default cash account not found. Creating "Cash in Hand"...`);
+  if (account) {
+    if (account.account_type !== 'CASH') {
+      console.log(`⚠️ Account "Cash in Hand" found with type ${account.account_type}, expected CASH. Using existing.`);
+    }
     
-    const newAccountData = {
-      firm_id: firmId,
-      account_name: 'Cash in Hand',
-      account_type: 'CASH',
-      is_system: true,
-      is_active: true,
-      created_by: userId,
-      updated_by: userId,
-    };
-
-    const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
-    account = createdAccounts[0].toObject();
+    if (!account.is_active) {
+      console.log(`⚠️ Account "Cash in Hand" is inactive. Reactivating...`);
+      await ChartOfAccounts.updateOne(
+        { _id: account._id },
+        { $set: { is_active: true, updated_by: userId } },
+        { session }
+      );
+      account.is_active = true;
+    }
     
-    console.log(`✅ Created default cash account: Cash in Hand`);
+    return account;
   }
 
+  console.log(`⚠️ Default cash account not found. Creating "Cash in Hand"...`);
+  
+  const newAccountData = {
+    firm_id: firmId,
+    account_name: 'Cash in Hand',
+    account_type: 'CASH',
+    is_system: true,
+    is_active: true,
+    created_by: userId,
+    updated_by: userId,
+  };
+
+  const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+  account = createdAccounts[0].toObject();
+  
+  console.log(`✅ Created default cash account: Cash in Hand`);
   return account;
 }
 
