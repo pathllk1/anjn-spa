@@ -258,14 +258,14 @@ export async function createWagesBulk(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid month format. Use YYYY-MM' });
     }
 
-    // For batches of 20+, return error asking client to split into smaller batches
-    // This ensures Vercel timeout safety (20 records × ~200ms = ~4 seconds per request)
-    if (wages.length > 20) {
+    // For batches of 5+, return error asking client to split into smaller batches
+    // This ensures Vercel timeout safety (5 records × ~200ms = ~1 second per request)
+    if (wages.length > 5) {
       return res.status(400).json({
         success: false,
-        message: `Batch size too large. Maximum 20 records per request. Received ${wages.length}. Please split into multiple requests.`,
-        max_batch_size: 20,
-        required_batches: Math.ceil(wages.length / 20),
+        message: `Batch size too large. Maximum 5 records per request. Received ${wages.length}. Please split into multiple requests.`,
+        max_batch_size: 5,
+        required_batches: Math.ceil(wages.length / 5),
       });
     }
 

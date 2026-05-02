@@ -1,6 +1,6 @@
 /**
  * Batch Wage Submitter
- * Handles submitting wages in batches of 20 with progress tracking
+ * Handles submitting wages in batches of 5 with progress tracking
  */
 
 import { processBatchesSequentially } from './batchProcessor.js';
@@ -14,7 +14,7 @@ import { api } from './api.js';
  * @returns {Object} Final results
  */
 export async function submitWagesInBatches(month, wageRecords, progressModal) {
-  const BATCH_SIZE = 20;
+  const BATCH_SIZE = 5;
   const DELAY_BETWEEN_BATCHES = 800; // ms
 
   if (!wageRecords || wageRecords.length === 0) {
