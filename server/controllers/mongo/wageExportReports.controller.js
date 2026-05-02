@@ -152,7 +152,7 @@ export async function generateEPFESICReport(req, res) {
 
     // Fetch wages
     const wages = await Wage.find({ firm_id: firmId, salary_month: month, status: 'POSTED' })
-      .populate('master_roll_id', 'employee_name aadhar account_no')
+      .populate('master_roll_id', 'employee_name aadhar account_no project site date_of_joining date_of_exit')
       .sort({ 'master_roll_id.employee_name': 1 })
       .lean();
 
@@ -160,12 +160,21 @@ export async function generateEPFESICReport(req, res) {
       return res.status(400).json({ success: false, message: 'No wages found for the selected month' });
     }
 
+    // Calculate Previous Month for Exit Date logic
+    const [year, m] = month.split('-').map(Number);
+    const prevDate = new Date(year, m - 2, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('EPF-ESIC Report');
 
     worksheet.columns = [
       { header: 'S.No', key: 'sno', width: 8 },
       { header: 'Employee Name', key: 'name', width: 25 },
+      { header: 'Project', key: 'project', width: 20 },
+      { header: 'Site', key: 'site', width: 20 },
+      { header: 'Date of Joining', key: 'doj', width: 15 },
+      { header: 'Date of Exit', key: 'doe', width: 15 },
       { header: 'Aadhar', key: 'aadhar', width: 15 },
       { header: 'Account Number', key: 'acc', width: 20 },
       { header: 'Gross Salary', key: 'gross', width: 15 },
@@ -192,6 +201,11 @@ export async function generateEPFESICReport(req, res) {
       const epf = wage.epf_deduction || 0;
       const esic = wage.esic_deduction || 0;
       const gross = wage.gross_salary || 0;
+      const mr = wage.master_roll_id;
+
+      // Conditional Date Display Logic
+      const joiningDisplay = (mr?.date_of_joining && mr.date_of_joining.startsWith(month)) ? mr.date_of_joining : '';
+      const exitDisplay = (mr?.date_of_exit && mr.date_of_exit.startsWith(prevMonth)) ? mr.date_of_exit : '';
       
       // Calculate Employer Part
       // Employer EPF matches employee EPF (usually capped at 1800)
@@ -203,9 +217,13 @@ export async function generateEPFESICReport(req, res) {
 
       const row = worksheet.addRow({
         sno: index + 1,
-        name: wage.master_roll_id?.employee_name || 'N/A',
-        aadhar: wage.master_roll_id?.aadhar || '',
-        acc: wage.master_roll_id?.account_no || '',
+        name: mr?.employee_name || 'N/A',
+        project: mr?.project || '',
+        site: mr?.site || '',
+        doj: joiningDisplay,
+        doe: exitDisplay,
+        aadhar: mr?.aadhar || '',
+        acc: mr?.account_no || '',
         gross: gross,
         epf: epf,
         esic: esic,

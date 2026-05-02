@@ -46,6 +46,14 @@ export function renderReportMode({
 
   const totalEmployerPart = totals.employerEpf + totals.employerEsic;
 
+  // Calculate Previous Month for DOE logic
+  let prevMonth = '';
+  if (reportMonth) {
+    const [year, m] = reportMonth.split('-').map(Number);
+    const prevDate = new Date(year, m - 2, 1);
+    prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+  }
+
   return `
     <div class="flex flex-col h-full gap-4 p-4 bg-slate-50">
       <!-- FILTERS SECTION -->
@@ -164,6 +172,9 @@ export function renderReportMode({
             <thead class="sticky top-0 z-10">
               <tr class="bg-slate-900 border-b border-white/5">
                 <th class="px-4 py-3 text-left text-xs font-black text-slate-300 uppercase">Employee</th>
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-300 uppercase">Project / Site</th>
+                <th class="px-2 py-3 text-center text-[10px] font-black text-slate-300 uppercase">DOJ</th>
+                <th class="px-2 py-3 text-center text-[10px] font-black text-slate-300 uppercase">DOE</th>
                 <th class="px-4 py-3 text-center text-xs font-black text-slate-300 uppercase">Paid Date</th>
                 <th class="px-4 py-3 text-center text-xs font-black text-slate-300 uppercase">Mode</th>
                 <th class="px-4 py-3 text-right text-xs font-black text-slate-300 uppercase">Gross</th>
@@ -181,12 +192,23 @@ export function renderReportMode({
                 filteredWages.length > 0
                   ? filteredWages
                       .map(
-                        (wage) => `
+                        (wage) => {
+                          const mr = wage.master_roll_id;
+                          const joiningDisplay = (mr?.date_of_joining && mr.date_of_joining.startsWith(reportMonth)) ? mr.date_of_joining : '-';
+                          const exitDisplay = (mr?.date_of_exit && mr.date_of_exit.startsWith(prevMonth)) ? mr.date_of_exit : '-';
+
+                          return `
                     <tr class="hover:bg-slate-50 transition-colors">
                       <td class="px-4 py-3 text-sm font-bold text-slate-800">
-                        <div>${wage.master_roll_id?.employee_name || 'N/A'}</div>
-                        <div class="text-xs text-slate-500 font-mono">${wage.master_roll_id?.account_no || ''}</div>
+                        <div>${mr?.employee_name || 'N/A'}</div>
+                        <div class="text-xs text-slate-500 font-mono">${mr?.account_no || ''}</div>
                       </td>
+                      <td class="px-4 py-3 text-sm text-slate-600">
+                        <div class="font-bold">${mr?.project || 'General'}</div>
+                        <div class="text-[10px] font-black uppercase tracking-tighter opacity-60">${mr?.site || 'N/A'}</div>
+                      </td>
+                      <td class="px-2 py-3 text-center text-[10px] font-bold text-slate-500">${joiningDisplay}</td>
+                      <td class="px-2 py-3 text-center text-[10px] font-bold text-rose-500">${exitDisplay}</td>
                       <td class="px-4 py-3 text-center text-sm font-bold text-slate-700">${wage.paid_date || '-'}</td>
                       <td class="px-4 py-3 text-center">
                         <span class="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black rounded uppercase">
@@ -206,12 +228,13 @@ export function renderReportMode({
                         </button>
                       </td>
                     </tr>
-                  `
+                  `;
+                        }
                       )
                       .join('')
                   : `
                     <tr>
-                      <td colspan="11" class="px-4 py-8 text-center text-slate-500 font-bold">
+                      <td colspan="14" class="px-4 py-8 text-center text-slate-500 font-bold">
                         ${reportMonth ? 'No wages found for the selected filters' : 'Please select a month to view wages'}
                       </td>
                     </tr>
@@ -220,7 +243,7 @@ export function renderReportMode({
             </tbody>
             <tfoot class="bg-slate-50 border-t-2 border-slate-200">
               <tr>
-                <td colspan="3" class="px-4 py-3 text-right font-black text-slate-800 uppercase text-xs">Total:</td>
+                <td colspan="6" class="px-4 py-3 text-right font-black text-slate-800 uppercase text-xs">Total:</td>
                 <td class="px-4 py-3 text-right text-sm font-black text-slate-800 font-mono">₹${(totals.grossSalary).toLocaleString('en-IN')}</td>
                 <td class="px-4 py-3 text-right text-sm font-black text-amber-700 font-mono">₹${(totals.epfDeduction).toLocaleString('en-IN')}</td>
                 <td class="px-4 py-3 text-right text-sm font-black text-amber-700 font-mono">₹${(totals.esicDeduction).toLocaleString('en-IN')}</td>

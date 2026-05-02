@@ -152,7 +152,7 @@ export const createVoucher = async (req, res) => {
       return res.status(403).json({ error: 'Bank account does not belong to your firm or is inactive' });
     }
     bankAccountId = bankAccount._id;
-    bankAccountName = bankAccount.bank_name || bankAccount.account_name;
+    bankAccountName = `${bankAccount.bank_name} - ${bankAccount.account_number}`;
   }
 
   let voucherNo;

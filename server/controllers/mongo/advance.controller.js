@@ -110,22 +110,51 @@ export async function recordAdvance(req, res) {
   try {
     session.startTransaction();
 
-    const { masterRollId, amount, date, paymentMode, remarks, bankDetails } = req.body;
+    const { masterRollId, amount, date, paymentMode, remarks, bankDetails, bankAccountId, type } = req.body;
     const firmId = req.user.firm_id;
     const userId = req.user.id;
+    const finalType = type || 'ADVANCE';
 
     if (!masterRollId || !amount || !date) {
       await session.abortTransaction();
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
+    const numAmount = parseFloat(amount);
+
+    // If repayment, check against outstanding balance
+    if (finalType === 'REPAYMENT') {
+      const pipeline = [
+        { $match: { firm_id: new mongoose.Types.ObjectId(firmId), master_roll_id: new mongoose.Types.ObjectId(masterRollId) } },
+        {
+          $group: {
+            _id: '$master_roll_id',
+            balance: {
+              $sum: { $cond: [{ $eq: ['$type', 'ADVANCE'] }, '$amount', { $subtract: [0, '$amount'] }] }
+            }
+          }
+        }
+      ];
+      const balResult = await Advance.aggregate(pipeline).session(session);
+      const currentBalance = balResult.length > 0 ? balResult[0].balance : 0;
+
+      if (numAmount > currentBalance) {
+        await session.abortTransaction();
+        return res.status(400).json({ 
+          success: false, 
+          message: `Repayment (₹${numAmount}) exceeds outstanding balance (₹${currentBalance.toFixed(2)})` 
+        });
+      }
+    }
+
     const doc = new Advance({
       firm_id: firmId,
       master_roll_id: masterRollId,
-      type: 'ADVANCE',
-      amount: parseFloat(amount),
+      type: finalType,
+      amount: numAmount,
       date,
       payment_mode: paymentMode || 'CASH',
+      bank_account_id: bankAccountId,
       bank_account_details: bankDetails,
       remarks,
       created_by: userId,

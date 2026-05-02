@@ -56,7 +56,7 @@ const ledgerSchema = new Schema(
     },
     ref_type: {
       type: String,
-      enum: ['BILL', 'JOURNAL', 'VOUCHER', 'OPENING_BALANCE', 'MANUAL', 'WAGE'],
+      enum: ['BILL', 'JOURNAL', 'VOUCHER', 'OPENING_BALANCE', 'MANUAL', 'WAGE', 'ADVANCE'],
       default: null,
       index: true,
     },

@@ -3838,6 +3838,9 @@
   .text-emerald-800 {
     color: var(--color-emerald-800);
   }
+  .text-emerald-900 {
+    color: var(--color-emerald-900);
+  }
   .text-gray-100 {
     color: var(--color-gray-100);
   }
@@ -6628,9 +6631,9 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
-  .lg\:grid-cols-7 {
+  .lg\:grid-cols-8 {
     @media (width >= 64rem) {
-      grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-template-columns: repeat(8, minmax(0, 1fr));
     }
   }
   .lg\:flex-row {

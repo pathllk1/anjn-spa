@@ -37,6 +37,11 @@ const advanceSchema = new Schema(
     bank_account_details: {
       type: String,
     },
+    bank_account_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'BankAccount',
+      index: true,
+    },
     wage_id: {
       type: Schema.Types.ObjectId,
       ref: 'Wage',

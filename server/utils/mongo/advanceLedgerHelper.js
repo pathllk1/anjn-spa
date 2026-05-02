@@ -70,6 +70,74 @@ async function resolveAccountHead(firmId, accountName, accountType, userId, sess
 
 /**
  * Resolve bank account and get its ledger account head
+ * Automatically creates the bank ledger account if it doesn't exist
+ * @param {ObjectId} firmId
+ * @param {ObjectId} bankAccountId
+ * @param {ObjectId} userId - User ID for creation
+ * @param {Session} session - MongoDB session
+ */
+export async function resolveBankAccount(firmId, bankAccountId, userId, session = null) {
+  const { BankAccount, ChartOfAccounts } = await import('../../models/index.js');
+  
+  const bankAccount = await BankAccount.findOne({
+    _id: bankAccountId,
+    firm_id: firmId,
+    status: 'ACTIVE',
+  }).session(session).lean();
+
+  if (!bankAccount) {
+    throw new Error(`Bank account not found or inactive: ${bankAccountId}`);
+  }
+
+  // STANDARD CANONICAL NAME: Bank Name - Account Number
+  const accountHeadName = `${bankAccount.bank_name} - ${bankAccount.account_number}`;
+
+  // Try to find or create the account head
+  let account = await ChartOfAccounts.findOne({
+    firm_id: firmId,
+    account_name: accountHeadName,
+  }).session(session).lean();
+
+  if (account) {
+    if (account.account_type !== 'BANK') {
+      console.log(`⚠️ Account "${accountHeadName}" found with type ${account.account_type}, expected BANK. Using existing.`);
+    }
+    
+    if (!account.is_active) {
+      console.log(`⚠️ Account "${accountHeadName}" is inactive. Reactivating...`);
+      await ChartOfAccounts.updateOne(
+        { _id: account._id },
+        { $set: { is_active: true, updated_by: userId } },
+        { session }
+      );
+      account.is_active = true;
+    }
+    
+    return account;
+  }
+
+  console.log(`⚠️ Bank ledger account not found: ${accountHeadName}. Creating auto...`);
+  
+  const newAccountData = {
+    firm_id: firmId,
+    account_name: accountHeadName,
+    account_type: 'BANK',
+    is_system: true,
+    is_active: true,
+    created_by: userId,
+    updated_by: userId,
+  };
+
+  const createdAccounts = await ChartOfAccounts.create([newAccountData], { session });
+  account = createdAccounts[0].toObject();
+  
+  console.log(`✅ Created auto bank ledger account: ${accountHeadName}`);
+  return account;
+}
+
+/**
+ * Resolve bank account and get its ledger account head from a label
+ * (Legacy/Fallback for cases where ID is missing)
  * @param {ObjectId} firmId
  * @param {string} bankLabel - "Bank Name • Account Number"
  * @param {ObjectId} userId - User ID for creation
@@ -201,8 +269,16 @@ export async function postAdvanceLedger(advance, session) {
     const advanceAccount = await resolveAccountHead(firmId, 'Advance to Employees', 'ASSET', userId, session);
     let paymentAccount;
 
-    if (advance.payment_mode === 'BANK' && advance.bank_account_details) {
-      paymentAccount = await resolveBankAccountFromLabel(firmId, advance.bank_account_details, userId, session);
+    if (advance.payment_mode === 'BANK') {
+      if (advance.bank_account_id) {
+        // Preferred: Resolve using bank_account_id
+        paymentAccount = await resolveBankAccount(firmId, advance.bank_account_id, userId, session);
+      } else if (advance.bank_account_details) {
+        // Fallback: Resolve using string label (Legacy)
+        paymentAccount = await resolveBankAccountFromLabel(firmId, advance.bank_account_details, userId, session);
+      } else {
+        paymentAccount = await getDefaultCashAccount(firmId, userId, session);
+      }
     } else {
       paymentAccount = await getDefaultCashAccount(firmId, userId, session);
     }

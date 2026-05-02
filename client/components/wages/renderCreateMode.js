@@ -1,3 +1,5 @@
+import { getBankAccountOptionLabel } from '../../utils/bankAccounts.js';
+
 export function renderCreateMode(ctx) {
   const {
     selectedMonth,
@@ -25,15 +27,6 @@ export function renderCreateMode(ctx) {
   const uniqueBanks = getUniqueValues(employees, 'bank');
   const uniqueProjects = getUniqueValues(employees, 'project');
   const uniqueSites = getUniqueValues(employees, 'site');
-
-  function getBankAccountOptionLabel(account) {
-    const parts = [
-      account.account_name || account.bank_name || 'Bank Account',
-      account.bank_name || null,
-      account.account_number ? `A/C ${account.account_number}` : null,
-    ].filter(Boolean);
-    return parts.join(' • ');
-  }
 
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   

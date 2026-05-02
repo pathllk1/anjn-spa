@@ -7,12 +7,14 @@ export async function fetchBankAccounts(activeOnly = false) {
 }
 
 export function getBankAccountOptionLabel(account) {
-  const parts = [
-    account.account_name || account.bank_name || 'Bank Account',
-    account.bank_name || null,
-    account.account_number ? `A/C ${account.account_number}` : null,
-  ].filter(Boolean);
-  return parts.join(' • ');
+  if (!account) return 'Bank Account';
+  
+  // STRICT CANONICAL FORMAT: Bank Name - Account Number
+  // This must match the server-side resolution logic in ledger helpers
+  const bank = account.bank_name || 'Bank';
+  const acct = account.account_number || '0000';
+  
+  return `${bank} - ${acct}`;
 }
 
 export function populateBankAccountSelect(selectEl, accounts, selectedId = '') {

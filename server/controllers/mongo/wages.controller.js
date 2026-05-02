@@ -204,7 +204,7 @@ export async function getExistingWagesForMonth(req, res) {
 
     // Fetch master roll data
     const masterRolls = await MasterRoll.find({ _id: { $in: masterRollIds } })
-      .select('employee_name aadhar bank account_no project site')
+      .select('employee_name aadhar bank account_no project site date_of_joining date_of_exit')
       .lean();
 
     // Create lookup map

@@ -10,6 +10,7 @@ import { saveWageSession, loadWageSession, clearWageSession, hasValidWageSession
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { renderLayout } from '../components/layout.js';
 import { api, fetchWithCSRF } from '../utils/api.js';
+import { getBankAccountOptionLabel } from '../utils/bankAccounts.js';
 
 export async function renderWagesDashboard(router) {
   const canAccess = await requireAuth(router);
@@ -137,16 +138,6 @@ export async function renderWagesDashboard(router) {
   /* --------------------------------------------------
      UTILITY FUNCTIONS
   -------------------------------------------------- */
-
-  function getBankAccountOptionLabel(account) {
-    if (!account) return '';
-    const parts = [
-      account.account_name || account.bank_name || 'Bank Account',
-      account.bank_name || null,
-      account.account_number ? `A/C ${account.account_number}` : null,
-    ].filter(Boolean);
-    return parts.join(' • ');
-  }
 
   function getSelectedBankAccountId(bankLabel) {
     if (!bankLabel) return null;

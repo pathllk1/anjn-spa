@@ -1,4 +1,5 @@
 import { api, fetchWithCSRF } from '../../utils/api.js';
+import { getBankAccountOptionLabel } from '../../utils/bankAccounts.js';
 
 export function createAdvanceModal() {
   let modalRoot = null;
@@ -50,15 +51,6 @@ export function createAdvanceModal() {
     });
     
     renderEmployeeList();
-  }
-
-  function getBankAccountOptionLabel(account) {
-    const parts = [
-      account.account_name || account.bank_name || 'Bank Account',
-      account.bank_name || null,
-      account.account_number ? `A/C ${account.account_number}` : null,
-    ].filter(Boolean);
-    return parts.join(' • ');
   }
 
   function render() {
@@ -137,20 +129,29 @@ export function createAdvanceModal() {
                    <!-- RIGHT: DISBURSEMENT CONSOLE (MAX SPACE & COMPACT) -->
                    <div class="flex-1 flex flex-col bg-white overflow-y-auto p-8 custom-scrollbar">
                       
-                      <div class="mb-6">
-                         <div class="flex items-center gap-2 mb-1">
-                           <div class="w-1 h-4 bg-slate-900 rounded-full"></div>
-                           <h5 class="text-[11px] font-black text-slate-900 uppercase tracking-widest">Disbursement Console</h5>
+                      <div class="mb-6 flex justify-between items-start">
+                         <div>
+                            <div class="flex items-center gap-2 mb-1">
+                              <div class="w-1 h-4 bg-slate-900 rounded-full"></div>
+                              <h5 id="console-title" class="text-[11px] font-black text-slate-900 uppercase tracking-widest">Disbursement Console</h5>
+                            </div>
+                            <p id="console-subtitle" class="text-[9px] text-slate-400 font-bold uppercase">Record new cash or bank advance</p>
                          </div>
-                         <p class="text-[9px] text-slate-400 font-bold uppercase">Record new cash or bank advance</p>
+
+                         <!-- TRANSACTION TYPE TOGGLE -->
+                         <div class="flex p-1 bg-slate-100 rounded-xl">
+                            <button type="button" data-type="ADVANCE" class="adv-type-btn px-3 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all bg-white text-slate-900 shadow-sm">Disburse</button>
+                            <button type="button" data-type="REPAYMENT" class="adv-type-btn px-3 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all text-slate-500">Repay</button>
+                         </div>
                       </div>
                       
                       <form id="advance-form" class="space-y-4">
+                        <input type="hidden" id="adv-type" value="ADVANCE" />
                         
                         <!-- AMOUNT & DATE (CLEAN & COMPACT) -->
                         <div class="grid grid-cols-2 gap-4">
                           <div class="space-y-1.5">
-                            <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Advance Amount</label>
+                            <label id="label-amount" class="block text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Advance Amount</label>
                             <div class="relative group">
                               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">₹</span>
                               <input type="number" id="adv-amount" required step="0.01" min="1" placeholder="0.00" 
@@ -159,7 +160,7 @@ export function createAdvanceModal() {
                           </div>
                           
                           <div class="space-y-1.5">
-                            <label class="block text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Disbursement Date</label>
+                            <label id="label-date" class="block text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Disbursement Date</label>
                             <input type="date" id="adv-date" required 
                               class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:bg-white transition-all" />
                           </div>
@@ -303,6 +304,44 @@ export function createAdvanceModal() {
       applyFilters();
     };
 
+    // Transaction Type Toggle
+    const typeButtons = modalRoot.querySelectorAll('.adv-type-btn');
+    const typeInput = modalRoot.querySelector('#adv-type');
+    const consoleTitle = modalRoot.querySelector('#console-title');
+    const consoleSubtitle = modalRoot.querySelector('#console-subtitle');
+    const labelAmount = modalRoot.querySelector('#label-amount');
+    const labelDate = modalRoot.querySelector('#label-date');
+    const saveBtn = modalRoot.querySelector('#save-advance-btn');
+
+    typeButtons.forEach(btn => {
+      btn.onclick = () => {
+        const type = btn.dataset.type;
+        typeInput.value = type;
+
+        // UI Updates
+        typeButtons.forEach(b => {
+          b.classList.remove('bg-white', 'text-slate-900', 'text-rose-600', 'shadow-sm');
+          b.classList.add('text-slate-500');
+        });
+
+        if (type === 'ADVANCE') {
+          btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+          consoleTitle.innerText = 'Disbursement Console';
+          consoleSubtitle.innerText = 'Record new cash or bank advance';
+          labelAmount.innerText = 'Advance Amount';
+          labelDate.innerText = 'Disbursement Date';
+          saveBtn.innerText = 'Confirm Disbursement';
+        } else {
+          btn.classList.add('bg-white', 'text-rose-600', 'shadow-sm');
+          consoleTitle.innerText = 'Repayment Console';
+          consoleSubtitle.innerText = 'Record manual advance repayment';
+          labelAmount.innerText = 'Repayment Amount';
+          labelDate.innerText = 'Repayment Date';
+          saveBtn.innerText = 'Confirm Repayment';
+        }
+      };
+    });
+
     const modeRadios = modalRoot.querySelectorAll('input[name="payment-mode"]');
     const bankDetails = modalRoot.querySelector('#adv-bank-details-container');
     modeRadios.forEach(radio => {
@@ -317,6 +356,7 @@ export function createAdvanceModal() {
       if (!selectedEmployeeId) return;
 
       const mode = modalRoot.querySelector('input[name="payment-mode"]:checked').value;
+      const type = typeInput.value;
       const bankVal = document.getElementById('adv-bank-select').value;
       
       const btn = document.getElementById('save-advance-btn');
@@ -331,14 +371,18 @@ export function createAdvanceModal() {
       
       errContainer.classList.add('hidden');
       btn.disabled = true;
+      const originalText = btn.innerText;
       btn.innerText = 'PROCESSING...';
 
       try {
+        const selectedBank = firmBankAccounts.find(a => getBankAccountOptionLabel(a) === bankVal);
         const payload = {
           masterRollId: selectedEmployeeId,
           amount: document.getElementById('adv-amount').value,
           date: document.getElementById('adv-date').value,
           paymentMode: mode,
+          type: type,
+          bankAccountId: selectedBank ? selectedBank._id : null,
           bankDetails: mode === 'BANK' ? bankVal : '',
           remarks: document.getElementById('adv-remarks').value
         };
@@ -363,7 +407,7 @@ export function createAdvanceModal() {
         errContainer.classList.remove('hidden');
       } finally {
         btn.disabled = false;
-        btn.innerText = 'CONFIRM DISBURSEMENT';
+        btn.innerText = originalText;
       }
     };
   }
