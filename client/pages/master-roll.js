@@ -4,6 +4,7 @@ import { api, fetchWithCSRF } from '../utils/api.js';
 import { downloadAppointmentLetter } from '../utils/appointmentLetterGenerator.js';
 import { BulkEditModal } from '../components/master-roll-bulk-edit-modal.js';
 import { IcardExportModal } from '../components/icard-export-modal.js';
+import { DataQualityModal } from '../components/admin/dataQualityModal.js';
 
 export async function renderMasterRoll(router) {
   // Check authentication
@@ -115,6 +116,10 @@ function getMasterRollHTML() {
       <button id="bulk-edit-btn" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center gap-2 text-sm font-bold">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
         Bulk Update
+      </button>
+
+      <button id="data-quality-btn" class="bg-white hover:bg-gray-50 text-gray-700 px-2.5 py-2 rounded-xl shadow-sm transition duration-200 flex items-center justify-center text-sm font-medium border border-gray-300" title="Data Quality Report">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       </button>
 
       <button id="open-modal-btn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-3.5 py-2 rounded-xl shadow-lg transition duration-200 flex items-center gap-2 text-sm font-semibold">
@@ -475,6 +480,22 @@ function initMasterRollScripts() {
   if (icardsBtn) {
     icardsBtn.onclick = () => icardModal.open();
   }
+
+  // Initialize Data Quality Modal
+  const dataQualityModal = new DataQualityModal((id) => masterRollManager.openEditModal(id));
+  const dataQualityBtn = document.getElementById('data-quality-btn');
+  if (dataQualityBtn) {
+    dataQualityBtn.onclick = () => dataQualityModal.open(masterRollManager.masterRolls);
+  }
+  
+  // Update data quality modal when master rolls are fetched if it's open
+  const originalFetch = masterRollManager.fetchMasterRolls.bind(masterRollManager);
+  masterRollManager.fetchMasterRolls = async function() {
+    await originalFetch();
+    if (dataQualityModal.isOpen && dataQualityModal.isOpen()) {
+      dataQualityModal.init(this.masterRolls);
+    }
+  };
 }
 
 class MasterRollManager {
@@ -1617,26 +1638,7 @@ class MasterRollManager {
 
       // Edit button handlers
       document.querySelectorAll(".edit-btn").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const id = btn.dataset.id;
-          const row = this.masterRolls.find(r => r.id == id);
-          if (!row) return;
-          for (const key in row) {
-            const input = this.elements.form.querySelector(`[name=${key}]`);
-            if (input) input.value = row[key] ?? "";
-          }
-          this.editingId = id;
-          this.elements.modalTitle.textContent = "Edit Employee";
-          this.elements.generateLetterBtn.disabled = false;
-          
-          // Show wages history section
-          document.getElementById("wages-history-section").classList.remove("hidden");
-          
-          // Fetch and display wages history
-          await this.loadWagesHistory(id);
-          
-          this.elements.modal.classList.remove("hidden");
-        });
+        btn.addEventListener("click", () => this.openEditModal(btn.dataset.id));
       });
 
       // Delete button handlers
@@ -1647,6 +1649,31 @@ class MasterRollManager {
 
     this.renderPagination();
     this.updateStats();
+  }
+
+  async openEditModal(id) {
+    const row = this.masterRolls.find(r => r.id == id);
+    if (!row) return;
+    
+    // Clear and populate form
+    this.elements.form.reset();
+    for (const key in row) {
+      const input = this.elements.form.querySelector(`[name=${key}]`);
+      if (input) input.value = row[key] ?? "";
+    }
+    
+    this.editingId = id;
+    this.elements.modalTitle.textContent = "Edit Employee";
+    this.elements.generateLetterBtn.disabled = false;
+    
+    // Show wages history section
+    const wagesSection = document.getElementById("wages-history-section");
+    if (wagesSection) wagesSection.classList.remove("hidden");
+    
+    // Fetch and display wages history
+    await this.loadWagesHistory(id);
+    
+    this.elements.modal.classList.remove("hidden");
   }
 
   openModal() {

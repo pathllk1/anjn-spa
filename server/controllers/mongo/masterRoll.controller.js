@@ -658,6 +658,180 @@ export const exportMasterRolls = async (req, res) => {
   }
 };
 
+export const exportDataQualityReport = async (req, res) => {
+  try {
+    const { firm_id } = req.user;
+    // Filter: Only process ACTIVE employees for data quality audit
+    const employees = await MasterRoll.find({ firm_id, status: 'Active' }).lean();
+    
+    if (!employees.length) {
+      return res.status(404).json({ success: false, error: 'No active employees found for report' });
+    }
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Enterprise System';
+    wb.lastModifiedBy = 'Data Quality Engine';
+    wb.created = new Date();
+
+    const borderStyle = {
+      top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+      left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+      bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+      right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
+    };
+
+    // 1. DATA VALIDATION LOGIC
+    const missingFieldsList = ['phone_no', 'pan', 'aadhar', 'uan', 'project', 'site'];
+    const missingData = [];
+    const invalidData = [];
+    
+    employees.forEach(emp => {
+      // Check Missing
+      const missing = missingFieldsList.filter(f => !emp[f] || emp[f].toString().trim() === '');
+      if (missing.length) {
+        missingData.push({
+          name: emp.employee_name || 'Unnamed',
+          fields: missing.map(f => f.toUpperCase().replace('_', ' ')).join(', '),
+          count: missing.length,
+          project: emp.project || 'N/A',
+          site: emp.site || 'N/A'
+        });
+      }
+
+      // Check Invalid
+      const checks = [
+        { key: 'phone_no', label: 'Phone', regex: /^\d{10}$/, req: '10 digits' },
+        { key: 'aadhar', label: 'Aadhar', regex: /^\d{12}$/, req: '12 digits' },
+        { key: 'pan', label: 'PAN', regex: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, req: 'Format (ABCDE1234F)' },
+        { key: 'uan', label: 'UAN', regex: /^\d{12}$/, req: '12 digits' }
+      ];
+
+      checks.forEach(check => {
+        const val = emp[check.key]?.toString().trim() || '';
+        if (val === '') return;
+
+        let hasIssue = false;
+        let issueType = '';
+
+        if (!check.regex.test(val)) {
+          hasIssue = true;
+          issueType = `Invalid Format (Req: ${check.req})`;
+        } else if (check.key === 'phone_no') {
+          const allSame = /^(\d)\1{9}$/.test(val);
+          const sequential = '0123456789876543210'.includes(val);
+          if (allSame || sequential) {
+            hasIssue = true;
+            issueType = 'Fake/Pattern Number Detected';
+          }
+        }
+
+        if (hasIssue) {
+          invalidData.push({
+            name: emp.employee_name || 'Unnamed',
+            project: emp.project || 'N/A',
+            site: emp.site || 'N/A',
+            field: check.label,
+            value: val,
+            issue: issueType
+          });
+        }
+      });
+    });
+
+    // Helper to style only used cells in a row (prevents infinite background color)
+    const styleRowCells = (row, colCount, style) => {
+      for (let i = 1; i <= colCount; i++) {
+        const cell = row.getCell(i);
+        if (style.fill) cell.fill = style.fill;
+        if (style.font) cell.font = style.font;
+        if (style.alignment) cell.alignment = style.alignment;
+        cell.border = borderStyle;
+      }
+    };
+
+    // 2. WORKSHEET: SUMMARY
+    const wsSum = wb.addWorksheet('Quality Summary');
+    wsSum.columns = [{ width: 35 }, { width: 15 }];
+    
+    const titleRow = wsSum.addRow(['DATA QUALITY SUMMARY REPORT']);
+    titleRow.getCell(1).font = { size: 16, bold: true };
+    wsSum.addRow(['Generated on: ' + new Date().toLocaleString()]);
+    wsSum.addRow([]);
+
+    const summaryItems = [
+      ['Total Employees', employees.length, 'FF1F4E78'],
+      ['Complete Records', employees.length - new Set([...missingData.map(d => d.name), ...invalidData.map(d => d.name)]).size, 'FF059669'],
+      ['Records with Missing Fields', missingData.length, 'FFD97706'],
+      ['Records with Format Issues', new Set(invalidData.map(d => d.name)).size, 'FFDC2626']
+    ];
+
+    summaryItems.forEach(item => {
+      const row = wsSum.addRow([item[0], item[1]]);
+      row.getCell(1).font = { bold: true };
+      row.getCell(1).border = borderStyle;
+      
+      const valCell = row.getCell(2);
+      valCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: item[2] } };
+      valCell.alignment = { horizontal: 'center' };
+      valCell.border = borderStyle;
+    });
+
+    // 3. WORKSHEET: MISSING DATA
+    const wsMiss = wb.addWorksheet('Missing Data');
+    wsMiss.columns = [
+      { width: 30 }, // Name
+      { width: 20 }, // Project
+      { width: 20 }, // Site
+      { width: 40 }, // Missing Fields
+      { width: 10 }  // Count
+    ];
+    
+    const headerMiss = wsMiss.addRow(['Employee Name', 'Project', 'Site', 'Missing Fields', 'Count']);
+    styleRowCells(headerMiss, 5, {
+      font: { bold: true, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD97706' } }
+    });
+
+    missingData.forEach(d => {
+      const r = wsMiss.addRow([d.name, d.project, d.site, d.fields, d.count]);
+      r.eachCell(c => c.border = borderStyle);
+    });
+
+    // 4. WORKSHEET: INVALID DATA
+    const wsInv = wb.addWorksheet('Format Issues');
+    wsInv.columns = [
+      { width: 30 }, // Name
+      { width: 20 }, // Project
+      { width: 20 }, // Site
+      { width: 15 }, // Field
+      { width: 20 }, // Value
+      { width: 40 }  // Issue
+    ];
+    
+    const headerInv = wsInv.addRow(['Employee Name', 'Project', 'Site', 'Field', 'Value', 'Detected Issue']);
+    styleRowCells(headerInv, 6, {
+      font: { bold: true, color: { argb: 'FFFFFFFF' } },
+      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }
+    });
+
+    invalidData.forEach(d => {
+      const r = wsInv.addRow([d.name, d.project, d.site, d.field, d.value, d.issue]);
+      r.getCell(5).font = { name: 'Courier New', color: { argb: 'FFDC2626' } };
+      r.eachCell(c => c.border = borderStyle);
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=DataQualityReport.xlsx`);
+    res.send(buffer);
+
+  } catch (err) {
+    console.error('Data quality export error:', err);
+    res.status(500).json({ success: false, error: 'Failed to generate report' });
+  }
+};
+
 /* ── EXPORT I-CARDS ─────────────────────────────────────────────────────── */
 
 export const exportICards = async (req, res) => {
