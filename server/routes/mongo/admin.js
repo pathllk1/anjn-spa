@@ -141,6 +141,28 @@ router.get("/users-with-firms", authenticateJWT, requireRole(["super_admin", "ad
 router.post("/users", authenticateJWT, requireRole("admin"), firmManagementController.createUser);
 router.put("/users/:id", authenticateJWT, requireRole("admin"), firmManagementController.updateUser);
 
+// Get current user's firm (accessible to all authenticated users)
+router.get("/my-firm", authenticateJWT, async (req, res) => {
+  try {
+    const { firm_id } = req.user;
+    
+    if (!firm_id) {
+      return res.status(400).json({ success: false, error: 'User not associated with a firm' });
+    }
+
+    const firm = await Firm.findById(firm_id).lean();
+    
+    if (!firm) {
+      return res.status(404).json({ success: false, error: 'Firm not found' });
+    }
+
+    res.json({ success: true, data: firm });
+  } catch (err) {
+    console.error('Error fetching user firm:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Super Admin Routes
 router.get('/super-admin/stats', authenticateJWT, requireRole('super_admin'), superAdminController.getSuperAdminStats);
 router.get('/super-admin/users', authenticateJWT, requireRole('super_admin'), superAdminController.getAllUsersForAdmin);

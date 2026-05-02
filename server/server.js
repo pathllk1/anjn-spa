@@ -19,6 +19,7 @@ import settingsRoutes                           from './routes/mongo/settings.ro
 import inventorySalesRoutes                     from './routes/mongo/inventory/sls.js';
 import inventoryPurchaseRoutes                  from './routes/mongo/inventory/prs.js';
 import ledgerRoutes                             from './routes/mongo/ledger.routes.js';
+import gstr1Routes                              from './routes/mongo/gst/gstr1.routes.js';
 import adminRoutes                              from './routes/mongo/admin.js';
 import databaseRoutes                           from './routes/mongo/database.routes.js';
 import toolsRoutes                              from './routes/mongo/toolsRoutes.js';
@@ -106,6 +107,7 @@ app.use('/api/settings',        settingsRoutes);
 app.use('/api/inventory/sales', inventorySalesRoutes);
 app.use('/api/inventory/purchase', inventoryPurchaseRoutes);
 app.use('/api/ledger',          ledgerRoutes);
+app.use('/api/gst/gstr1',       gstr1Routes);
 app.use('/api/admin',           adminRoutes);
 app.use('/api/admin/database',  databaseRoutes);
 app.use('/api/tools',           toolsRoutes);
