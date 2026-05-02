@@ -1040,59 +1040,46 @@ class MasterRollManager {
     this.exportToExcel(selected, `MasterRoll_Selected_${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
-  exportToExcel(data, filename) {
+  async exportToExcel(data, filename) {
     if (data.length === 0) {
       this.showToast("No data to export", "error");
       return;
     }
 
-    const XLSX = window.XLSX;
-    if (!XLSX) {
-      this.showToast("Excel library not loaded", "error");
-      return;
-    }
-
-    const wb = XLSX.utils.book_new();
-    const ws_data = [
-      this.allColumns.map(col => col.label),
-      ...data.map(r => this.allColumns.map(col => r[col.key] ?? ''))
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(ws_data);
-
-    const colWidths = ws_data[0].map((_, i) => ({
-      wch: Math.max(...ws_data.map(row => String(row[i] || "").length)) + 2
-    }));
-    ws['!cols'] = colWidths;
-
-    // Add styling: header color and borders
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    
-    // Style header row (bold, gold background)
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const cell_ref = XLSX.utils.encode_cell({ c: C, r: 0 });
-      if (ws[cell_ref]) {
-        ws[cell_ref].s = {
-          font: { bold: true },
-          fill: { fgColor: { rgb: "FFD700" } }, // Gold color
-          border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } }
-        };
-      }
-    }
-    
-    // Add borders to all cells
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cell_ref = XLSX.utils.encode_cell({ c: C, r: R });
-        if (ws[cell_ref]) {
-          if (!ws[cell_ref].s) ws[cell_ref].s = {};
-          ws[cell_ref].s.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+    try {
+      // Get selected IDs if exporting selected rows
+      const selectedIds = data.map(r => r.id).join(',');
+      
+      // Call server endpoint for Excel export
+      const response = await fetch(`/api/master-rolls/export?format=xlsx&selectedIds=${selectedIds}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
-      }
-    }
+      });
 
-    XLSX.utils.book_append_sheet(wb, ws, "Master Roll");
-    XLSX.writeFile(wb, filename);
-    this.showToast(`Excel file exported successfully! (${data.length} records)`);
+      if (!response.ok) {
+        const error = await response.json();
+        this.showToast(error.message || "Export failed", "error");
+        return;
+      }
+
+      // Get the blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      this.showToast(`Excel file exported successfully! (${data.length} records)`);
+    } catch (err) {
+      console.error('Export error:', err);
+      this.showToast("Export failed: " + err.message, "error");
+    }
   }
 
   async downloadTemplateFromAPI() {

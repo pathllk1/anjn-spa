@@ -490,17 +490,50 @@ export const exportMasterRolls = async (req, res) => {
     const { firm_id } = req.user;
     const rows = await MasterRoll.find({ firm_id }).sort({ createdAt: -1 }).lean();
     const format = req.query.format ?? 'json';
+    const selectedIds = req.query.selectedIds ? req.query.selectedIds.split(',') : null;
+
+    // Filter to selected rows if provided
+    let dataToExport = rows;
+    if (selectedIds && selectedIds.length > 0) {
+      dataToExport = rows.filter(row => selectedIds.includes(row._id.toString()));
+    }
+
+    if (dataToExport.length === 0) {
+      return res.status(404).json({ success: false, message: 'No data to export' });
+    }
+
+    // Column definitions matching client-side
+    const columns = [
+      { key: 'employee_name', label: 'Employee Name' },
+      { key: 'status', label: 'Status' },
+      { key: 'father_husband_name', label: 'Father/Husband' },
+      { key: 'aadhar', label: 'Aadhar' },
+      { key: 'pan', label: 'PAN' },
+      { key: 'phone_no', label: 'Phone' },
+      { key: 'address', label: 'Address' },
+      { key: 'bank', label: 'Bank' },
+      { key: 'account_no', label: 'Account No' },
+      { key: 'ifsc', label: 'IFSC' },
+      { key: 'uan', label: 'UAN' },
+      { key: 'esic_no', label: 'ESIC No' },
+      { key: 's_kalyan_no', label: 'S Kalyan No' },
+      { key: 'category', label: 'Category' },
+      { key: 'p_day_wage', label: 'Daily Wage' },
+      { key: 'project', label: 'Project' },
+      { key: 'site', label: 'Site' },
+      { key: 'date_of_birth', label: 'DOB' },
+      { key: 'date_of_joining', label: 'Joining Date' },
+      { key: 'date_of_exit', label: 'Exit Date' },
+      { key: 'doe_rem', label: 'Remarks' }
+    ];
 
     if (format === 'csv') {
-      if (rows.length === 0) {
-        return res.status(404).json({ success: false, message: 'No data to export' });
-      }
-
-      const headers = Object.keys(rows[0]).join(',');
-      const csvRows = rows.map(row =>
-        Object.values(row).map(val =>
-          typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-        ).join(',')
+      const headers = columns.map(col => col.label).join(',');
+      const csvRows = dataToExport.map(row =>
+        columns.map(col => {
+          const val = row[col.key] ?? '';
+          return typeof val === 'string' && val.includes(',') ? `"${val}"` : val;
+        }).join(',')
       );
 
       res.setHeader('Content-Type', 'text/csv');
@@ -508,7 +541,118 @@ export const exportMasterRolls = async (req, res) => {
       return res.send([headers, ...csvRows].join('\n'));
     }
 
-    res.json({ success: true, count: rows.length, data: rows });
+    if (format === 'xlsx') {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Master Roll');
+
+      // Add header row with Sl No column first
+      const headerLabels = ['Sl No', ...columns.map(col => col.label)];
+      ws.addRow(headerLabels);
+      const headerRow = ws.getRow(1);
+
+      // Style header row: bold, blue background, white text, centered, borders
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E78' } }; // Dark blue
+      headerRow.alignment = { horizontal: 'center', vertical: 'center', wrapText: false };
+
+      // Add borders to header
+      headerRow.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } }
+        };
+      });
+
+      // Add data rows with alternating colors and borders
+      dataToExport.forEach((row, idx) => {
+        const rowData = [idx + 1, ...columns.map(col => row[col.key] ?? '')]; // Add serial number
+        const excelRow = ws.addRow(rowData);
+
+        // Alternating row colors (white and light blue)
+        const bgColor = idx % 2 === 0 ? 'FFFFFFFF' : 'FFE7F0F7'; // Light blue for alternating rows
+        excelRow.eachCell((cell, colNum) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+            bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+            left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+            right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
+          };
+
+          // Status column (column 3: Sl No=1, Status=2, so index 2) - add color formatting
+          if (colNum === 3) { // Status is the 3rd column (after Sl No and Employee Name)
+            const status = cell.value;
+            if (status === 'Active') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } }; // Light green
+              cell.font = { color: { argb: 'FF006100' } }; // Dark green text
+            } else if (status === 'Inactive') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } }; // Light red
+              cell.font = { color: { argb: 'FF9C0006' } }; // Dark red text
+            } else if (status && status.toLowerCase() === 'left') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEB9C' } }; // Light yellow/orange
+              cell.font = { color: { argb: 'FF9C6500' } }; // Dark orange text
+            }
+          }
+
+          // Determine which columns need wrapping (Address, Remarks)
+          const wrapColumns = ['Address', 'Remarks', 'Father/Husband'];
+          const columnLabel = headerLabels[colNum - 1];
+          const shouldWrap = wrapColumns.includes(columnLabel);
+
+          // All cells aligned to top for consistency
+          cell.alignment = {
+            horizontal: 'left',
+            vertical: 'top',
+            wrapText: shouldWrap
+          };
+        });
+      });
+
+      // Set column widths - Sl No first, then others
+      const columnWidths = [
+        8,  // Sl No
+        20, // Employee Name
+        12, // Status
+        20, // Father/Husband
+        15, // Aadhar
+        12, // PAN
+        15, // Phone
+        30, // Address (wider for wrapping)
+        15, // Bank
+        18, // Account No
+        15, // IFSC (increased width)
+        12, // UAN
+        12, // ESIC No
+        15, // S Kalyan No
+        15, // Category
+        12, // Daily Wage
+        15, // Project
+        15, // Site
+        12, // DOB
+        15, // Joining Date
+        12, // Exit Date
+        25  // Remarks (wider for wrapping)
+      ];
+      ws.columns.forEach((col, idx) => {
+        col.width = columnWidths[idx] || 15;
+      });
+
+      // Set row height for header
+      headerRow.height = 25;
+
+      // Freeze header row
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+      // Generate buffer and send
+      const buffer = await wb.xlsx.writeBuffer();
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=master_rolls.xlsx');
+      return res.send(buffer);
+    }
+
+    res.json({ success: true, count: dataToExport.length, data: dataToExport });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
