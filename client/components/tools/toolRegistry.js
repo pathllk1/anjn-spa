@@ -5,6 +5,7 @@ import { createStopwatchToolModal } from './stopwatchToolModal.js';
 import { createUnitConverterToolModal } from './unitConverterToolModal.js';
 import { createTextStudioToolModal } from './textStudioToolModal.js';
 import { createSettingsToolModal } from './settingsToolModal.js';
+import { createWeatherToolModal } from './weatherToolModal.js';
 
 const TOOL_DEFINITIONS = [
   createCalendarToolModal(),
@@ -14,6 +15,7 @@ const TOOL_DEFINITIONS = [
   createUnitConverterToolModal(),
   createTextStudioToolModal(),
   createSettingsToolModal(),
+  createWeatherToolModal(),
 ];
 
 let toolRegistryState = null;
