@@ -7,12 +7,12 @@
 /**
  * Process array in batches with delay between batches
  * @param {Array} items - Items to process
- * @param {Number} batchSize - Number of items per batch (default: 20)
+ * @param {Number} batchSize - Number of items per batch (default: 5)
  * @param {Function} processBatch - Async function to process each batch
  * @param {Object} options - Configuration options
  * @returns {Object} Results with success/failure counts and details
  */
-export async function processBatchesSequentially(items, batchSize = 20, processBatch, options = {}) {
+export async function processBatchesSequentially(items, batchSize = 5, processBatch, options = {}) {
   const {
     delayBetweenBatches = 800,  // ms delay between batches
     onProgress = null,           // Callback: (current, total, batchNumber)
@@ -123,7 +123,7 @@ export async function processBatchesSequentially(items, batchSize = 20, processB
  * @param {Number} chunkSize - Size of each chunk
  * @returns {Array} Array of chunks
  */
-export function splitIntoChunks(array, chunkSize = 20) {
+export function splitIntoChunks(array, chunkSize = 5) {
   const chunks = [];
   for (let i = 0; i < array.length; i += chunkSize) {
     chunks.push(array.slice(i, i + chunkSize));

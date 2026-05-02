@@ -8,7 +8,7 @@
 import { Wage, MasterRoll, Advance, WageJob } from '../../models/index.js';
 import { postWageLedger } from './wagesLedgerHelper.js';
 
-const BATCH_SIZE = 10; // Process 10 wages per batch
+const BATCH_SIZE = 5; // Process 5 wages per batch
 
 /**
  * Process wage job asynchronously

@@ -60,9 +60,8 @@
 
 4. **Create Wages** → `POST /api/wages/create`
    - Input: `{ month: "2025-02", wages: [{master_roll_id, gross_salary, ...}] }`
-   - Max batch size: 20 records per request
-   - Creates Wage documents with status='DRAFT'
-   - Posts accounting ledger entries
+   - Max batch size: 5 records per request
+   - Creates Wage documents with status='DRAFT'   - Posts accounting ledger entries
    - Creates Advance repayment records (if advance_deduction > 0)
    - Returns: Result array with success/failure per wage
 
