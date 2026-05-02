@@ -50,15 +50,43 @@ function processLocations(locations, legacyFields = {}) {
       clean.state_code = clean.gst_number.substring(0, 2);
     }
 
-    // Default registration_type
+    // Default registration_type to PPOB if not specified
     if (!clean.registration_type) clean.registration_type = 'PPOB';
 
     return clean;
   });
 
-  // Ensure exactly one default
-  if (locs.length > 0 && !locs.some(l => l.is_default)) {
-    locs[0].is_default = true;
+  // Ensure exactly one default and fix registration types
+  if (locs.length > 0) {
+    // Find if any location is marked as default
+    const defaultIndex = locs.findIndex(l => l.is_default);
+    
+    if (defaultIndex >= 0) {
+      // Mark only the default location as PPOB and is_default: true
+      locs[defaultIndex].registration_type = 'PPOB';
+      locs[defaultIndex].is_default = true;
+      
+      // Mark all others as APOB and is_default: false
+      locs.forEach((loc, idx) => {
+        if (idx !== defaultIndex) {
+          loc.is_default = false;
+          if (loc.registration_type === 'PPOB') {
+            loc.registration_type = 'APOB';
+          }
+        }
+      });
+    } else {
+      // No default marked, set first as PPOB/default and rest as APOB
+      locs[0].registration_type = 'PPOB';
+      locs[0].is_default = true;
+      
+      locs.forEach((loc, idx) => {
+        if (idx > 0) {
+          loc.is_default = false;
+          loc.registration_type = 'APOB';
+        }
+      });
+    }
   }
 
   return locs;

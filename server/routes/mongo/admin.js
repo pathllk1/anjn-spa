@@ -150,10 +150,51 @@ router.get("/my-firm", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, error: 'User not associated with a firm' });
     }
 
-    const firm = await Firm.findById(firm_id).lean();
+    let firm = await Firm.findById(firm_id).lean();
     
     if (!firm) {
       return res.status(404).json({ success: false, error: 'Firm not found' });
+    }
+
+    // Fix: Ensure locations have proper is_default and registration_type flags
+    if (firm.locations && Array.isArray(firm.locations) && firm.locations.length > 0) {
+      let needsUpdate = false;
+      
+      // Check if any location is missing is_default or has improper registration_type
+      const hasDefault = firm.locations.some(loc => loc.is_default);
+      
+      if (!hasDefault) {
+        // No default marked, set first as PPOB/default and rest as APOB
+        firm.locations[0].is_default = true;
+        firm.locations[0].registration_type = 'PPOB';
+        
+        firm.locations.forEach((loc, idx) => {
+          if (idx > 0) {
+            loc.is_default = false;
+            if (!loc.registration_type || loc.registration_type === 'PPOB') {
+              loc.registration_type = 'APOB';
+            }
+          }
+        });
+        
+        needsUpdate = true;
+      } else {
+        // Ensure registration types match is_default flags
+        firm.locations.forEach(loc => {
+          if (loc.is_default && loc.registration_type !== 'PPOB') {
+            loc.registration_type = 'PPOB';
+            needsUpdate = true;
+          } else if (!loc.is_default && loc.registration_type === 'PPOB') {
+            loc.registration_type = 'APOB';
+            needsUpdate = true;
+          }
+        });
+      }
+      
+      // Save the corrected firm data if needed
+      if (needsUpdate) {
+        await Firm.findByIdAndUpdate(firm_id, { $set: { locations: firm.locations } });
+      }
     }
 
     res.json({ success: true, data: firm });

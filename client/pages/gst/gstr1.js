@@ -244,12 +244,19 @@ class GSTR1Manager {
           // Extract all GST numbers from locations
           gstins = firm.locations
             .filter(loc => loc.gst_number)
-            .map(loc => ({
-              gstin: loc.gst_number,
-              isDefault: loc.is_default || false,
-              registrationType: loc.registration_type || 'PPOB',
-              state: loc.state || '',
-            }));
+            .map(loc => {
+              // Determine registration type: PPOB if is_default, otherwise APOB
+              let regType = loc.registration_type;
+              if (!regType) {
+                regType = loc.is_default ? 'PPOB' : 'APOB';
+              }
+              return {
+                gstin: loc.gst_number,
+                isDefault: loc.is_default || false,
+                registrationType: regType,
+                state: loc.state || '',
+              };
+            });
           
           // Find the default GSTIN
           const defaultLoc = firm.locations.find(loc => loc.is_default && loc.gst_number);
