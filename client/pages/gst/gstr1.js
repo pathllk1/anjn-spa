@@ -58,14 +58,10 @@ function getGSTR1HTML() {
       Report Filters
     </h3>
     
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-2">Start Date</label>
-        <input type="date" id="start-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-700 mb-2">End Date</label>
-        <input type="date" id="end-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+        <label class="block text-xs font-semibold text-gray-700 mb-2">Select Month & Year</label>
+        <input type="month" id="report-month" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
       </div>
       <div>
         <label class="block text-xs font-semibold text-gray-700 mb-2">Firm GSTIN</label>
@@ -183,8 +179,7 @@ class GSTR1Manager {
 
   cacheElements() {
     this.elements = {
-      startDate: document.getElementById('start-date'),
-      endDate: document.getElementById('end-date'),
+      reportMonth: document.getElementById('report-month'),
       firmGstin: document.getElementById('firm-gstin'),
       generateBtn: document.getElementById('generate-report-btn'),
       applyFiltersBtn: document.getElementById('apply-filters-btn'),
@@ -229,10 +224,9 @@ class GSTR1Manager {
 
   setDefaultDates() {
     const today = new Date();
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    this.elements.startDate.value = monthStart.toISOString().split('T')[0];
-    this.elements.endDate.value = today.toISOString().split('T')[0];
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    this.elements.reportMonth.value = year + '-' + month;
   }
 
   async loadFirmGstins() {
@@ -302,14 +296,19 @@ class GSTR1Manager {
   }
 
   async generateReport() {
-    const startDate = this.elements.startDate.value;
-    const endDate = this.elements.endDate.value;
+    const reportMonth = this.elements.reportMonth.value;
     const firmGstin = this.elements.firmGstin.value;
 
-    if (!startDate || !endDate || !firmGstin) {
-      alert('Please select all filters');
+    if (!reportMonth || !firmGstin) {
+      alert('Please select month and GSTIN');
       return;
     }
+
+    // Parse month (YYYY-MM) to get start and end dates
+    const [year, month] = reportMonth.split('-');
+    const startDate = year + '-' + month + '-01';
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = year + '-' + month + '-' + lastDay;
 
     try {
       this.elements.generateBtn.disabled = true;
@@ -523,25 +522,34 @@ class GSTR1Manager {
   }
 
   async exportJSON() {
-    const startDate = this.elements.startDate.value;
-    const endDate = this.elements.endDate.value;
+    const reportMonth = this.elements.reportMonth.value;
     const firmGstin = this.elements.firmGstin.value;
+    const [year, month] = reportMonth.split('-');
+    const startDate = year + '-' + month + '-01';
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = year + '-' + month + '-' + lastDay;
     const url = '/api/gst/gstr1/export/json?startDate=' + startDate + '&endDate=' + endDate + '&firmGstin=' + firmGstin;
     window.location.href = url;
   }
 
   async exportExcel() {
-    const startDate = this.elements.startDate.value;
-    const endDate = this.elements.endDate.value;
+    const reportMonth = this.elements.reportMonth.value;
     const firmGstin = this.elements.firmGstin.value;
+    const [year, month] = reportMonth.split('-');
+    const startDate = year + '-' + month + '-01';
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = year + '-' + month + '-' + lastDay;
     const url = '/api/gst/gstr1/export/excel?startDate=' + startDate + '&endDate=' + endDate + '&firmGstin=' + firmGstin;
     window.location.href = url;
   }
 
   async exportCSV() {
-    const startDate = this.elements.startDate.value;
-    const endDate = this.elements.endDate.value;
+    const reportMonth = this.elements.reportMonth.value;
     const firmGstin = this.elements.firmGstin.value;
+    const [year, month] = reportMonth.split('-');
+    const startDate = year + '-' + month + '-01';
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = year + '-' + month + '-' + lastDay;
     const url = '/api/gst/gstr1/export/csv?startDate=' + startDate + '&endDate=' + endDate + '&firmGstin=' + firmGstin;
     window.location.href = url;
   }
