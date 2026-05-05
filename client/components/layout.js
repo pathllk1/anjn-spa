@@ -1,7 +1,13 @@
 import { renderNavbar } from './navbar.js';
 import { renderSidebar } from './sidebar.js';
+import { initGlobalHelpModal } from './help-modal.js';
 
 export function renderLayout(content, router) {
+  // Initialize global help modal (only once)
+  if (!window.helpModal) {
+    initGlobalHelpModal();
+  }
+
   // Render navbar first
   renderNavbar(router);
   

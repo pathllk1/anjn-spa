@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────
 
 import { initGlobalToolModal } from './components/tools/globalToolModal.js';
+import { initGlobalHelpModal } from './components/help/HelpModal.js';
 import { getAllSettings } from './utils/appSettingsDB.js';
 import { DEFAULT_SETTINGS } from './components/settings/settingsRegistry.js';
 import { applySettingToUI } from './utils/settingsApplier.js';
@@ -142,6 +143,7 @@ async function initializeAppSettings() {
 initializeAppSettings();
 
 initGlobalToolModal();
+initGlobalHelpModal();
 
 router
   // General
