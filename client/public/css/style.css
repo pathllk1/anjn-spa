@@ -500,8 +500,15 @@ body {
     from { opacity: 0; }
     to { opacity: 1; }
   }
+  @keyframes colorShift {
+    0% { background-color: rgb(187, 247, 208); }
+    33% { background-color: rgb(254, 205, 205); }
+    66% { background-color: rgb(233, 213, 255); }
+    100% { background-color: rgb(187, 247, 208); }
+  }
   .animate-slide-in { animation: slideIn 0.3s ease-out; }
   .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+  .animate-color-shift { animation: colorShift 30s ease-in-out infinite; }
   .table-row-selected { background-color: #e0e7ff !important; }
   
   input[list] {

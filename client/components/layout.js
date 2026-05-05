@@ -11,15 +11,32 @@ export function renderLayout(content, router) {
   // Render page content with proper spacing for fixed navbar, sidebar, and footer
   const appContainer = document.getElementById('app');
   if (appContainer) {
-    appContainer.innerHTML = `
-      <div class="ml-16 pt-16 pb-12 min-h-screen transition-all duration-300" id="main-content">
-        <main class="px-6 py-4">
-          <div class="page">
-            ${content}
-          </div>
-        </main>
-      </div>
-    `;
+    // Check if this is a home page (full-width content)
+    const isFullWidth = content.includes('Welcome to SecureApp') && content.includes('Powerful Features');
+    
+    if (isFullWidth) {
+      // For home page, render without the constraining wrapper
+      appContainer.innerHTML = `
+        <div class="ml-16 pt-0 pb-12 min-h-screen transition-all duration-300 animate-color-shift" id="main-content">
+          <main class="p-0">
+            <div class="page">
+              ${content}
+            </div>
+          </main>
+        </div>
+      `;
+    } else {
+      // For other pages, use the standard wrapper with color shift animation
+      appContainer.innerHTML = `
+        <div class="ml-16 pt-16 pb-12 min-h-screen transition-all duration-300 animate-color-shift" id="main-content">
+          <main class="px-6 py-4">
+            <div class="page">
+              ${content}
+            </div>
+          </main>
+        </div>
+      `;
+    }
   }
 
   // Render footer
