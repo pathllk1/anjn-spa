@@ -64,6 +64,11 @@ export class HelpModal {
       const masterRoll = await import('./content/masterRoll.js');
       const wages = await import('./content/wages.js');
       const advances = await import('./content/advances.js');
+      const inventory = await import('./content/inventory.js');
+      const accounting = await import('./content/accounting.js');
+      const compliance = await import('./content/compliance.js');
+      const administration = await import('./content/administration.js');
+      const productivity = await import('./content/productivity.js');
       const dataQuality = await import('./content/dataQuality.js');
       const authentication = await import('./content/authentication.js');
       const shortcuts = await import('./content/shortcuts.js');
@@ -75,6 +80,21 @@ export class HelpModal {
           'Advances': advances.content,
           'Data Quality': dataQuality.content,
           'Keyboard Shortcuts': shortcuts.content,
+        },
+        'Inventory System': {
+          'Overview & Flow': inventory.content,
+        },
+        'Accounting System': {
+          'General Ledger & Vouchers': accounting.content,
+        },
+        'Tax & Compliance': {
+          'GSTR-1 Reporting': compliance.content,
+        },
+        'Administration': {
+          'Super Admin Control': administration.content,
+        },
+        'Global Tools': {
+          'Productivity Suite': productivity.content,
         },
         'Security': {
           'Authentication & Authorization': authentication.content,
