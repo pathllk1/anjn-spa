@@ -50,6 +50,16 @@ export const content = `
         essential for accurate inventory stock-taking.
       </p>
     </div>
+    <div class="p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+      <h4 class="font-bold text-sm text-indigo-600 flex items-center gap-2 mb-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20l-7-7 7-7M5 20l7-7-7-7"/></svg>
+        Daily News
+      </h4>
+      <p class="text-[11px] text-gray-500 leading-relaxed">
+        Stay updated with real-time news coverage in <strong>Hindi</strong> and <strong>Bengali</strong> 
+        from trusted global sources directly within the dashboard.
+      </p>
+    </div>
   </section>
 
   <!-- Specialized Tools -->

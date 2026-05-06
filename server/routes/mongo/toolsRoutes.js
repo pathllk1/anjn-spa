@@ -1,7 +1,14 @@
 import express from 'express';
-import { getCurrencyRates, convertCurrencyAmount, getWeather, geocodeLocation } from '../../controllers/mongo/toolsController.js';
+import { getCurrencyRates, convertCurrencyAmount, getWeather, geocodeLocation, getNews } from '../../controllers/mongo/toolsController.js';
 
 const router = express.Router();
+
+/**
+ * News endpoints
+ */
+
+// Get news from Google RSS (Hindi/Bengali)
+router.get('/news', getNews);
 
 /**
  * Currency exchange rate endpoints

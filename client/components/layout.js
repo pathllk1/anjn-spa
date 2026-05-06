@@ -1,6 +1,6 @@
 import { renderNavbar } from './navbar.js';
 import { renderSidebar } from './sidebar.js';
-import { initGlobalHelpModal } from './help-modal.js';
+import { initGlobalHelpModal } from './help/HelpModal.js';
 
 export function renderLayout(content, router) {
   // Initialize global help modal (only once)

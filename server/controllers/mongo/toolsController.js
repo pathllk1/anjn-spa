@@ -222,3 +222,116 @@ export async function geocodeLocation(req, res) {
     });
   }
 }
+
+/**
+ * GET /api/tools/news
+ * Fetch news from Google News RSS (Hindi and Bengali)
+ * Query params: lang (hi, bn)
+ */
+export async function getNews(req, res) {
+  try {
+    const { lang = 'hi', topic = 'business' } = req.query;
+    
+    // Construct Google News RSS URL based on language and topic
+    // Using search?q={topic} is more flexible than standard topic IDs
+    const baseUrl = 'https://news.google.com/rss/search';
+    const params = new URLSearchParams({
+      q: topic,
+      hl: lang,
+      gl: 'IN',
+      ceid: `IN:${lang}`
+    });
+    
+    const url = `${baseUrl}?${params.toString()}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`News fetch failed: ${response.statusText}`);
+    }
+    
+    const xml = await response.text();
+    
+    // Manual XML parsing for items (minimalist but robust for Google News RSS)
+    const items = [];
+    // More robust regex to catch <item> tags regardless of spacing/newlines
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    let match;
+    
+    while ((match = itemRegex.exec(xml)) !== null) {
+      const itemContent = match[1];
+      
+      const title = extractTag(itemContent, 'title');
+      const link = extractTag(itemContent, 'link');
+      const pubDate = extractTag(itemContent, 'pubDate');
+      const source = extractTag(itemContent, 'source');
+      const description = extractTag(itemContent, 'description');
+      
+      // Extract image URL from description if present
+      let imageUrl = '';
+      const imgMatch = /<img[^>]+src="([^">]+)"/i.exec(description);
+      if (imgMatch) {
+        imageUrl = imgMatch[1];
+      }
+      
+      if (!title || !link) continue;
+
+      // Attempt to clean title (Google News appends " - Source")
+      let cleanTitle = title;
+      if (source && title.toLowerCase().endsWith(` - ${source.toLowerCase()}`)) {
+        cleanTitle = title.substring(0, title.lastIndexOf(' - '));
+      }
+      
+      items.push({
+        title: cleanTitle,
+        link,
+        pubDate,
+        source: source || 'News Source',
+        imageUrl,
+        lang
+      });
+      
+      if (items.length >= 25) break; // Limit to 25 items
+    }
+    
+    res.json({
+      success: true,
+      data: items,
+      count: items.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('News API error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch news',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Helper to extract tag content from XML string
+ */
+function extractTag(xml, tag) {
+  // Matches <tag>content</tag> or <tag ...>content</tag>
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
+  const match = regex.exec(xml);
+  if (!match) return '';
+  
+  let content = match[1].trim();
+  // Remove CDATA wrapper if present
+  content = content.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1');
+  // Decode basic XML entities
+  content = content
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+    
+  return content.trim();
+}
