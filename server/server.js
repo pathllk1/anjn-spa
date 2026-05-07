@@ -37,11 +37,13 @@ const isVercel     = process.env.VERCEL === '1';
 
 // Track real DB readiness so the health check reflects actual state
 let dbReady = false;
+let pgReady = false;
 
 // FIX: Database initialization — in non-serverless envs, block startup until
 // connected so the first requests don't hit route handlers with no DB.
 // In Vercel (serverless), allow cold-start to complete and rely on per-request retries.
 (async () => {
+    // 1. MongoDB
     try {
         const { connectDB } = await import('./utils/mongo/mongoose.config.js');
         await connectDB();
@@ -53,6 +55,15 @@ let dbReady = false;
             console.error('❌ Exiting — cannot serve requests without a database.');
             process.exit(1);
         }
+    }
+
+    // 2. PostgreSQL
+    try {
+        const { connectPostgres, isPgReady } = await import('./postgres/config/pg.config.js');
+        await connectPostgres();
+        pgReady = isPgReady();
+    } catch (err) {
+        console.error('⚠️  PostgreSQL initialization error:', err.message);
     }
 })();
 
