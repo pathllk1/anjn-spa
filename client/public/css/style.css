@@ -517,6 +517,17 @@ body {
     background-position: right 0.75rem center;
     padding-right: 2.5rem;
   }
+
+/* Sidebar Fixed Height & Positioning Fix */
+.sidebar-fixed-height {
+  position: fixed !important;
+  top: 64px !important;    /* Matches navbar h-16 */
+  bottom: 32px !important; /* Matches footer h-8 */
+  height: calc(100vh - 96px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
 /* Super Admin Panel Iframe Scaling */
 .admin-iframe {
   width: 100%;
