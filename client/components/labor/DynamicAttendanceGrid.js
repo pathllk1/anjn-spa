@@ -12,6 +12,7 @@ export function renderAttendanceGrid(containerId, periodData, onSync) {
   const dates = getDatesInRange(new Date(start_date), new Date(end_date));
   let workers = periodData.workers || [];
   let attendanceMap = mapAttendance(periodData.attendance);
+  let lastFocusedCoord = null; // Track focus: { r, c, type: 'cell' | 'name' | 'wage' }
 
   // Initialize with at least one row if empty
   if (workers.length === 0) {
@@ -42,11 +43,11 @@ export function renderAttendanceGrid(containerId, periodData, onSync) {
                 <tr data-worker-idx="${wIdx}" class="group">
                   <td class="p-0 border-b border-r">
                     <input type="text" class="w-full px-4 py-3 bg-transparent outline-none focus:bg-indigo-50 border-none font-medium text-slate-800" 
-                           data-field="name" value="${w.labor_name || ''}" placeholder="Worker Name...">
+                           data-field="name" data-worker-idx="${wIdx}" value="${w.labor_name || ''}" placeholder="Worker Name...">
                   </td>
                   <td class="p-0 border-b border-r">
                     <input type="number" class="w-full px-2 py-3 bg-transparent text-center outline-none focus:bg-indigo-50 border-none font-semibold text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                           data-field="wage" value="${w.daily_wage || 0}">
+                           data-field="wage" data-worker-idx="${wIdx}" value="${w.daily_wage || 0}">
                   </td>
                   ${dates.map((d, dIdx) => {
                     const dateStr = d.toISOString().split('T')[0];
@@ -103,12 +104,30 @@ export function renderAttendanceGrid(containerId, periodData, onSync) {
     `;
 
     attachEvents();
-    if (shouldFocusFirst) focusFirstCell();
+    if (shouldFocusFirst) {
+      focusFirstCell();
+    } else if (lastFocusedCoord) {
+      restoreFocus();
+    }
   }
 
   function focusFirstCell() {
     const firstCell = container.querySelector('.attendance-cell');
     if (firstCell) firstCell.focus();
+  }
+
+  function restoreFocus() {
+    if (!lastFocusedCoord) return;
+    const { r, c, type } = lastFocusedCoord;
+    let target = null;
+    if (type === 'cell') {
+      target = container.querySelector(`.attendance-cell[data-worker-idx="${r}"][data-col-idx="${c}"]`);
+    } else if (type === 'name') {
+      target = container.querySelector(`input[data-field="name"][data-worker-idx="${r}"]`);
+    } else if (type === 'wage') {
+      target = container.querySelector(`input[data-field="wage"][data-worker-idx="${r}"]`);
+    }
+    if (target) target.focus();
   }
 
   function attachEvents() {
@@ -122,12 +141,12 @@ export function renderAttendanceGrid(containerId, periodData, onSync) {
         const worker = workers[workerIdx];
 
         // 1. Mark and Move
-        if (e.code === 'Space') {
+        if (e.key === ' ' || e.code === 'Space') {
           e.preventDefault();
           updateAttendance(worker, date, 'P');
           moveNext(workerIdx, colIdx);
         }
-        else if (e.code === 'Enter') {
+        else if (e.key === 'Enter' || e.code === 'Enter') {
           e.preventDefault();
           updateAttendance(worker, date, 'L');
           moveNext(workerIdx, colIdx);
@@ -153,26 +172,43 @@ export function renderAttendanceGrid(containerId, periodData, onSync) {
 
       cell.addEventListener('click', () => {
         const workerIdx = parseInt(cell.dataset.workerIdx);
+        const colIdx = parseInt(cell.dataset.colIdx);
         const date = cell.dataset.date;
         const worker = workers[workerIdx];
         const current = attendanceMap[worker.id]?.[date];
+        
+        lastFocusedCoord = { r: workerIdx, c: colIdx, type: 'cell' };
         updateAttendance(worker, date, current === 'P' ? 'L' : 'P');
+      });
+
+      cell.addEventListener('focus', () => {
+        lastFocusedCoord = { 
+          r: parseInt(cell.dataset.workerIdx), 
+          c: parseInt(cell.dataset.colIdx), 
+          type: 'cell' 
+        };
       });
     });
 
     // Worker Name/Wage Input Sync
     container.querySelectorAll('input[data-field="name"]').forEach(input => {
       input.addEventListener('change', (e) => {
-        const idx = input.closest('tr').dataset.workerIdx;
+        const idx = input.dataset.workerIdx;
         workers[idx].labor_name = e.target.value;
+      });
+      input.addEventListener('focus', () => {
+        lastFocusedCoord = { r: parseInt(input.dataset.workerIdx), type: 'name' };
       });
     });
 
     container.querySelectorAll('input[data-field="wage"]').forEach(input => {
       input.addEventListener('change', (e) => {
-        const idx = input.closest('tr').dataset.workerIdx;
+        const idx = input.dataset.workerIdx;
         workers[idx].daily_wage = parseFloat(e.target.value) || 0;
         render(); // Update totals
+      });
+      input.addEventListener('focus', () => {
+        lastFocusedCoord = { r: parseInt(input.dataset.workerIdx), type: 'wage' };
       });
     });
 

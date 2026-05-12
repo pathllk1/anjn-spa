@@ -21,15 +21,92 @@ export const laborController = {
 
   async createLeader(req, res) {
     const sql = getSql();
+    if (!sql) {
+      return res.status(503).json({ success: false, message: 'Database connection not ready' });
+    }
+
     try {
       const { firm_id, name, phone, bank_name, account_number, ifsc_code } = req.body;
+      
+      // Robust handling: treat empty strings or undefined as NULL for optional fields
+      const b_name = (bank_name && String(bank_name).trim()) || null;
+      const a_num  = (account_number && String(account_number).trim()) || null;
+      const i_code = (ifsc_code && String(ifsc_code).trim()) || null;
+
       const [leader] = await sql`
         INSERT INTO labor_leaders (firm_id, name, phone, bank_name, account_number, ifsc_code)
-        VALUES (${firm_id}, ${name}, ${phone}, ${bank_name}, ${account_number}, ${ifsc_code})
+        VALUES (${firm_id}, ${name}, ${phone}, ${b_name}, ${a_num}, ${i_code})
         RETURNING *
       `;
       res.json({ success: true, data: leader });
     } catch (err) {
+      console.error('[CREATE_LEADER_ERROR]', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  async updateLeader(req, res) {
+    const sql = getSql();
+    if (!sql) {
+      return res.status(503).json({ success: false, message: 'Database connection not ready' });
+    }
+
+    try {
+      const { id } = req.params;
+      const { name, phone, bank_name, account_number, ifsc_code, status } = req.body;
+
+      const b_name = (bank_name !== undefined) ? ((bank_name && String(bank_name).trim()) || null) : undefined;
+      const a_num  = (account_number !== undefined) ? ((account_number && String(account_number).trim()) || null) : undefined;
+      const i_code = (ifsc_code !== undefined) ? ((ifsc_code && String(ifsc_code).trim()) || null) : undefined;
+
+      const [leader] = await sql`
+        UPDATE labor_leaders 
+        SET 
+          name = ${name || sql`name`},
+          phone = ${phone || sql`phone`},
+          bank_name = ${b_name !== undefined ? b_name : sql`bank_name`},
+          account_number = ${a_num !== undefined ? a_num : sql`account_number`},
+          ifsc_code = ${i_code !== undefined ? i_code : sql`ifsc_code`},
+          status = ${status || sql`status`},
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${id}
+        RETURNING *
+      `;
+
+      if (!leader) {
+        return res.status(404).json({ success: false, message: 'Leader not found' });
+      }
+
+      res.json({ success: true, data: leader });
+    } catch (err) {
+      console.error('[UPDATE_LEADER_ERROR]', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  async deleteLeader(req, res) {
+    const sql = getSql();
+    if (!sql) {
+      return res.status(503).json({ success: false, message: 'Database connection not ready' });
+    }
+
+    try {
+      const { id } = req.params;
+
+      // Check if leader has associated periods
+      const periods = await sql`SELECT id FROM labor_periods WHERE leader_id = ${id} LIMIT 1`;
+      if (periods.length > 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Cannot delete leader with active or past work periods. Delete the periods first or deactivate the leader instead.' 
+        });
+      }
+
+      const result = await sql`DELETE FROM labor_leaders WHERE id = ${id}`;
+      
+      res.json({ success: true, message: 'Leader deleted successfully' });
+    } catch (err) {
+      console.error('[DELETE_LEADER_ERROR]', err);
       res.status(500).json({ success: false, message: err.message });
     }
   },

@@ -1,11 +1,17 @@
 import express from 'express';
 import { laborController } from '../controllers/labor.controller.js';
+import { authMiddleware } from '../../middleware/mongo/authMiddleware.js';
 
 const router = express.Router();
+
+// All labor routes require authentication
+router.use(authMiddleware);
 
 // Labor Leaders
 router.get('/leaders', laborController.getLeaders);
 router.post('/leaders', laborController.createLeader);
+router.put('/leaders/:id', laborController.updateLeader);
+router.delete('/leaders/:id', laborController.deleteLeader);
 
 // Labor Periods
 router.get('/periods', laborController.getPeriods);

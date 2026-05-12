@@ -115,14 +115,37 @@ export async function renderLaborDashboard(router) {
               ${leaders.length === 0 ? `
                 <p class="text-slate-400 text-sm text-center py-8 italic font-medium">No leaders registered yet.</p>
               ` : leaders.map(l => `
-                <div class="p-4 flex justify-between items-center group hover:bg-slate-50 transition rounded-xl">
-                  <div>
+                <div class="p-4 flex flex-col group hover:bg-slate-50 transition rounded-xl">
+                  <div class="flex justify-between items-center mb-1">
                     <div class="font-bold text-slate-900">${l.name}</div>
-                    <div class="text-xs text-slate-400 font-medium">${l.phone || 'No phone recorded'}</div>
+                    <div class="flex items-center gap-1">
+                      <button class="edit-leader-btn p-1 text-slate-300 hover:text-indigo-600 transition opacity-0 group-hover:opacity-100" data-leader='${JSON.stringify(l).replace(/'/g, "&apos;")}' title="Edit Leader">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      </button>
+                      <button class="delete-leader-btn p-1 text-slate-300 hover:text-rose-600 transition opacity-0 group-hover:opacity-100" data-id="${l.id}" data-name="${l.name}" title="Delete Leader">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   </div>
-                  <span class="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                    ${l.status}
-                  </span>
+                  <div class="flex justify-between items-center mb-2">
+                    <div class="text-xs text-slate-400 font-medium">${l.phone || 'No phone recorded'}</div>
+                    <span class="text-[10px] ${l.status === 'Active' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'} px-2 py-0.5 rounded-lg font-black uppercase tracking-widest">
+                      ${l.status}
+                    </span>
+                  </div>
+                  ${l.bank_name ? `
+                    <div class="bg-slate-50 group-hover:bg-white p-2 rounded-lg border border-slate-100 space-y-1">
+                       <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                          <svg class="w-3 h-3 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                          ${l.bank_name}
+                       </div>
+                       <div class="text-[10px] font-medium text-slate-400 pl-4.5">
+                          ${l.account_number || 'No A/C'} • ${l.ifsc_code || 'No IFSC'}
+                       </div>
+                    </div>
+                  ` : `
+                    <div class="text-[9px] text-slate-300 italic">No bank details added</div>
+                  `}
                 </div>
               `).join('')}
             </div>
@@ -155,6 +178,34 @@ function setupDashboardEvents(router, firmId, leaders) {
 
   document.getElementById('add-period-btn')?.addEventListener('click', () => {
     LaborModals.showPeriodModal(firmId, leaders, () => renderLaborDashboard(router));
+  });
+
+  // Handle Edit Leader
+  document.querySelectorAll('.edit-leader-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const leaderData = JSON.parse(btn.getAttribute('data-leader'));
+      LaborModals.showEditLeaderModal(leaderData, () => renderLaborDashboard(router));
+    });
+  });
+
+  // Handle Delete Leader
+  document.querySelectorAll('.delete-leader-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const name = btn.getAttribute('data-name');
+      
+      if (confirm(`Are you sure you want to delete labor leader "${name}"? This will only work if there are no work periods associated with them.`)) {
+        try {
+          const res = await api.delete(`/api/pg/labor/leaders/${id}`);
+          toast.success(res.message || 'Leader deleted successfully');
+          renderLaborDashboard(router);
+        } catch (err) {
+          toast.error(err.message || 'Failed to delete leader');
+        }
+      }
+    });
   });
 
   // Handle row clicks for periods using delegation

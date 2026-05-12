@@ -1439,7 +1439,7 @@ function handleManageFieldChange(wageId, field, value) {
     const focusedSelectionDirection = activeElement?.selectionDirection;
 
     const html = `
-      <div id="wages-dashboard" class="w-full px-4 -mt-6 pb-8 animate-in fade-in duration-500">
+      <div id="wages-dashboard" class="w-full px-4 mt-2 pb-8 animate-in fade-in duration-500">
         <!-- Dashboard Header -->
         <div class="flex justify-between items-center bg-white px-6 h-14 rounded-2xl shadow-sm border border-slate-100 mb-4 shrink-0">
           <div class="flex items-center gap-3">

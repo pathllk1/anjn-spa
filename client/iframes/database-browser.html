@@ -133,14 +133,33 @@
 
   <div class="bg-white border-b border-gray-200 px-4 py-2 space-y-2">
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
 
       <div>
+        <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Database</label>
+        <select id="db-type-select"
+                class="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1
+                       focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white font-bold text-indigo-600">
+          <option value="mongodb">MongoDB (NoSQL)</option>
+          <option value="postgres">Postgres (SQL)</option>
+        </select>
+      </div>
+
+      <div id="collection-wrap">
         <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Collection</label>
         <select id="collection-select"
                 class="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1
                        focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white">
           <option value="">— Select Collection —</option>
+        </select>
+      </div>
+
+      <div id="pg-table-wrap" class="hidden">
+        <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Table</label>
+        <select id="pg-table-select"
+                class="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-1
+                       focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white">
+          <option value="">— Select Table —</option>
         </select>
       </div>
 
@@ -329,8 +348,11 @@
 
 class DatabaseBrowser {
   constructor() {
+    this.dbType           = 'mongodb'; // 'mongodb' | 'postgres'
     this.collections      = [];
+    this.pgTables         = [];
     this.currentCollection = null;
+    this.currentPgTable    = null;
     this.allData          = [];   // raw records from server
     this.processedData    = [];   // flattened primitives — fed to jqxGrid
     this.currentFields    = [];   // field names in schema order (for export)
@@ -354,7 +376,11 @@ class DatabaseBrowser {
   // ── DOM cache ──────────────────────────────────────────────────────────────
   initializeElements() {
     this.els = {
+      dbTypeSelect:       document.getElementById('db-type-select'),
+      collectionWrap:     document.getElementById('collection-wrap'),
       collectionSelect:   document.getElementById('collection-select'),
+      pgTableWrap:        document.getElementById('pg-table-wrap'),
+      pgTableSelect:      document.getElementById('pg-table-select'),
       firmFilter:         document.getElementById('firm-filter'),
       userFilter:         document.getElementById('user-filter'),
       searchInput:        document.getElementById('search-input'),
@@ -386,7 +412,9 @@ class DatabaseBrowser {
 
   // ── Listeners ──────────────────────────────────────────────────────────────
   attachListeners() {
+    this.els.dbTypeSelect.addEventListener('change', () => this.onDbTypeChange());
     this.els.collectionSelect.addEventListener('change', () => this.onCollectionChange());
+    this.els.pgTableSelect.addEventListener('change', () => this.onPgTableChange());
     this.els.firmFilter.addEventListener('change',   () => this.applyFilters());
     this.els.userFilter.addEventListener('change',   () => this.applyFilters());
     this.els.searchInput.addEventListener('input',   () => this.applyFilters());
@@ -420,6 +448,41 @@ class DatabaseBrowser {
     // Note: Export button listeners are now attached dynamically in injectPagerControls()
   }
 
+  onDbTypeChange() {
+    this.dbType = this.els.dbTypeSelect.value;
+    if (this.dbType === 'mongodb') {
+      this.els.collectionWrap.classList.remove('hidden');
+      this.els.pgTableWrap.classList.add('hidden');
+      this.els.backupBtn.classList.remove('hidden');
+      this.els.emptyBtn.classList.remove('hidden');
+      this.els.dropBtn.classList.remove('hidden');
+      this.loadCollections();
+    } else {
+      this.els.collectionWrap.classList.add('hidden');
+      this.els.pgTableWrap.classList.remove('hidden');
+      this.els.backupBtn.classList.add('hidden'); // Not implemented for PG yet
+      this.els.emptyBtn.classList.add('hidden'); // Not implemented for PG yet
+      this.els.dropBtn.classList.add('hidden'); // Not implemented for PG yet
+      this.loadPgTables();
+    }
+    this.clearFilters();
+    this.processedData = [];
+    if (this.gridInitialized) {
+      $('#jqxgrid').jqxGrid('clear');
+    }
+  }
+
+  onPgTableChange() {
+    const table = this.els.pgTableSelect.value;
+    if (table) {
+      this.currentPgTable = table;
+      this.clearFilters(true);
+      this.loadData();
+    } else {
+      this.currentPgTable = null;
+    }
+  }
+
   // ── Grid height ────────────────────────────────────────────────────────────
   getGridHeight() {
     const el = document.getElementById('jqxgrid');
@@ -428,7 +491,7 @@ class DatabaseBrowser {
     return Math.max(300, Math.floor(window.innerHeight - top - 32 - 8));
   }
 
-  // ── Flatten raw MongoDB docs to primitives ─────────────────────────────────
+  // ── Flatten raw data to primitives ─────────────────────────────────
   preprocessData(data) {
     return data.map(doc => {
       const row = {};
@@ -436,7 +499,7 @@ class DatabaseBrowser {
         const v = doc[key];
         if (v === null || v === undefined)    row[key] = '';
         else if (v instanceof Date)           row[key] = v.toISOString();
-        else if (typeof v === 'object')       row[key] = JSON.stringify(v);
+        else if (typeof v === 'object' && !(v instanceof Date)) row[key] = JSON.stringify(v);
         else                                  row[key] = v;
       });
       return row;
@@ -513,16 +576,16 @@ class DatabaseBrowser {
       const col = {
         text:       key,
         datafield:  key,
-        width:      key === '_id' ? 200 : 150,
+        width:      (key === '_id' || key === 'id') ? 200 : 150,
         cellsalign: typeof rawVal === 'number' ? 'right' : 'left'
       };
 
-      // _id: monospace truncated with tooltip
-      if (key === '_id') {
+      // _id / id: monospace truncated with tooltip
+      if (key === '_id' || key === 'id') {
         col.cellsrenderer = (_r, _c, val) =>
           '<div style="margin-top:8px;font-family:monospace;font-size:11px;' +
           'color:#6d28d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + val + '">' +
-          String(val).substring(0, 26) + '&#8230;</div>';
+          String(val).substring(0, 36) + '</div>';
       }
 
       // Firm field: indigo badge
@@ -545,6 +608,7 @@ class DatabaseBrowser {
     };
 
     if ('_id' in firstRow) addField('_id');
+    if ('id' in firstRow)  addField('id');
     Object.keys(firstRow).forEach(key => addField(key));
 
     return { datafields, columns };
@@ -686,6 +750,11 @@ class DatabaseBrowser {
     window.parent.postMessage({ type: 'GET_COLLECTIONS' }, '*');
   }
 
+  loadPgTables() {
+    this.setStatus('Loading PostgreSQL tables...');
+    window.parent.postMessage({ type: 'GET_PG_TABLES' }, '*');
+  }
+
   requestBackupStatus() {
     window.parent.postMessage({ type: 'GET_BACKUP_STATUS' }, '*');
   }
@@ -704,10 +773,16 @@ class DatabaseBrowser {
   }
 
   loadData() {
-    if (!this.currentCollection) { this.setStatus('Select a collection first'); return; }
     this.startTime = performance.now();
-    this.setStatus('Loading ' + this.currentCollection + '...');
-    window.parent.postMessage({ type: 'GET_COLLECTION_DATA', collection: this.currentCollection }, '*');
+    if (this.dbType === 'mongodb') {
+      if (!this.currentCollection) { this.setStatus('Select a collection first'); return; }
+      this.setStatus('Loading ' + this.currentCollection + '...');
+      window.parent.postMessage({ type: 'GET_COLLECTION_DATA', collection: this.currentCollection }, '*');
+    } else {
+      if (!this.currentPgTable) { this.setStatus('Select a table first'); return; }
+      this.setStatus('Loading ' + this.currentPgTable + '...');
+      window.parent.postMessage({ type: 'GET_PG_TABLE_DATA', table: this.currentPgTable }, '*');
+    }
   }
 
   // ── Unified client-side filter (firm + user + search text) ────────────────
@@ -740,11 +815,11 @@ class DatabaseBrowser {
   }
 
   // ── Clear all three filters ────────────────────────────────────────────────
-  clearFilters(keepCollection) {
+  clearFilters(keepSelection) {
     this.els.firmFilter.value  = '';
     this.els.userFilter.value  = '';
     this.els.searchInput.value = '';
-    if (!keepCollection && this.source) {
+    if (!keepSelection && this.source) {
       this.source.localdata = this.processedData;
       $('#jqxgrid').jqxGrid('updatebounddata');
       setTimeout(() => this.updateStats(), 50);
@@ -772,7 +847,8 @@ class DatabaseBrowser {
     this.els.totalRecords.textContent       = data.length;
     this.els.performanceMetrics.textContent = 'Load time: ' + loadTime + 'ms';
     this.els.sizeBytes.textContent          = this.formatBytes(JSON.stringify(data).length);
-    this.setStatus('Loaded ' + data.length + ' records from ' + this.currentCollection);
+    const sourceName = this.dbType === 'mongodb' ? this.currentCollection : this.currentPgTable;
+    this.setStatus('Loaded ' + data.length + ' records from ' + sourceName);
   }
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -832,7 +908,8 @@ class DatabaseBrowser {
       const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-      const filename = (this.currentCollection || 'database') + '-export.xlsx';
+      const sourceName = this.dbType === 'mongodb' ? this.currentCollection : this.currentPgTable;
+      const filename = (sourceName || 'database') + '-export.xlsx';
       XLSX.writeFile(workbook, filename);
       this.setStatus('Exported ' + data.length + ' records as Excel');
     } catch (err) {
@@ -853,15 +930,17 @@ class DatabaseBrowser {
         return val != null ? val : '';
       }).join(','))
     ].join('\n');
-    this.downloadFile(csv, (this.currentCollection || 'database') + '-export.csv', 'text/csv');
+    const sourceName = this.dbType === 'mongodb' ? this.currentCollection : this.currentPgTable;
+    this.downloadFile(csv, (sourceName || 'database') + '-export.csv', 'text/csv');
     this.setStatus('Exported ' + data.length + ' records as CSV');
   }
 
   exportAsJSON() {
     const data = this.getDisplayedRows();
     if (!data.length) { this.setStatus('No data to export'); return; }
+    const sourceName = this.dbType === 'mongodb' ? this.currentCollection : this.currentPgTable;
     this.downloadFile(JSON.stringify(data, null, 2),
-      (this.currentCollection || 'database') + '-export.json', 'application/json');
+      (sourceName || 'database') + '-export.json', 'application/json');
     this.setStatus('Exported ' + data.length + ' records as JSON');
   }
 
@@ -1057,17 +1136,31 @@ class DatabaseBrowser {
     this.setStatus('Loaded ' + collections.length + ' collections');
   }
 
+  handlePgTablesData(tables) {
+    this.pgTables = tables;
+    const sel = this.els.pgTableSelect;
+    sel.innerHTML = '<option value="">— Select Table —</option>';
+    tables.forEach(table => {
+      const opt = document.createElement('option');
+      opt.value = table; opt.textContent = table; sel.appendChild(opt);
+    });
+    this.setStatus('Loaded ' + tables.length + ' PostgreSQL tables');
+  }
+
   handleCollectionData(data) { this.displayData(data); }
+  handlePgTableData(data) { this.displayData(data); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 const browser = new DatabaseBrowser();
 
 window.addEventListener('message', (event) => {
-  const { type, collections, data, error } = event.data;
+  const { type, collections, tables, data, error } = event.data;
   if (error) { browser.setStatus('Error: ' + error); return; }
   if (type === 'COLLECTIONS_DATA') browser.handleCollectionsData(collections || []);
   if (type === 'COLLECTION_DATA')  browser.handleCollectionData(data || []);
+  if (type === 'PG_TABLES_DATA')   browser.handlePgTablesData(tables || []);
+  if (type === 'PG_TABLE_DATA')    browser.handlePgTableData(data || []);
   if (type === 'BACKUP_STATUS')    browser.handleBackupStatus(event.data || {});
   if (type === 'BACKUP_RESULT')    browser.handleBackupResult(event.data || {});
   if (type === 'EMPTY_RESULT')     browser.handleEmptyResult(event.data || {});

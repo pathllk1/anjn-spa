@@ -100,6 +100,110 @@ export const LaborModals = {
   },
 
   /**
+   * Show modal to edit an existing Labor Leader
+   */
+  async showEditLeaderModal(leader, onSave) {
+    const modalId = 'labor-leader-edit-modal';
+    document.getElementById(modalId)?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4';
+    modal.innerHTML = `
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" id="${modalId}-backdrop"></div>
+      <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden transform transition-all">
+        <div class="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+          <h3 class="text-white font-bold text-lg">Edit Labor Leader</h3>
+          <button class="text-white/80 hover:text-white" id="${modalId}-close">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <form class="p-6 space-y-4" id="${modalId}-form">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="col-span-2">
+              <label class="block text-sm font-semibold text-slate-700 mb-1">Leader Name</label>
+              <input type="text" name="name" required value="${leader.name || ''}" class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium" placeholder="Enter name...">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-semibold text-slate-700 mb-1">Phone Number (Optional)</label>
+              <input type="tel" name="phone" value="${leader.phone || ''}" class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium" placeholder="Enter phone...">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-semibold text-slate-700 mb-1">Status</label>
+              <select name="status" class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium">
+                <option value="Active" ${leader.status === 'Active' ? 'selected' : ''}>Active</option>
+                <option value="Inactive" ${leader.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4 mt-2">
+            <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Bank Details (Optional)</h4>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Bank Name</label>
+              <input type="text" name="bank_name" value="${leader.bank_name || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium" placeholder="e.g. HDFC Bank">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Account No.</label>
+                <input type="text" name="account_number" value="${leader.account_number || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium" placeholder="000000000000">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">IFSC Code</label>
+                <input type="text" name="ifsc_code" value="${leader.ifsc_code || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium" placeholder="IFSC0001234">
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+              Update Leader Info
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => {
+      modal.remove();
+    };
+
+    document.getElementById(`${modalId}-close`).addEventListener('click', close);
+    document.getElementById(`${modalId}-backdrop`).addEventListener('click', close);
+
+    const form = document.getElementById(`${modalId}-form`);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const data = {
+        name: formData.get('name'),
+        phone: formData.get('phone'),
+        status: formData.get('status'),
+        bank_name: formData.get('bank_name'),
+        account_number: formData.get('account_number'),
+        ifsc_code: formData.get('ifsc_code')
+      };
+
+      try {
+        const response = await fetchWithCSRF(`/api/pg/labor/leaders/${leader.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Update failed');
+        
+        toast.success('Leader updated successfully');
+        close();
+        if (onSave) onSave();
+      } catch (err) {
+        toast.error('Failed to update leader: ' + err.message);
+      }
+    };
+  },
+
+  /**
    * Show modal to start a new Work Period
    */
   async showPeriodModal(firmId, leaders, onSave) {

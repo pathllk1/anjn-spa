@@ -22,6 +22,7 @@ import ledgerRoutes                             from './routes/mongo/ledger.rout
 import gstr1Routes                              from './routes/mongo/gst/gstr1.routes.js';
 import adminRoutes                              from './routes/mongo/admin.js';
 import databaseRoutes                           from './routes/mongo/database.routes.js';
+import pgDatabaseRoutes                        from './postgres/routes/database.routes.js';
 import toolsRoutes                              from './routes/mongo/toolsRoutes.js';
 import cronRoutes                               from './routes/mongo/cron.routes.js';
 import laborRoutes                              from './postgres/routes/labor.routes.js';
@@ -99,7 +100,6 @@ app.use(securityMiddleware);
 app.use('/api/cron', cronRoutes);
 
 // ── API routes (Priority) ──────────────────────────────────────────────────
-app.use('/api/pg/labor',        laborRoutes);
 
 // ── CSRF protection for all other routes ──────────────────────────────────
 app.use(csrfGenerateToken);
@@ -125,6 +125,8 @@ app.use('/api/ledger',          ledgerRoutes);
 app.use('/api/gst/gstr1',       gstr1Routes);
 app.use('/api/admin',           adminRoutes);
 app.use('/api/admin/database',  databaseRoutes);
+app.use('/api/pg/labor',        laborRoutes);
+app.use('/api/pg/database',     pgDatabaseRoutes);
 app.use('/api/tools',           toolsRoutes);
 
 // ── Health check — reflects real DB state ─────────────────────────────────

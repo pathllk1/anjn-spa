@@ -724,6 +724,63 @@ function loadDatabaseIframe() {
     }
   }
 
+  /* Fetch PostgreSQL tables on demand */
+  async function fetchPgTables() {
+    try {
+      const res = await fetch('/api/pg/database/tables', { credentials: 'same-origin' });
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch PG tables');
+      }
+
+      iframe.contentWindow.postMessage({
+        type: 'PG_TABLES_DATA',
+        tables: data.tables || []
+      }, '*');
+    } catch (err) {
+      console.error('Failed to fetch PG tables:', err);
+      iframe.contentWindow.postMessage({
+        type: 'PG_TABLES_DATA',
+        error: err.message
+      }, '*');
+    }
+  }
+
+  /* Fetch PostgreSQL table data on demand */
+  async function fetchPgTableData(table, limit = 100, skip = 0) {
+    try {
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        skip: skip.toString()
+      });
+
+      const res = await fetch(
+        `/api/pg/database/${table}?${params.toString()}`,
+        { credentials: 'same-origin' }
+      );
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to fetch PG table data');
+      }
+
+      iframe.contentWindow.postMessage({
+        type: 'PG_TABLE_DATA',
+        data: data.data || [],
+        total: data.total || 0,
+        limit: parseInt(limit),
+        skip: parseInt(skip)
+      }, '*');
+    } catch (err) {
+      console.error('Failed to fetch PG table data:', err);
+      iframe.contentWindow.postMessage({
+        type: 'PG_TABLE_DATA',
+        error: err.message
+      }, '*');
+    }
+  }
+
   /* Fetch collection data on demand */
   async function fetchCollectionData(collection, filter = 'all', search = '', limit = 50, skip = 0) {
     try {
@@ -783,6 +840,12 @@ function loadDatabaseIframe() {
       return;
     }
 
+    /* GET_PG_TABLES request */
+    if (msg.type === 'GET_PG_TABLES') {
+      fetchPgTables();
+      return;
+    }
+
     if (msg.type === 'GET_BACKUP_STATUS') {
       fetchBackupStatus();
       return;
@@ -792,6 +855,13 @@ function loadDatabaseIframe() {
     if (msg.type === 'GET_COLLECTION_DATA') {
       const { collection, filter = 'all', search = '', limit = 50, skip = 0 } = msg;
       fetchCollectionData(collection, filter, search, limit, skip);
+      return;
+    }
+
+    /* GET_PG_TABLE_DATA request */
+    if (msg.type === 'GET_PG_TABLE_DATA') {
+      const { table, limit = 100, skip = 0 } = msg;
+      fetchPgTableData(table, limit, skip);
       return;
     }
 
