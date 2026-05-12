@@ -18,6 +18,8 @@ const loadProfile = () => import('./pages/profile.js').then(m => m.renderProfile
 const loadSuperAdmin = () => import('./pages/superAdmin.js').then(m => m.renderSuperAdmin);
 const loadMasterRoll = () => import('./pages/master-roll.js').then(m => m.renderMasterRoll);
 const loadWagesDashboard = () => import('./pages/WagesDashboard.js').then(m => m.renderWagesDashboard);
+const loadLaborDashboard = () => import('./pages/labor/labor-dashboard.js').then(m => m.renderLaborDashboard);
+const loadLaborPeriodDetails = () => import('./pages/labor/labor-period-details.js').then(m => m.renderLaborPeriodDetails);
 const loadSales = () => import('./pages/sales.js').then(m => m.renderSales);
 const loadPurchase = () => import('./pages/purchase.js').then(m => m.renderPurchase);
 const loadStocks = () => import('./pages/stocks.js').then(m => m.renderStocks);
@@ -157,6 +159,8 @@ router
   // HR
   .on('/master-roll',               navigate(loadMasterRoll))
   .on('/wages-dashboard',           navigate(loadWagesDashboard))
+  .on('/labor-dashboard',           navigate(loadLaborDashboard))
+  .on('/labor/periods/:id',         navigate(loadLaborPeriodDetails))
 
   // Inventory
   .on('/inventory/sls',             navigate(loadSales))

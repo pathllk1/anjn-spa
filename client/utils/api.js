@@ -79,10 +79,18 @@ export const api = {
         credentials: 'same-origin' // Include cookies
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Expected JSON but received:', text.substring(0, 100));
+        throw new Error(`Server returned non-JSON response (${response.status}). Please check if the API route exists and the server is running.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Request failed');
+        throw new Error(data.message || `Request failed with status ${response.status}`);
       }
 
       return data;

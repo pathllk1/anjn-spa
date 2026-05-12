@@ -24,6 +24,7 @@ import adminRoutes                              from './routes/mongo/admin.js';
 import databaseRoutes                           from './routes/mongo/database.routes.js';
 import toolsRoutes                              from './routes/mongo/toolsRoutes.js';
 import cronRoutes                               from './routes/mongo/cron.routes.js';
+import laborRoutes                              from './postgres/routes/labor.routes.js';
 import { cleanupExpiredTokens }                 from './utils/mongo/tokenRevocationUtils.js';
 import { cleanupRateLimitEntries }              from './middleware/mongo/rateLimitMiddleware.js';
 import morgan from 'morgan';
@@ -97,6 +98,9 @@ app.use(securityMiddleware);
 // Register them HERE, before csrfGenerateToken/csrfValidateToken are applied.
 app.use('/api/cron', cronRoutes);
 
+// ── API routes (Priority) ──────────────────────────────────────────────────
+app.use('/api/pg/labor',        laborRoutes);
+
 // ── CSRF protection for all other routes ──────────────────────────────────
 app.use(csrfGenerateToken);
 app.use(csrfValidateToken);
@@ -107,7 +111,7 @@ app.use(express.static(join(__dirname, '../client'), {
     etag:   false,
 }));
 
-// ── API routes ─────────────────────────────────────────────────────────────
+// ── Other API routes ───────────────────────────────────────────────────────
 app.use('/api/auth',            authRoutes);
 app.use('/api/sessions',        sessionRoutes);
 app.use('/api/pages',           pageRoutes);
