@@ -268,7 +268,7 @@ export async function getHSNSummary(firmId, firmGstin, startDate, endDate) {
  * Table 9: Amendments to B2B, B2CL, Exports
  */
 export async function getAmendments(firmId, firmGstin, startDate, endDate) {
-  const creditNotes = await Bill.find({
+  const notes = await Bill.find({
     firm_id: firmId,
     firm_gstin: firmGstin,
     btype: { $in: ['CREDIT_NOTE', 'DEBIT_NOTE'] },
@@ -278,7 +278,15 @@ export async function getAmendments(firmId, firmGstin, startDate, endDate) {
     .populate('ref_bill_id', 'bno bdate')
     .lean();
 
-  return creditNotes.map(note => ({
+  // Filter out Purchase Returns (Debit Notes without SALES subtype)
+  // CREDIT_NOTE in this system is always for Sales Returns.
+  // DEBIT_NOTE is primarily for Purchase Returns, unless it has a SALES subtype.
+  const filteredNotes = notes.filter(note => 
+    note.btype === 'CREDIT_NOTE' || 
+    (note.btype === 'DEBIT_NOTE' && note.bill_subtype === 'SALES')
+  );
+
+  return filteredNotes.map(note => ({
     amendment_type: note.btype,
     original_invoice_no: note.ref_bill_id?.bno || 'N/A',
     original_invoice_date: note.ref_bill_id?.bdate || 'N/A',
@@ -461,10 +469,12 @@ export async function getAdvances(firmId, firmGstin, startDate, endDate) {
  * Mandatory: 4-digit HSN for turnover < ₹5 Cr, 6-digit for ≥ ₹5 Cr
  */
 export async function getHSNSummaryB2B(firmId, firmGstin, startDate, endDate) {
+  const outwardInvoiceTypes = ['SALES', 'EXPORT', 'EXPORT_WITH_PAYMENT', 'EXPORT_WITHOUT_PAYMENT', 'SEZ_WITH_PAYMENT', 'SEZ_WITHOUT_PAYMENT', 'DEEMED_EXPORT'];
+
   const bills = await Bill.find({
     firm_id: firmId,
     firm_gstin: firmGstin,
-    btype: 'SALES',
+    btype: { $in: outwardInvoiceTypes },
     status: 'ACTIVE',
     bdate: { $gte: startDate, $lte: endDate },
     gstin: { $ne: 'UNREGISTERED', $exists: true },
@@ -474,7 +484,7 @@ export async function getHSNSummaryB2B(firmId, firmGstin, startDate, endDate) {
 
   const stockRegs = await StockReg.find({
     firm_id: firmId,
-    type: 'SALE',
+    type: { $in: ['SALE', 'EXPORT'] },
     bill_id: { $in: billIds },
   }).lean();
 
@@ -521,10 +531,12 @@ export async function getHSNSummaryB2B(firmId, firmGstin, startDate, endDate) {
  * Table 12: HSN Summary - B2C Tab
  */
 export async function getHSNSummaryB2C(firmId, firmGstin, startDate, endDate) {
+  const outwardInvoiceTypes = ['SALES', 'EXPORT', 'EXPORT_WITH_PAYMENT', 'EXPORT_WITHOUT_PAYMENT', 'SEZ_WITH_PAYMENT', 'SEZ_WITHOUT_PAYMENT', 'DEEMED_EXPORT'];
+
   const bills = await Bill.find({
     firm_id: firmId,
     firm_gstin: firmGstin,
-    btype: 'SALES',
+    btype: { $in: outwardInvoiceTypes },
     status: 'ACTIVE',
     bdate: { $gte: startDate, $lte: endDate },
     $or: [
@@ -538,7 +550,7 @@ export async function getHSNSummaryB2C(firmId, firmGstin, startDate, endDate) {
 
   const stockRegs = await StockReg.find({
     firm_id: firmId,
-    type: 'SALE',
+    type: { $in: ['SALE', 'EXPORT'] },
     bill_id: { $in: billIds },
   }).lean();
 
@@ -586,51 +598,66 @@ export async function getHSNSummaryB2C(firmId, firmGstin, startDate, endDate) {
  * All documents issued during the tax period
  */
 export async function getDocumentSummary(firmId, firmGstin, startDate, endDate) {
+  // Fetch both ACTIVE and CANCELLED bills for document numbering count
   const bills = await Bill.find({
     firm_id: firmId,
     firm_gstin: firmGstin,
-    status: 'ACTIVE',
+    status: { $in: ['ACTIVE', 'CANCELLED'] },
     bdate: { $gte: startDate, $lte: endDate },
   }).lean();
 
   // Categorize documents by type
   const docTypes = {
-    invoices: { from: '', to: '', total: 0, cancelled: 0 },
+    outward_invoices: { from: '', to: '', total: 0, cancelled: 0 },
+    rcm_invoices: { from: '', to: '', total: 0, cancelled: 0 },
     credit_notes: { from: '', to: '', total: 0, cancelled: 0 },
     debit_notes: { from: '', to: '', total: 0, cancelled: 0 },
     delivery_challan: { from: '', to: '', total: 0, cancelled: 0 },
   };
 
-  const invoices = bills.filter(b => b.btype === 'SALES' || b.btype === 'PURCHASE');
+  // 1. Invoices for outward supply (SALES, EXPORTS, etc.)
+  const outwardInvoiceTypes = ['SALES', 'EXPORT', 'EXPORT_WITH_PAYMENT', 'EXPORT_WITHOUT_PAYMENT', 'SEZ_WITH_PAYMENT', 'SEZ_WITHOUT_PAYMENT', 'DEEMED_EXPORT'];
+  const outwardInvoices = bills.filter(b => outwardInvoiceTypes.includes(b.btype));
+
+  // 2. Invoices for inward supply from unregistered person (Self-Invoice for RCM)
+  const rcmInvoices = bills.filter(b => 
+    b.btype === 'PURCHASE' && 
+    b.reverse_charge === true && 
+    (!b.gstin || b.gstin === 'UNREGISTERED')
+  );
+
+  // 3. Credit Notes (Sales returns issued by taxpayer)
   const creditNotes = bills.filter(b => b.btype === 'CREDIT_NOTE');
-  const debitNotes = bills.filter(b => b.btype === 'DEBIT_NOTE');
 
-  if (invoices.length > 0) {
-    const invoiceNos = invoices.map(b => b.bno).sort();
-    docTypes.invoices.from = invoiceNos[0];
-    docTypes.invoices.to = invoiceNos[invoiceNos.length - 1];
-    docTypes.invoices.total = invoices.length;
-    docTypes.invoices.cancelled = invoices.filter(b => b.status === 'CANCELLED').length;
-  }
+  // 4. Debit Notes (Price increase issued by taxpayer)
+  // Note: In this system, DEBIT_NOTE is primarily used for Purchase Returns.
+  // Purchase returns do not go in GSTR-1. Only Sales Debit Notes should.
+  // For now, we filter for any DEBIT_NOTE that might be sales related if the system supports it.
+  const debitNotes = bills.filter(b => b.btype === 'DEBIT_NOTE' && b.bill_subtype === 'SALES');
 
-  if (creditNotes.length > 0) {
-    const cnNos = creditNotes.map(b => b.bno).sort();
-    docTypes.credit_notes.from = cnNos[0];
-    docTypes.credit_notes.to = cnNos[cnNos.length - 1];
-    docTypes.credit_notes.total = creditNotes.length;
-    docTypes.credit_notes.cancelled = creditNotes.filter(b => b.status === 'CANCELLED').length;
-  }
+  // Helper to populate docType stats
+  const populateStats = (filteredBills, docTypeKey) => {
+    if (filteredBills.length > 0) {
+      // Filter for bills with a bill number
+      const withBno = filteredBills.filter(b => b.bno);
+      if (withBno.length === 0) return;
 
-  if (debitNotes.length > 0) {
-    const dnNos = debitNotes.map(b => b.bno).sort();
-    docTypes.debit_notes.from = dnNos[0];
-    docTypes.debit_notes.to = dnNos[dnNos.length - 1];
-    docTypes.debit_notes.total = debitNotes.length;
-    docTypes.debit_notes.cancelled = debitNotes.filter(b => b.status === 'CANCELLED').length;
-  }
+      const nos = withBno.map(b => b.bno).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      docTypes[docTypeKey].from = nos[0];
+      docTypes[docTypeKey].to = nos[nos.length - 1];
+      docTypes[docTypeKey].total = filteredBills.length;
+      docTypes[docTypeKey].cancelled = filteredBills.filter(b => b.status === 'CANCELLED').length;
+    }
+  };
+
+  populateStats(outwardInvoices, 'outward_invoices');
+  populateStats(rcmInvoices, 'rcm_invoices');
+  populateStats(creditNotes, 'credit_notes');
+  populateStats(debitNotes, 'debit_notes');
 
   return [
-    { nature_of_document: 'Invoices for outward supply', sr_no_from: docTypes.invoices.from, sr_no_to: docTypes.invoices.to, total_number: docTypes.invoices.total, cancelled: docTypes.invoices.cancelled },
+    { nature_of_document: 'Invoices for outward supply', sr_no_from: docTypes.outward_invoices.from, sr_no_to: docTypes.outward_invoices.to, total_number: docTypes.outward_invoices.total, cancelled: docTypes.outward_invoices.cancelled },
+    { nature_of_document: 'Invoices for inward supply from unregistered person', sr_no_from: docTypes.rcm_invoices.from, sr_no_to: docTypes.rcm_invoices.to, total_number: docTypes.rcm_invoices.total, cancelled: docTypes.rcm_invoices.cancelled },
     { nature_of_document: 'Credit Notes', sr_no_from: docTypes.credit_notes.from, sr_no_to: docTypes.credit_notes.to, total_number: docTypes.credit_notes.total, cancelled: docTypes.credit_notes.cancelled },
     { nature_of_document: 'Debit Notes', sr_no_from: docTypes.debit_notes.from, sr_no_to: docTypes.debit_notes.to, total_number: docTypes.debit_notes.total, cancelled: docTypes.debit_notes.cancelled },
   ];
@@ -715,10 +742,12 @@ export async function getExemptedSupplies(firmId, firmGstin, startDate, endDate)
  * Get GSTR1 summary statistics
  */
 export async function getGSTR1Summary(firmId, firmGstin, startDate, endDate) {
+  const outwardInvoiceTypes = ['SALES', 'EXPORT', 'EXPORT_WITH_PAYMENT', 'EXPORT_WITHOUT_PAYMENT', 'SEZ_WITH_PAYMENT', 'SEZ_WITHOUT_PAYMENT', 'DEEMED_EXPORT'];
+  
   const bills = await Bill.find({
     firm_id: firmId,
     firm_gstin: firmGstin,
-    btype: 'SALES',
+    btype: { $in: outwardInvoiceTypes },
     status: 'ACTIVE',
     bdate: { $gte: startDate, $lte: endDate },
   }).lean();
@@ -755,10 +784,12 @@ export async function validateGSTR1Data(firmId, firmGstin, startDate, endDate) {
   const errors = [];
   const warnings = [];
 
+  const outwardInvoiceTypes = ['SALES', 'EXPORT', 'EXPORT_WITH_PAYMENT', 'EXPORT_WITHOUT_PAYMENT', 'SEZ_WITH_PAYMENT', 'SEZ_WITHOUT_PAYMENT', 'DEEMED_EXPORT'];
+
   const bills = await Bill.find({
     firm_id: firmId,
     firm_gstin: firmGstin,
-    btype: 'SALES',
+    btype: { $in: outwardInvoiceTypes },
     status: 'ACTIVE',
     bdate: { $gte: startDate, $lte: endDate },
   }).lean();
