@@ -4,8 +4,10 @@
  * No DB dependency — uses Mongoose document shapes instead of SQLite rows.
  */
 
-import PdfPrinter from 'pdfmake';
+import PrinterModule from 'pdfmake/js/Printer.js';
 import { formatReadableDate } from './dateFormatter.js';
+
+const PdfPrinter = PrinterModule.default;
 
 // pdfmake uses standard built-in fonts
 const fonts = {
@@ -300,16 +302,17 @@ function _paymentReceiptContent(voucher) {
   };
 }
 
-function _buildPDF(docDefinition) {
-  const pdfDoc = printer.createPdfKitDocument(docDefinition);
+async function _buildPDF(docDefinition) {
+  const pdfDoc = await printer.createPdfKitDocument(docDefinition);
   const chunks = [];
+
   return new Promise((resolve, reject) => {
-    pdfDoc.on('data',  chunk => chunks.push(chunk));
-    pdfDoc.on('end',   ()    => resolve(Buffer.concat(chunks)));
+    pdfDoc.on('data', chunk => chunks.push(chunk));
+    pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
     pdfDoc.on('error', reject);
     pdfDoc.end();
   });
-}
+  }
 
 /* ─────────────────────────────────────────────
    NUMBER TO WORDS (Indian numbering)

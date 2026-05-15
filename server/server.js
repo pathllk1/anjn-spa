@@ -20,6 +20,7 @@ import inventorySalesRoutes                     from './routes/mongo/inventory/s
 import inventoryPurchaseRoutes                  from './routes/mongo/inventory/prs.js';
 import ledgerRoutes                             from './routes/mongo/ledger.routes.js';
 import gstr1Routes                              from './routes/mongo/gst/gstr1.routes.js';
+import gstr3bRoutes                             from './routes/mongo/gst/gstr3b.routes.js';
 import adminRoutes                              from './routes/mongo/admin.js';
 import databaseRoutes                           from './routes/mongo/database.routes.js';
 import pgDatabaseRoutes                        from './postgres/routes/database.routes.js';
@@ -123,6 +124,7 @@ app.use('/api/inventory/sales', inventorySalesRoutes);
 app.use('/api/inventory/purchase', inventoryPurchaseRoutes);
 app.use('/api/ledger',          ledgerRoutes);
 app.use('/api/gst/gstr1',       gstr1Routes);
+app.use('/api/gst/gstr3b',      gstr3bRoutes);
 app.use('/api/admin',           adminRoutes);
 app.use('/api/admin/database',  databaseRoutes);
 app.use('/api/pg/labor',        laborRoutes);

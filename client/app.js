@@ -28,7 +28,7 @@ const loadInventoryCategories = () => import('./pages/inventory-categories.js').
 const loadInventorySuppliers = () => import('./pages/inventory-suppliers.js').then(m => m.renderInventorySuppliers);
 const loadInventoryReports = () => import('./pages/inventory-reports.js').then(m => m.renderInventoryReports);
 const loadStockMovement = () => import('./pages/stock-movement.js').then(m => m.renderStockMovement);
-const loadGSTR1 = () => import('./pages/gst/gstr1.js').then(m => m.renderGSTR1);
+const loadGSTReturns = () => import('./pages/gst/gst-returns.js').then(m => m.renderGSTReturns);
 const loadAccountsDashboard = () => import('./pages/accounts-dashboard.js').then(m => m.renderAccountsDashboard);
 const loadJournalEntries = () => import('./pages/ledger/journal-entries.js').then(m => m.renderJournalEntries);
 const loadVouchers = () => import('./pages/ledger/vouchers.js').then(m => m.renderVouchers);
@@ -173,7 +173,8 @@ router
   .on('/inventory/stock-movement',  navigate(loadStockMovement))
 
   // GST
-  .on('/gst/gstr1',                 navigate(loadGSTR1))
+  .on('/gst/returns',               navigate(loadGSTReturns))
+  .on('/gst/returns/:tab',          navigate(loadGSTReturns))
 
   // Accounts
   .on('/accounts-dashboard',        navigate(loadAccountsDashboard))

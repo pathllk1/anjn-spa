@@ -31,6 +31,48 @@ import {
   exportGSTR1AsExcel,
   exportGSTR1AsCSV,
 } from './gstr1ExportUtils.js';
+import { generateGSTR1PDF } from '../../../utils/gstPdfGenerator.js';
+
+/**
+ * Export GSTR1 as PDF
+ */
+export const exportGSTR1PDF = async (req, res) => {
+  try {
+    const { firm_id } = req.user;
+    const { startDate, endDate, firmGstin } = req.query;
+
+    if (!startDate || !endDate || !firmGstin) {
+      return res.status(400).json({ success: false, error: 'startDate, endDate, and firmGstin are required' });
+    }
+
+    const firm = await Firm.findById(firm_id).lean();
+    if (!firm) return res.status(404).json({ success: false, error: 'Firm not found' });
+
+    // Fetch required tables for PDF
+    const [summary, b2b, hsnB2B] = await Promise.all([
+      getGSTR1Summary(firm_id, firmGstin, startDate, endDate),
+      getB2BSupplies(firm_id, firmGstin, startDate, endDate),
+      getHSNSummaryB2B(firm_id, firmGstin, startDate, endDate),
+    ]);
+
+    const reportData = {
+      summary,
+      tables: {
+        table_4a_b2b_supplies: b2b,
+        table_12_hsn_b2b: hsnB2B
+      }
+    };
+
+    const buffer = await generateGSTR1PDF(reportData, firm);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=GSTR1_${firmGstin}_${startDate}.pdf`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Error exporting GSTR1 as PDF:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
 
 /**
  * Get GSTR1 summary for a given period

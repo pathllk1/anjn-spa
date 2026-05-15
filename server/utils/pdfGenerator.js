@@ -3,8 +3,10 @@
  * Generates PDF documents for bills, vouchers, and reports using pdfmake
  */
 
-import PdfPrinter from 'pdfmake';
+import PrinterModule from 'pdfmake/js/Printer.js';
 import { formatDate, formatReadableDate } from './dateFormatter.js';
+
+const PdfPrinter = PrinterModule.default;
 
 // Define fonts (using standard fonts available in pdfmake)
 const fonts = {
@@ -25,7 +27,7 @@ const printer = new PdfPrinter(fonts);
  * @param {Array} items - Bill items
  * @returns {Buffer} PDF buffer
  */
-function generateInvoicePDF(bill, firm, items) {
+async function generateInvoicePDF(bill, firm, items) {
   const docDefinition = {
     pageSize: 'A4',
     pageMargins: [40, 60, 40, 60],
@@ -173,7 +175,7 @@ function generateInvoicePDF(bill, firm, items) {
     }
   };
   
-  const pdfDoc = printer.createPdfKitDocument(docDefinition);
+  const pdfDoc = await printer.createPdfKitDocument(docDefinition);
   const chunks = [];
   
   return new Promise((resolve, reject) => {
@@ -190,7 +192,7 @@ function generateInvoicePDF(bill, firm, items) {
  * @param {Object} firm - Firm details
  * @returns {Buffer} PDF buffer
  */
-function generateVoucherPDF(voucher, firm) {
+async function generateVoucherPDF(voucher, firm) {
   const voucherTitle = voucher.voucher_type === 'PAYMENT' ? 'Payment Voucher' :
                        voucher.voucher_type === 'RECEIPT' ? 'Receipt Voucher' : 'Journal Voucher';
   
@@ -268,7 +270,7 @@ function generateVoucherPDF(voucher, firm) {
     }
   };
   
-  const pdfDoc = printer.createPdfKitDocument(docDefinition);
+  const pdfDoc = await printer.createPdfKitDocument(docDefinition);
   const chunks = [];
   
   return new Promise((resolve, reject) => {

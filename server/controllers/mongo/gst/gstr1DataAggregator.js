@@ -44,8 +44,8 @@ export async function getB2BSupplies(firmId, firmGstin, startDate, endDate) {
     invoice_date: bill.bdate,
     customer_gstin: bill.gstin,
     customer_state_code: bill.state_code,
-    invoice_value: bill.gtot,
-    taxable_value: bill.ntot,
+    invoice_value: bill.ntot,
+    taxable_value: bill.gtot,
     cgst: bill.cgst || 0,
     sgst: bill.sgst || 0,
     igst: bill.igst || 0,
@@ -113,7 +113,7 @@ export async function getB2CSupplies(firmId, firmGstin, startDate, endDate) {
       aggregated[key].taxable_value += parseFloat(sr.total) || 0;
 
       // Distribute GST proportionally
-      const billTaxableValue = bill.ntot || 1;
+      const billTaxableValue = bill.gtot || 1;
       const itemProportion = (parseFloat(sr.total) || 0) / billTaxableValue;
       aggregated[key].cgst += (bill.cgst || 0) * itemProportion;
       aggregated[key].sgst += (bill.sgst || 0) * itemProportion;
@@ -137,7 +137,7 @@ export async function getB2CLSupplies(firmId, firmGstin, startDate, endDate) {
     btype: 'SALES',
     status: 'ACTIVE',
     bdate: { $gte: startDate, $lte: endDate },
-    gtot: { $gt: B2CL_THRESHOLD },
+    ntot: { $gt: B2CL_THRESHOLD },
     $or: [
       { gstin: 'UNREGISTERED' },
       { gstin: { $exists: false } },
@@ -155,8 +155,8 @@ export async function getB2CLSupplies(firmId, firmGstin, startDate, endDate) {
     invoice_no: bill.bno,
     invoice_date: bill.bdate,
     state_code: bill.state_code,
-    invoice_value: bill.gtot,
-    taxable_value: bill.ntot,
+    invoice_value: bill.ntot,
+    taxable_value: bill.gtot,
     cgst: bill.cgst || 0,
     sgst: bill.sgst || 0,
     igst: bill.igst || 0,
@@ -190,7 +190,7 @@ export async function getB2CSSupplies(firmId, firmGstin, startDate, endDate) {
   // Filter B2CS: intra-state OR inter-state <= ₹1 lakh
   const b2csBills = bills.filter(bill => {
     const isIntraState = !bill.state_code || bill.state_code === firmStateCode;
-    const isSmallInterState = bill.state_code !== firmStateCode && bill.gtot <= B2CL_THRESHOLD;
+    const isSmallInterState = bill.state_code !== firmStateCode && bill.ntot <= B2CL_THRESHOLD;
     return isIntraState || isSmallInterState;
   });
 
@@ -294,8 +294,8 @@ export async function getAmendments(firmId, firmGstin, startDate, endDate) {
     amendment_invoice_date: note.bdate,
     customer_gstin: note.gstin,
     customer_state_code: note.state_code,
-    invoice_value: note.gtot,
-    taxable_value: note.ntot,
+    invoice_value: note.ntot,
+    taxable_value: note.gtot,
     cgst: note.cgst || 0,
     sgst: note.sgst || 0,
     igst: note.igst || 0,
@@ -325,8 +325,8 @@ export async function getB2BReverseCharge(firmId, firmGstin, startDate, endDate)
     invoice_date: bill.bdate,
     customer_gstin: bill.gstin,
     customer_state_code: bill.state_code,
-    invoice_value: bill.gtot,
-    taxable_value: bill.ntot,
+    invoice_value: bill.ntot,
+    taxable_value: bill.gtot,
     place_of_supply: bill.state_code,
     bill_id: bill._id,
   }));
@@ -348,8 +348,8 @@ export async function getExports(firmId, firmGstin, startDate, endDate) {
     export_type: bill.btype,
     invoice_no: bill.bno,
     invoice_date: bill.bdate,
-    invoice_value: bill.gtot,
-    taxable_value: bill.ntot,
+    invoice_value: bill.ntot,
+    taxable_value: bill.gtot,
     igst: bill.igst || 0,
     cess: 0,
     port_code: bill.port_code || '',
@@ -516,7 +516,7 @@ export async function getHSNSummaryB2B(firmId, firmGstin, startDate, endDate) {
     // Find corresponding bill for GST
     const bill = bills.find(b => b._id.toString() === sr.bill_id.toString());
     if (bill) {
-      const billTaxableValue = bill.ntot || 1;
+      const billTaxableValue = bill.gtot || 1;
       const itemProportion = (parseFloat(sr.total) || 0) / billTaxableValue;
       aggregated[hsn].central_tax += (bill.cgst || 0) * itemProportion;
       aggregated[hsn].state_ut_tax += (bill.sgst || 0) * itemProportion;
@@ -582,7 +582,7 @@ export async function getHSNSummaryB2C(firmId, firmGstin, startDate, endDate) {
     // Find corresponding bill for GST
     const bill = bills.find(b => b._id.toString() === sr.bill_id.toString());
     if (bill) {
-      const billTaxableValue = bill.ntot || 1;
+      const billTaxableValue = bill.gtot || 1;
       const itemProportion = (parseFloat(sr.total) || 0) / billTaxableValue;
       aggregated[hsn].central_tax += (bill.cgst || 0) * itemProportion;
       aggregated[hsn].state_ut_tax += (bill.sgst || 0) * itemProportion;
@@ -692,8 +692,8 @@ export async function getEcommerceSupplies(firmId, firmGstin, startDate, endDate
     grouped[ecomGstin].supplies.push({
       invoice_no: bill.bno,
       invoice_date: bill.bdate,
-      invoice_value: bill.gtot,
-      taxable_value: bill.ntot,
+      invoice_value: bill.ntot,
+      taxable_value: bill.gtot,
       cgst: bill.cgst || 0,
       sgst: bill.sgst || 0,
       igst: bill.igst || 0,
@@ -732,8 +732,8 @@ export async function getExemptedSupplies(firmId, firmGstin, startDate, endDate)
     invoice_no: bill.bno,
     invoice_date: bill.bdate,
     customer_gstin: bill.gstin,
-    invoice_value: bill.gtot,
-    taxable_value: bill.ntot,
+    invoice_value: bill.ntot,
+    taxable_value: bill.gtot,
     bill_id: bill._id,
   }));
 }
@@ -755,11 +755,11 @@ export async function getGSTR1Summary(firmId, firmGstin, startDate, endDate) {
   const b2bBills = bills.filter(b => b.gstin && b.gstin !== 'UNREGISTERED');
   const b2cBills = bills.filter(b => !b.gstin || b.gstin === 'UNREGISTERED');
 
-  const totalTaxableValue = bills.reduce((sum, b) => sum + (b.ntot || 0), 0);
+  const totalTaxableValue = bills.reduce((sum, b) => sum + (b.gtot || 0), 0);
   const totalCGST = bills.reduce((sum, b) => sum + (b.cgst || 0), 0);
   const totalSGST = bills.reduce((sum, b) => sum + (b.sgst || 0), 0);
   const totalIGST = bills.reduce((sum, b) => sum + (b.igst || 0), 0);
-  const totalInvoiceValue = bills.reduce((sum, b) => sum + (b.gtot || 0), 0);
+  const totalInvoiceValue = bills.reduce((sum, b) => sum + (b.ntot || 0), 0);
 
   return {
     period_start: startDate,
@@ -803,7 +803,7 @@ export async function validateGSTR1Data(firmId, firmGstin, startDate, endDate) {
   bills.forEach(bill => {
     // Check for missing GSTIN in B2B
     if (!bill.gstin || bill.gstin === 'UNREGISTERED') {
-      if (bill.gtot > 100000) {
+      if (bill.ntot > 100000) {
         // B2CL threshold is ₹1 lakh
         const firmStateCode = firmGstin ? firmGstin.substring(0, 2) : null;
         const isInterState = bill.state_code && bill.state_code !== firmStateCode;

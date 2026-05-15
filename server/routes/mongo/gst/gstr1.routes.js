@@ -83,4 +83,7 @@ router.get('/export/excel', gstr1Controller.exportGSTR1Excel);
 // Export as CSV
 router.get('/export/csv', gstr1Controller.exportGSTR1CSV);
 
+// Export as PDF
+router.get('/export/pdf', gstr1Controller.exportGSTR1PDF);
+
 export default router;

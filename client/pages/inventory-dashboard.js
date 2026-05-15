@@ -26,9 +26,9 @@ const DASHBOARD_LINKS = [
     `,
   },
   {
-    href: '/gst/gstr1',
-    title: 'GSTR1 Report',
-    subtitle: 'GST outward supplies analysis',
+    href: '/gst/returns',
+    title: 'GST Returns',
+    subtitle: 'GSTR-1 & GSTR-3B analysis',
     gradient: 'from-indigo-600 via-blue-500 to-cyan-400',
     accent: 'text-indigo-100',
     icon: `
