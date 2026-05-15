@@ -177,6 +177,8 @@ export async function generateEPFESICReport(req, res) {
       { header: 'Date of Exit', key: 'doe', width: 15 },
       { header: 'Aadhar', key: 'aadhar', width: 15 },
       { header: 'Account Number', key: 'acc', width: 20 },
+      { header: 'Wage Days', key: 'wage_days', width: 12 },
+      { header: 'Per Day Wage', key: 'p_day_wage', width: 15 },
       { header: 'Gross Salary', key: 'gross', width: 15 },
       { header: 'EPF (12%)', key: 'epf', width: 18 },
       { header: 'ESIC (0.75%)', key: 'esic', width: 18 },
@@ -224,6 +226,8 @@ export async function generateEPFESICReport(req, res) {
         doe: exitDisplay,
         aadhar: mr?.aadhar || '',
         acc: mr?.account_no || '',
+        wage_days: wage.wage_days || 0,
+        p_day_wage: wage.p_day_wage || 0,
         gross: gross,
         epf: epf,
         esic: esic,
@@ -237,13 +241,18 @@ export async function generateEPFESICReport(req, res) {
       });
 
       row.getCell('acc').numFmt = '@';
-      ['gross', 'epf', 'esic', 'stat', 'employer_epf', 'employer_esic', 'total_employer', 'grand_total', 'net'].forEach(key => {
-        row.getCell(key).numFmt = '₹#,##0.00';
+      ['wage_days', 'p_day_wage', 'gross', 'epf', 'esic', 'stat', 'employer_epf', 'employer_esic', 'total_employer', 'grand_total', 'net'].forEach(key => {
+        if (key === 'wage_days') {
+          row.getCell(key).numFmt = '0.0';
+        } else {
+          row.getCell(key).numFmt = '₹#,##0.00';
+        }
       });
     });
 
     const totalsRow = worksheet.addRow({
       name: 'TOTAL',
+      wage_days: wages.reduce((sum, w) => sum + (w.wage_days || 0), 0),
       gross: wages.reduce((sum, w) => sum + (w.gross_salary || 0), 0),
       epf: wages.reduce((sum, w) => sum + (w.epf_deduction || 0), 0),
       esic: wages.reduce((sum, w) => sum + (w.esic_deduction || 0), 0),
@@ -261,6 +270,15 @@ export async function generateEPFESICReport(req, res) {
       net: wages.reduce((sum, w) => sum + (w.net_salary || 0), 0),
     });
     totalsRow.font = { bold: true };
+
+    // Format totals row
+    ['wage_days', 'gross', 'epf', 'esic', 'stat', 'employer_epf', 'employer_esic', 'total_employer', 'grand_total', 'net'].forEach(key => {
+      if (key === 'wage_days') {
+        totalsRow.getCell(key).numFmt = '0.0';
+      } else {
+        totalsRow.getCell(key).numFmt = '₹#,##0.00';
+      }
+    });
 
     // Apply Borders to all cells with data
     worksheet.eachRow((row) => {

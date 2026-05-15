@@ -130,6 +130,25 @@ export const laborController = {
     }
   },
 
+  async getPeriodById(req, res) {
+    const sql = getSql();
+    try {
+      const { id } = req.params;
+      const [period] = await sql`
+        SELECT p.*, l.name as leader_name 
+        FROM labor_periods p
+        JOIN labor_leaders l ON l.id = p.leader_id
+        WHERE p.id = ${id}
+      `;
+      if (!period) {
+        return res.status(404).json({ success: false, message: `Work period ${id} not found` });
+      }
+      res.json({ success: true, data: period });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
   async createPeriod(req, res) {
     const sql = getSql();
     try {
@@ -139,6 +158,42 @@ export const laborController = {
         VALUES (${firm_id}, ${leader_id}, ${start_date}, ${end_date})
         RETURNING *
       `;
+      res.json({ success: true, data: period });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  async updatePeriod(req, res) {
+    const sql = getSql();
+    if (!sql) {
+      return res.status(503).json({ success: false, message: 'Database not ready' });
+    }
+    try {
+      const { id } = req.params;
+      const { leader_id, start_date, end_date } = req.body;
+
+      // Safety check: Only allow editing 'Open' periods
+      const [existing] = await sql`SELECT status FROM labor_periods WHERE id = ${id}`;
+      if (!existing) {
+        console.error(`[LABOR_UPDATE] Period ${id} not found in DB`);
+        return res.status(404).json({ success: false, message: `Period with ID ${id} not found in database` });
+      }
+      if (existing.status !== 'Open') {
+        return res.status(400).json({ success: false, message: 'Only Open periods can be edited' });
+      }
+
+      const [period] = await sql`
+        UPDATE labor_periods
+        SET 
+          leader_id = ${leader_id || sql`leader_id`},
+          start_date = ${start_date || sql`start_date`},
+          end_date = ${end_date || sql`end_date`},
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${id}
+        RETURNING *
+      `;
+
       res.json({ success: true, data: period });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
@@ -186,6 +241,10 @@ export const laborController = {
         JOIN labor_leaders l ON l.id = p.leader_id
         WHERE p.id = ${id}
       `;
+
+      if (!period) {
+        return res.status(404).json({ success: false, message: 'Period not found' });
+      }
 
       const workers = await sql`
         SELECT * FROM labor_workers WHERE period_id = ${id} ORDER BY created_at ASC

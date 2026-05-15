@@ -25,7 +25,7 @@ export async function renderLaborPeriodDetails(router, params) {
     data.advances = data.advances || [];
 
     const content = `
-      <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+      <div class="w-full px-4 py-8 space-y-8">
         <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-200 pb-8 gap-6">
           <div class="space-y-2">
@@ -37,9 +37,16 @@ export async function renderLaborPeriodDetails(router, params) {
                 Batch ID: ${id.substring(0, 8)}
               </span>
             </div>
-            <h1 class="text-4xl font-black text-slate-900 tracking-tight">
-              ${data.period.leader_name}'s Team
-            </h1>
+            <div class="flex items-center gap-3">
+              <h1 class="text-4xl font-black text-slate-900 tracking-tight">
+                ${data.period.leader_name}'s Team
+              </h1>
+              ${data.period.status === 'Open' ? `
+                <button id="edit-period-btn" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition" title="Edit Period Details">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
+              ` : ''}
+            </div>
             <div class="flex items-center gap-2 text-slate-500 font-bold">
                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                <span>${new Date(data.period.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
@@ -219,6 +226,19 @@ export async function renderLaborPeriodDetails(router, params) {
 
 
 function setupPeriodEvents(data, router, periodId, firmId) {
+  // Edit Period Logic
+  document.getElementById('edit-period-btn')?.addEventListener('click', async () => {
+    try {
+      const res = await api.get(`/api/pg/labor/leaders?firm_id=${firmId}`);
+      const leaders = res.data || [];
+      LaborModals.showEditPeriodModal(data.period, leaders, () => {
+        renderLaborPeriodDetails(router, { id: periodId });
+      });
+    } catch (err) {
+      toast.error('Failed to load leaders: ' + err.message);
+    }
+  });
+
   // Add Expense Logic
   document.getElementById('add-exp-btn')?.addEventListener('click', () => {
     const desc = document.getElementById('new-exp-desc').value;

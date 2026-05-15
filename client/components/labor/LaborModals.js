@@ -291,6 +291,90 @@ export const LaborModals = {
   },
 
   /**
+   * Show modal to edit an existing Work Period
+   */
+  async showEditPeriodModal(period, leaders, onSave) {
+    const modalId = 'labor-period-edit-modal';
+    document.getElementById(modalId)?.remove();
+
+    const startDate = period.start_date.split('T')[0];
+    const endDate = period.end_date.split('T')[0];
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4';
+    modal.innerHTML = `
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" id="${modalId}-backdrop"></div>
+      <div class="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden transform transition-all">
+        <div class="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+          <h3 class="text-white font-bold text-lg">Edit Work Period</h3>
+          <button class="text-white/80 hover:text-white" id="${modalId}-close">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <form class="p-6 space-y-6" id="${modalId}-form">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Select Leader</label>
+            <select name="leader_id" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium">
+              ${leaders.map(l => `<option value="${l.id}" ${l.id === period.leader_id ? 'selected' : ''}>${l.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1">Start Date</label>
+              <input type="date" name="start_date" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium" value="${startDate}">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-1">End Date</label>
+              <input type="date" name="end_date" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium" value="${endDate}">
+            </div>
+          </div>
+          <div class="pt-2">
+            <button type="submit" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+              Update Period
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const close = () => {
+      modal.remove();
+    };
+
+    document.getElementById(`${modalId}-close`).addEventListener('click', close);
+    document.getElementById(`${modalId}-backdrop`).addEventListener('click', close);
+
+    const form = document.getElementById(`${modalId}-form`);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const data = {
+        leader_id: formData.get('leader_id'),
+        start_date: formData.get('start_date'),
+        end_date: formData.get('end_date')
+      };
+
+      try {
+        const response = await fetchWithCSRF(`/api/pg/labor/periods/${period.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Update failed');
+        
+        toast.success('Work period updated');
+        close();
+        if (onSave) onSave();
+      } catch (err) {
+        toast.error('Failed to update period: ' + err.message);
+      }
+    };
+  },
+
+  /**
    * Show modal for Advance Payment
    */
   async showAdvanceModal(firmId, periodId, leaderName, onSave) {
