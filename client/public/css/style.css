@@ -510,6 +510,68 @@ body {
   .animate-fade-in { animation: fadeIn 0.3s ease-out; }
   .animate-color-shift { animation: colorShift 30s ease-in-out infinite; }
   .table-row-selected { background-color: #e0e7ff !important; }
+
+  /* --- Flying Birds --- */
+  .birds-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 5;
+    overflow: hidden;
+  }
+
+  .bird-fly {
+    position: absolute;
+    width: 60px;
+    height: 45px;
+    left: -100px;
+  }
+
+  .bird-bob {
+    width: 100%;
+    height: 100%;
+  }
+
+  .bird {
+    width: 100%;
+    height: 100%;
+    /* Use the internally animated SVG - No steps() or background-position needed! */
+    background-image: url('../img/bird-animated.svg?v=3');
+    background-size: contain;
+    background-repeat: no-repeat;
+    opacity: 0.9;
+  }
+
+  /* Reliable Coloring via mask-image and background-color */
+  .bird-color-1 { -webkit-mask-image: url('../img/bird-animated.svg?v=3'); mask-image: url('../img/bird-animated.svg?v=3'); -webkit-mask-size: contain; mask-size: contain; background-color: #3b82f6; background-image: none; }
+  .bird-color-2 { -webkit-mask-image: url('../img/bird-animated.svg?v=3'); mask-image: url('../img/bird-animated.svg?v=3'); -webkit-mask-size: contain; mask-size: contain; background-color: #ef4444; background-image: none; }
+  .bird-color-3 { -webkit-mask-image: url('../img/bird-animated.svg?v=3'); mask-image: url('../img/bird-animated.svg?v=3'); -webkit-mask-size: contain; mask-size: contain; background-color: #a855f7; background-image: none; }
+  .bird-color-4 { -webkit-mask-image: url('../img/bird-animated.svg?v=3'); mask-image: url('../img/bird-animated.svg?v=3'); -webkit-mask-size: contain; mask-size: contain; background-color: #10b981; background-image: none; }
+
+  @keyframes flyAcross {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(calc(100vw + 200px)); }
+  }
+
+  @keyframes flyBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-30px); }
+  }
+
+  .bird-1 { top: 10%; animation: flyAcross 20s linear infinite; }
+  .bird-1 .bird-bob { animation: flyBob 3s ease-in-out infinite; }
+
+  .bird-2 { top: 25%; animation: flyAcross 25s linear infinite; animation-delay: 5s; }
+  .bird-2 .bird-bob { animation: flyBob 4s ease-in-out infinite; }
+
+  .bird-3 { top: 45%; animation: flyAcross 18s linear infinite; animation-delay: 10s; }
+  .bird-3 .bird-bob { animation: flyBob 2.5s ease-in-out infinite; }
+
+  .bird-4 { top: 70%; animation: flyAcross 30s linear infinite; animation-delay: 2s; }
+  .bird-4 .bird-bob { animation: flyBob 5s ease-in-out infinite; }
   
   input[list] {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");

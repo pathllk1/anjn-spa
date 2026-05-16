@@ -23,8 +23,14 @@ export function renderLayout(content, router) {
     if (isFullWidth) {
       // For home page, render without the constraining wrapper
       appContainer.innerHTML = `
-        <div class="ml-16 pt-0 pb-12 min-h-screen transition-all duration-300 animate-color-shift" id="main-content">
-          <main class="p-0">
+        <div class="birds-container">
+          <div class="bird-fly bird-1"><div class="bird-bob"><div class="bird bird-color-1"></div></div></div>
+          <div class="bird-fly bird-2"><div class="bird-bob"><div class="bird bird-color-2"></div></div></div>
+          <div class="bird-fly bird-3"><div class="bird-bob"><div class="bird bird-color-3"></div></div></div>
+          <div class="bird-fly bird-4"><div class="bird-bob"><div class="bird bird-color-4"></div></div></div>
+        </div>
+        <div class="ml-16 pt-0 pb-12 min-h-screen transition-all duration-300 animate-color-shift relative" id="main-content">
+          <main class="p-0 relative z-10">
             <div class="page">
               ${content}
             </div>
@@ -34,8 +40,14 @@ export function renderLayout(content, router) {
     } else {
       // For other pages, use the standard wrapper with color shift animation
       appContainer.innerHTML = `
-        <div class="ml-16 pt-16 pb-12 min-h-screen transition-all duration-300 animate-color-shift" id="main-content">
-          <main class="px-6 py-4">
+        <div class="birds-container">
+          <div class="bird-fly bird-1"><div class="bird-bob"><div class="bird bird-color-1"></div></div></div>
+          <div class="bird-fly bird-2"><div class="bird-bob"><div class="bird bird-color-2"></div></div></div>
+          <div class="bird-fly bird-3"><div class="bird-bob"><div class="bird bird-color-3"></div></div></div>
+          <div class="bird-fly bird-4"><div class="bird-bob"><div class="bird bird-color-4"></div></div></div>
+        </div>
+        <div class="ml-16 pt-16 pb-12 min-h-screen transition-all duration-300 animate-color-shift relative" id="main-content">
+          <main class="px-6 py-4 relative z-10">
             <div class="page">
               ${content}
             </div>
