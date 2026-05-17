@@ -561,13 +561,15 @@ export const laborController = {
     try {
       const { 
         firm_id, period_id, total_wages, total_expenses, total_advances, 
-        net_payable, payment_date, bank_account_id, leader_name, created_by 
+        net_payable, paid_amount, adjustment_reason, payment_date, 
+        bank_account_id, leader_name, created_by 
       } = req.body;
 
       // 1. Post to MongoDB Ledger
       const voucherGroupId = await accountingService.postLaborSettlement({
         firm_id, total_wages, total_expenses, total_advances, net_payable, 
-        payment_date, bank_account_id, leader_name, created_by
+        paid_amount, adjustment_reason, payment_date, bank_account_id, 
+        leader_name, created_by
       });
 
       // 2. Save to Postgres
@@ -575,11 +577,11 @@ export const laborController = {
         await sql`
           INSERT INTO labor_settlements (
             period_id, total_wages, total_expenses, total_advances, 
-            net_payable, paid_amount, payment_date, 
+            net_payable, paid_amount, adjustment_reason, payment_date, 
             paid_from_bank_account_id, ledger_voucher_group_id
           ) VALUES (
             ${period_id}, ${total_wages}, ${total_expenses}, ${total_advances}, 
-            ${net_payable}, ${net_payable}, ${payment_date}, 
+            ${net_payable}, ${paid_amount}, ${adjustment_reason || null}, ${payment_date}, 
             ${bank_account_id}, ${voucherGroupId}
           )
         `;

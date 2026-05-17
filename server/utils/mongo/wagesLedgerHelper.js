@@ -11,6 +11,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { Ledger, ChartOfAccounts, BankAccount, MasterRoll } from '../../models/index.js';
+import { getCanonicalBankName } from './bankLedgerUtils.js';
 
 /* ─────────────────────────────────────────────────────────────────────────
    VALIDATION FUNCTIONS
@@ -178,8 +179,8 @@ export async function resolveBankAccount(firmId, bankAccountId, userId, session 
     throw new Error(`Bank account not found or inactive: ${bankAccountId}`);
   }
 
-  // Create account head name from bank details
-  const accountHeadName = `${bankAccount.bank_name} - ${bankAccount.account_number}`;
+  // Use Canonical naming for enterprise consistency
+  const accountHeadName = getCanonicalBankName(bankAccount);
 
   // Try to find or create the account head
   let account = await ChartOfAccounts.findOne({

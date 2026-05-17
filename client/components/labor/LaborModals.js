@@ -418,7 +418,7 @@ export const LaborModals = {
           <div>
             <label class="block text-sm font-semibold text-slate-700 mb-1">Select Bank Account</label>
             <select name="bank_account_id" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-medium">
-              ${banks.map(b => `<option value="${b._id}">${b.account_name}</option>`).join('')}
+              ${banks.map(b => `<option value="${b._id}">${b.bank_name} - ${b.account_number}</option>`).join('')}
             </select>
           </div>
           <div class="pt-2">
@@ -520,21 +520,48 @@ export const LaborModals = {
           </div>
 
           <form class="space-y-4" id="${modalId}-form">
-            <div>
-              <label class="block text-sm font-semibold text-slate-700 mb-1">Final Payment Date</label>
-              <input type="date" name="payment_date" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium" value="${new Date().toISOString().split('T')[0]}">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Final Payment Date</label>
+                <input type="date" name="payment_date" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium" value="${new Date().toISOString().split('T')[0]}">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Bank Account</label>
+                <select name="bank_account_id" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium">
+                  ${banks.map(b => `<option value="${b._id}">${b.bank_name} - ${b.account_number}</option>`).join('')}
+                </select>              </div>
             </div>
-            <div>
-              <label class="block text-sm font-semibold text-slate-700 mb-1">Payment Bank Account</label>
-              <select name="bank_account_id" required class="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium">
-                ${banks.map(b => `<option value="${b._id}">${b.account_name}</option>`).join('')}
-              </select>
+
+            <div class="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-4">
+              <div class="flex items-center justify-between">
+                <h4 class="text-xs font-black uppercase tracking-widest text-amber-700">Settlement Adjustment</h4>
+                <div class="text-[10px] font-bold text-amber-600 italic">Enterprise Dispute Handling</div>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-[10px] font-black uppercase text-amber-600 mb-1 tracking-tight">Amount to Pay (₹)</label>
+                  <input type="number" id="paid-amount-input" name="paid_amount" step="0.01" required 
+                         class="w-full px-4 py-3 rounded-xl border-2 border-amber-200 bg-white focus:border-amber-500 outline-none transition font-black text-lg" 
+                         value="${totals.net}">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-black uppercase text-amber-600 mb-1 tracking-tight">Adjustment/Discount</label>
+                  <div id="adjustment-display" class="px-4 py-3 rounded-xl bg-amber-100/50 border border-amber-200 font-black text-lg text-amber-700">₹0</div>
+                </div>
+              </div>
+
+              <div id="adjustment-reason-wrap" class="hidden animate-fade-in">
+                <label class="block text-[10px] font-black uppercase text-amber-600 mb-1 tracking-tight">Reason for Adjustment/Dispute</label>
+                <input type="text" name="adjustment_reason" placeholder="e.g. Penalty for quality issues, Rounding off" 
+                       class="w-full px-4 py-2 rounded-xl border border-amber-200 bg-white outline-none focus:ring-2 focus:ring-amber-500/20 transition-all font-medium text-sm">
+              </div>
             </div>
             
             <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-start gap-3">
                <svg class="w-5 h-5 text-indigo-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                <p class="text-xs text-slate-500 leading-relaxed font-medium">
-                 Settling this batch will create ledger entries for wages and expenses, deduct advances, and mark the work period as **Settled**. This action cannot be undone.
+                 Settling this batch will create ledger entries for wages and expenses, deduct advances, and record any discounts as firm income.
                </p>
             </div>
 
@@ -558,6 +585,24 @@ export const LaborModals = {
     document.getElementById(`${modalId}-backdrop`).addEventListener('click', close);
 
     const form = document.getElementById(`${modalId}-form`);
+    const paidInput = document.getElementById('paid-amount-input');
+    const adjDisplay = document.getElementById('adjustment-display');
+    const reasonWrap = document.getElementById('adjustment-reason-wrap');
+
+    paidInput.addEventListener('input', () => {
+      const paid = parseFloat(paidInput.value) || 0;
+      const diff = totals.net - paid;
+      adjDisplay.textContent = `₹${diff.toLocaleString()}`;
+      
+      if (Math.abs(diff) > 0.01) {
+        reasonWrap.classList.remove('hidden');
+        adjDisplay.classList.add('text-rose-600');
+      } else {
+        reasonWrap.classList.add('hidden');
+        adjDisplay.classList.remove('text-rose-600');
+      }
+    });
+
     form.onsubmit = async (e) => {
       e.preventDefault();
       const formData = new FormData(form);
@@ -568,6 +613,8 @@ export const LaborModals = {
         total_expenses: totals.expenses,
         total_advances: totals.advances,
         net_payable: totals.net,
+        paid_amount: parseFloat(formData.get('paid_amount')),
+        adjustment_reason: formData.get('adjustment_reason'),
         payment_date: formData.get('payment_date'),
         bank_account_id: formData.get('bank_account_id'),
         leader_name: leaderName,

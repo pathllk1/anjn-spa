@@ -10,6 +10,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { Ledger, ChartOfAccounts, BankAccount } from '../../models/index.js';
+import { getCanonicalBankName } from './bankLedgerUtils.js';
 
 /* ─────────────────────────────────────────────────────────────────────────
    ACCOUNT RESOLUTION
@@ -89,8 +90,8 @@ export async function resolveBankAccount(firmId, bankAccountId, userId, session 
     throw new Error(`Bank account not found or inactive: ${bankAccountId}`);
   }
 
-  // STANDARD CANONICAL NAME: Bank Name - Account Number
-  const accountHeadName = `${bankAccount.bank_name} - ${bankAccount.account_number}`;
+  // STANDARD CANONICAL NAME for enterprise consistency
+  const accountHeadName = getCanonicalBankName(bankAccount);
 
   // Try to find or create the account head
   let account = await ChartOfAccounts.findOne({

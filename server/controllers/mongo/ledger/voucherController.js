@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
 // FIX: Import VoucherSequence so createVoucher can generate atomic integer
 // voucher_ids instead of using Math.random(), which has collision risk.
-import { Ledger, Party, BankAccount, BillSequence, VoucherSequence } from '../../../models/index.js';
+import { Ledger, Party, BankAccount, BillSequence, VoucherSequence, ChartOfAccounts } from '../../../models/index.js';
 import { resolveLedgerPostingAccount } from '../../../utils/mongo/ledgerAccountResolver.js';
+import { getCanonicalBankName } from '../../../utils/mongo/bankLedgerUtils.js';
 
-const now              = () => new Date().toISOString();
+const now = () => new Date().toISOString();
 const getActorUsername = (req) => req?.user?.username ?? null;
 
 /* ── HELPERS ─────────────────────────────────────────────────────────────── */
@@ -168,7 +169,7 @@ export const createVoucher = async (req, res) => {
       return res.status(403).json({ error: 'Bank account does not belong to your firm or is inactive' });
     }
     bankAccountId = bankAccount._id;
-    bankAccountName = `${bankAccount.bank_name} - ${bankAccount.account_number}`;
+    bankAccountName = getCanonicalBankName(bankAccount);
   }
 
   let voucherNo;
@@ -285,7 +286,7 @@ export const updateVoucher = async (req, res) => {
         return res.status(403).json({ error: 'Bank account does not belong to your firm or is inactive' });
       }
       bankAccountId = bankAccount._id;
-      bankAccountName = bankAccount.bank_name || bankAccount.account_name;
+      bankAccountName = getCanonicalBankName(bankAccount);
     }
 
     const finalVoucherType     = voucher_type.toUpperCase();

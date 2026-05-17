@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { Ledger, Firm, BankAccount } from '../../../models/index.js';
+import { Ledger, Firm, BankAccount, ChartOfAccounts } from '../../../models/index.js';
+import { getCanonicalBankName } from '../../../utils/mongo/bankLedgerUtils.js';
 export {
   exportAccountLedgerPdf,
   exportGeneralLedgerPdf,
@@ -110,47 +111,51 @@ export const getAccountDetails = async (req, res) => {
 
     const firmId = req.user.firm_id;
 
-    // FIX: Account detail query must be smart for BANK accounts.
-    // Try to find bank by full name (Bank - Acc) OR just bank name
-    let bankAc = await BankAccount.findOne({ firm_id: firmId, bank_name: account_head }).lean();
+    // 1. Resolve Bank Account if applicable
+    let bankAc = await BankAccount.findOne({ 
+      firm_id: firmId, 
+      $or: [
+        { bank_name: account_head },
+        { account_name: account_head }
+      ] 
+    }).lean();
 
+    // 2. If not found by name, try parsing if it follows older formats (Bank - Acc)
     if (!bankAc && account_head.includes(' - ')) {
       const parts = account_head.split(' - ');
       const accNo = parts.pop();
-      const bName = parts.join(' - ');
       bankAc = await BankAccount.findOne({ 
         firm_id: firmId, 
-        bank_name: bName.trim(),
         account_number: accNo.trim()
       }).lean();
     }
+
+    // 3. Robust Filter: Find by Canonical Name OR Bank ID
+    const filter = { firm_id: firmId };
+    const searchHeads = [account_head];
     
-    // FIX: Calculate opening balance (all transactions before start_date)
+    if (bankAc) {
+      searchHeads.push(getCanonicalBankName(bankAc));
+      filter.$or = [
+        { account_head: { $in: searchHeads } },
+        { bank_account_id: bankAc._id }
+      ];
+    } else {
+      filter.account_head = account_head;
+    }
+
+    // Calculate opening balance (all transactions before start_date)
     let openingBalance = 0;
     if (start_date) {
       const openingFilter = { 
-        firm_id: firmId, 
+        ...filter, 
         transaction_date: { $lt: start_date }
       };
       
-      if (bankAc) {
-        openingFilter.$or = [ { account_head }, { bank_account_id: bankAc._id } ];
-      } else {
-        openingFilter.account_head = account_head;
-      }
-
       const openingRecords = await Ledger.find(openingFilter).lean();
       openingBalance = openingRecords.reduce((sum, r) => {
         return sum + (r.debit_amount || 0) - (r.credit_amount || 0);
       }, 0);
-    }
-
-    // Get transactions within the period (or all if no start_date)
-    const filter = { firm_id: firmId };
-    if (bankAc) {
-      filter.$or = [ { account_head }, { bank_account_id: bankAc._id } ];
-    } else {
-      filter.account_head = account_head;
     }
 
     if (start_date) filter.transaction_date = { ...filter.transaction_date, $gte: start_date };

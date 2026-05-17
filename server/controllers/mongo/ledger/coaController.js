@@ -189,7 +189,10 @@ export const syncCOA = async (req, res) => {
     // 2. Get unique firms from Party (MongoDB)
     const parties = await Party.find({ firm_id: firmId }).select('firm').lean();
 
-    // 3. Get Labor Leaders from PostgreSQL (Resilient check)
+    // 3. Get Bank Accounts from Master
+    const bankAccounts = await BankAccount.find({ firm_id: firmId, status: 'ACTIVE' }).lean();
+
+    // 4. Get Labor Leaders from PostgreSQL (Resilient check)
     let leaders = [];
     if (sql) {
       try {
@@ -228,6 +231,11 @@ export const syncCOA = async (req, res) => {
     // Sync Parties
     for (const party of parties) {
       await createHead(party.firm, 'DEBTOR');
+    }
+
+    // Sync Bank Accounts (Canonical)
+    for (const bank of bankAccounts) {
+      await createHead(getCanonicalBankName(bank), 'BANK');
     }
 
     // Sync Labor Leaders
