@@ -1,5 +1,6 @@
 import { getSql } from '../config/pg.config.js';
 import { accountingService } from '../services/accounting.service.js';
+import ExcelJS from 'exceljs';
 
 export const laborController = {
   
@@ -281,6 +282,182 @@ export const laborController = {
       });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  async exportToExcel(req, res) {
+    const sql = getSql();
+    try {
+      const { id } = req.params;
+      console.log(`[EXCEL_EXPORT] Request received for Period ID: ${id}`);
+      
+      // 1. Fetch Data (Reusing logic from getPeriodDetails)
+      const [period] = await sql`
+        SELECT p.*, l.name as leader_name 
+        FROM labor_periods p
+        JOIN labor_leaders l ON l.id = p.leader_id
+        WHERE p.id = ${id}
+      `;
+      if (!period) {
+        return res.status(404).json({ success: false, message: 'Excel Export: Period not found in database' });
+      }
+
+      const workers = await sql`SELECT * FROM labor_workers WHERE period_id = ${id} ORDER BY labor_name ASC`;
+      const attendance = await sql`
+        SELECT a.* FROM labor_attendance a
+        JOIN labor_workers w ON w.id = a.worker_id
+        WHERE w.period_id = ${id}
+      `;
+      const expenses = await sql`SELECT * FROM labor_expenses WHERE period_id = ${id} ORDER BY created_at ASC`;
+      const advances = await sql`SELECT * FROM labor_advances WHERE period_id = ${id} ORDER BY payment_date DESC`;
+      const [settlement] = await sql`SELECT * FROM labor_settlements WHERE period_id = ${id}`;
+
+      // 2. Setup Workbook
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Gemini ERP';
+      workbook.lastModifiedBy = 'Gemini ERP';
+      workbook.created = new Date();
+
+      // Styles
+      const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo 600
+      const headerFont = { color: { argb: 'FFFFFFFF' }, bold: true, size: 12 };
+      const subHeaderFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; // Slate 50
+      const borderStyle = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+      // ── SHEET 1: SUMMARY ───────────────────────────────────────────
+      const summarySheet = workbook.addWorksheet('Overview', { views: [{ showGridLines: false }] });
+      summarySheet.getColumn('B').width = 25;
+      summarySheet.getColumn('C').width = 40;
+
+      summarySheet.mergeCells('B2:C2');
+      const titleCell = summarySheet.getCell('B2');
+      titleCell.value = 'LABOR PERIOD SUMMARY';
+      titleCell.font = { size: 20, bold: true, color: { argb: 'FF1E293B' } };
+      titleCell.alignment = { horizontal: 'center' };
+
+      const summaryRows = [
+        ['', 'Leader Name', period.leader_name],
+        ['', 'Date Range', `${new Date(period.start_date).toLocaleDateString()} to ${new Date(period.end_date).toLocaleDateString()}`],
+        ['', 'Status', period.status],
+        ['', 'Batch ID', period.id],
+        ['', '', ''],
+        ['', 'FINANCIAL SNAPSHOT', ''],
+        ['', 'Total Wages', workers.reduce((sum, w) => sum + Number(w.total_wages), 0)],
+        ['', 'Misc Expenses', expenses.reduce((sum, e) => sum + Number(e.amount), 0)],
+        ['', 'Total Advances', advances.reduce((sum, a) => sum + Number(a.amount), 0)],
+        ['', 'Net Payable', settlement ? settlement.net_payable : 0],
+      ];
+
+      summarySheet.addRows(summaryRows);
+      
+      // Styling summary snapshot
+      summarySheet.getCell('B8').font = { bold: true, size: 14 };
+      summarySheet.getCell('C9').numFmt = '\"₹\"#,##0.00';
+      summarySheet.getCell('C10').numFmt = '\"₹\"#,##0.00';
+      summarySheet.getCell('C11').numFmt = '\"₹\"#,##0.00';
+      summarySheet.getCell('C12').numFmt = '\"₹\"#,##0.00';
+      summarySheet.getCell('C12').font = { bold: true, color: { argb: 'FF10B981' }, size: 14 };
+
+      // ── SHEET 2: ATTENDANCE & WAGES ─────────────────────────────
+      const attSheet = workbook.addWorksheet('Attendance Grid');
+      
+      // Calculate dates
+      const start = new Date(period.start_date);
+      const end = new Date(period.end_date);
+      const dateList = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        dateList.push(new Date(d));
+      }
+
+      // Headers
+      const headers = ['Labor Name', 'Daily Wage', ...dateList.map(d => d.getDate()), 'Present', 'Total Wages'];
+      const headerRow = attSheet.addRow(headers);
+      headerRow.eachCell((cell, colNumber) => {
+        cell.fill = headerFill;
+        cell.font = headerFont;
+        cell.alignment = { horizontal: 'center' };
+        cell.border = borderStyle;
+      });
+
+      attSheet.getColumn(1).width = 30;
+      attSheet.getColumn(2).width = 15;
+      attSheet.getColumn(headers.length).width = 20;
+
+      // Data Rows
+      workers.forEach(w => {
+        const rowData = [w.labor_name, Number(w.daily_wage)];
+        
+        dateList.forEach(d => {
+          const dateStr = d.toISOString().split('T')[0];
+          const entry = attendance.find(a => a.worker_id === w.id && new Date(a.attendance_date).toISOString().split('T')[0] === dateStr);
+          rowData.push(entry ? entry.status : '-');
+        });
+
+        rowData.push(w.total_present_days);
+        rowData.push(Number(w.total_wages));
+
+        const row = attSheet.addRow(rowData);
+        row.getCell(2).numFmt = '\"₹\"#,##0';
+        row.getCell(headers.length).numFmt = '\"₹\"#,##0';
+        
+        // Color code attendance status
+        row.eachCell((cell, colNumber) => {
+          cell.border = borderStyle;
+          if (colNumber > 2 && colNumber <= (2 + dateList.length)) {
+            if (cell.value === 'P') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } }; // Emerald 100
+              cell.font = { color: { argb: 'FF059669' }, bold: true };
+            } else if (cell.value === 'L') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Red 100
+              cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+            }
+            cell.alignment = { horizontal: 'center' };
+          }
+        });
+      });
+
+      // ── SHEET 3: EXPENSES ────────────────────────────────────────
+      const expSheet = workbook.addWorksheet('Miscellaneous Expenses');
+      expSheet.addRow(['Description', 'Amount', 'Date Recorded']).font = { bold: true };
+      expSheet.getColumn(1).width = 40;
+      expSheet.getColumn(2).width = 20;
+      expSheet.getColumn(3).width = 25;
+
+      expenses.forEach(e => {
+        const row = expSheet.addRow([e.description, Number(e.amount), new Date(e.created_at).toLocaleString()]);
+        row.getCell(2).numFmt = '\"₹\"#,##0.00';
+      });
+
+      // ── SHEET 4: ADVANCES ────────────────────────────────────────
+      const advSheet = workbook.addWorksheet('Advances & Payments');
+      advSheet.addRow(['Payment Date', 'Description', 'Amount', 'Type']).font = { bold: true };
+      advSheet.getColumn(1).width = 25;
+      advSheet.getColumn(2).width = 40;
+      advSheet.getColumn(3).width = 20;
+
+      advances.forEach(a => {
+        const row = advSheet.addRow([new Date(a.payment_date).toLocaleDateString(), 'Advance Issued', Number(a.amount), 'Advance']);
+        row.getCell(3).numFmt = '\"₹\"#,##0.00';
+        row.getCell(4).font = { color: { argb: 'FFD97706' }, bold: true }; // Amber 600
+      });
+
+      if (settlement) {
+        const row = advSheet.addRow([new Date(settlement.payment_date).toLocaleDateString(), 'Final Settlement', Number(settlement.net_payable), 'Settlement']);
+        row.getCell(3).numFmt = '\"₹\"#,##0.00';
+        row.getCell(4).font = { color: { argb: 'FF059669' }, bold: true }; // Emerald 600
+      }
+
+      // 3. Send Response
+      const filename = `Labor_Report_${period.leader_name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+      await workbook.xlsx.write(res);
+      res.end();
+
+    } catch (err) {
+      console.error('[EXPORT_EXCEL_ERROR]', err);
+      res.status(500).send('Internal Server Error');
     }
   },
 

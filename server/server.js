@@ -106,12 +106,6 @@ app.use('/api/cron', cronRoutes);
 app.use(csrfGenerateToken);
 app.use(csrfValidateToken);
 
-// ── Static files ───────────────────────────────────────────────────────────
-app.use(express.static(join(__dirname, '../client'), {
-    maxAge: isProduction ? '1d' : 0,
-    etag:   false,
-}));
-
 // ── Other API routes ───────────────────────────────────────────────────────
 app.use('/api/auth',            authRoutes);
 app.use('/api/sessions',        sessionRoutes);
@@ -130,6 +124,12 @@ app.use('/api/admin/database',  databaseRoutes);
 app.use('/api/pg/labor',        laborRoutes);
 app.use('/api/pg/database',     pgDatabaseRoutes);
 app.use('/api/tools',           toolsRoutes);
+
+// ── Static files ───────────────────────────────────────────────────────────
+app.use(express.static(join(__dirname, '../client'), {
+    maxAge: isProduction ? '1d' : 0,
+    etag:   false,
+}));
 
 // ── Health check — reflects real DB state ─────────────────────────────────
 // FIX: was always returning 200 "ok" even with no DB connection

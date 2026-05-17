@@ -21,7 +21,8 @@
       "server/controllers",
       "server/middleware",
       "server/routes",
-      "server/utils"
+      "server/utils",
+      "server/postgres"
     ],
     "ext": "js,json",
     "ignore": [

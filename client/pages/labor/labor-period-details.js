@@ -77,12 +77,18 @@ export async function renderLaborPeriodDetails(router, params) {
               </div>
               Attendance & Daily Wages
             </h2>
-            ${data.period.status === 'Settled' ? `
-              <div class="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-2xl border-2 border-emerald-100 animate-pulse">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                <span class="font-black uppercase text-xs tracking-widest">Batch Settled</span>
-              </div>
-            ` : ''}
+            <div class="flex items-center gap-3">
+              <button id="export-excel-btn" class="bg-white border-2 border-emerald-500 text-emerald-700 px-4 py-2 rounded-xl font-black hover:bg-emerald-50 transition shadow-sm flex items-center gap-2 text-xs uppercase tracking-widest">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Export Excel
+              </button>
+              ${data.period.status === 'Settled' ? `
+                <div class="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-2xl border-2 border-emerald-100 animate-pulse">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                  <span class="font-black uppercase text-xs tracking-widest">Batch Settled</span>
+                </div>
+              ` : ''}
+            </div>
           </div>
           <div id="attendance-grid-container" class="min-h-[300px]"></div>
         </div>
@@ -297,6 +303,33 @@ function setupPeriodEvents(data, router, periodId, firmId) {
     }, () => {
       renderLaborPeriodDetails(router, { id: periodId });
     });
+  });
+
+  // Export to Excel
+  document.getElementById('export-excel-btn')?.addEventListener('click', async () => {
+    try {
+      toast.info('Preparing your enterprise report...');
+      
+      const response = await fetchWithCSRF(`/api/pg/labor/export/${periodId}`, {
+        method: 'GET'
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Labor_Report_${data.period.leader_name.replace(/\s+/g, '_')}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      
+      toast.success('Excel report downloaded successfully!');
+    } catch (err) {
+      toast.error('Failed to export: ' + err.message);
+    }
   });
 }
 

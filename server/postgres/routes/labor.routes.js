@@ -7,6 +7,8 @@ const router = express.Router();
 // All labor routes require authentication
 router.use(authMiddleware);
 
+router.get('/export/:id', laborController.exportToExcel);
+
 // ── Labor Leaders ──────────────────────────────────────────────────────────
 router.route('/leaders')
     .get(laborController.getLeaders)
@@ -21,13 +23,13 @@ router.route('/periods')
     .get(laborController.getPeriods)
     .post(laborController.createPeriod);
 
+router.get('/periods/:id/details', laborController.getPeriodDetails);
+router.post('/periods/:id/sync', laborController.syncPeriodData);
+
 router.route('/periods/:id')
     .get(laborController.getPeriodById)
     .put(laborController.updatePeriod)
     .delete(laborController.deletePeriod);
-
-router.get('/periods/:id/details', laborController.getPeriodDetails);
-router.post('/periods/:id/sync', laborController.syncPeriodData);
 
 // ── Payments & Settlements ─────────────────────────────────────────────────
 router.post('/payments/advance', laborController.payAdvance);
