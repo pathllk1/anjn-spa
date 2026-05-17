@@ -43,6 +43,7 @@ const loadProfitLoss = () => import('./pages/ledger/profit-loss.js').then(m => m
 const loadOpeningBalances = () => import('./pages/ledger/opening-balances.js').then(m => m.renderOpeningBalances);
 const loadManualLedger = () => import('./pages/ledger/manual-ledger.js').then(m => m.renderManualLedger);
 const loadNewManualLedger = () => import('./pages/ledger/new-manual-ledger.js').then(m => m.renderNewManualLedger);
+const loadChartOfAccounts = () => import('./pages/ledger/chart-of-accounts.js').then(m => m.renderChartOfAccounts);
 
 // ─────────────────────────────────────────────
 //  Loading spinner
@@ -186,6 +187,7 @@ router
   .on('/ledger/vouchers',           navigate(loadVouchers))
   .on('/ledger/vouchers/new',       navigate(loadNewVoucher))
   .on('/ledger/bank-accounts',      navigate(loadBankAccounts))
+  .on('/ledger/coa',                navigate(loadChartOfAccounts))
   .on('/ledger/opening-balances',   navigate(loadOpeningBalances))
   .on('/ledger/manual-ledger',      navigate(loadManualLedger))
   .on('/ledger/manual-ledger/new',  navigate(loadNewManualLedger))

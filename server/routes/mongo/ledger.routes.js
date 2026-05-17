@@ -6,8 +6,16 @@ import * as voucherController from '../../controllers/mongo/ledger/voucherContro
 import * as bankAccountController from '../../controllers/mongo/ledger/bankAccountController.js';
 import * as manualLedgerController from '../../controllers/mongo/ledger/manualLedgerController.js';
 import * as openingBalanceController from '../../controllers/mongo/ledger/openingBalanceController.js';
+import * as coaController from '../../controllers/mongo/ledger/coaController.js';
 
 const router = express.Router();
+
+// ── Chart of Accounts ─────────────────────────────────────────────────────
+router.get   ('/coa',      authMiddleware, coaController.getCOA);
+router.post  ('/coa',      authMiddleware, coaController.createCOA);
+router.put   ('/coa/:id',  authMiddleware, coaController.updateCOA);
+router.delete('/coa/:id',  authMiddleware, coaController.deleteCOA);
+router.get   ('/coa/sync', authMiddleware, coaController.syncCOA);
 
 // ── Manual Ledger Entries ─────────────────────────────────────────────────
 router.post  ('/manual-ledger',             authMiddleware, manualLedgerController.createManualLedgerEntry);
