@@ -60,6 +60,18 @@ const chartOfAccountsSchema = new Schema(
       ref: 'User',
       required: true,
     },
+    bank_account_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'BankAccount',
+      default: null,
+      index: true,
+    },
+    party_id: {
+      type: Schema.Types.ObjectId,
+      ref: 'Party',
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true }
 );

@@ -114,64 +114,49 @@ function resolveAccountHead(payment_mode, bankAccountName) {
   return { accountHead, accountType };
 }
 
-/* ── CREATE VOUCHER ──────────────────────────────────────────────────────── */
+/* ── CREATE VOUCHER (MULTI-ROW ENTERPRISE GRADE) ────────────────────────── */
 
 export const createVoucher = async (req, res) => {
   const actorUsername = getActorUsername(req);
   if (!actorUsername) return res.status(401).json({ error: 'Unauthorized' });
 
-  const firmId = getFirmId(req, res, 'VOUCHER_CREATE');
+  const firmId = getFirmId(req, res, 'VOUCHER_CREATE_MULTI');
   if (!firmId) return;
 
-  const { voucher_type, party_id, amount, payment_mode, narration, transaction_date, bank_account_id, account_head, account_type } = req.body;
+  const { voucher_type, transaction_date, narration, entries } = req.body;
 
   if (!voucher_type || !['PAYMENT', 'RECEIPT'].includes(voucher_type.toUpperCase())) {
     return res.status(400).json({ error: 'Valid voucher_type (PAYMENT/RECEIPT) is required' });
   }
 
-  // Support either party_id OR account_head
-  if (!party_id && !account_head) {
-    return res.status(400).json({ error: 'Either Party ID or Account Head name is required' });
+  if (!entries || !Array.isArray(entries) || entries.length < 2) {
+    return res.status(400).json({ error: 'Voucher must contain at least 2 entries for double-entry compliance' });
   }
 
-  const validatedAmount = parseFloat(amount);
-  if (!amount || !isFinite(validatedAmount) || validatedAmount <= 0) {
-    return res.status(400).json({ error: 'Valid positive amount is required' });
+  // 1. Double-Entry Validation
+  let totalDebit = 0;
+  let totalCredit = 0;
+  
+  for (const entry of entries) {
+    const dr = parseFloat(entry.debit_amount) || 0;
+    const cr = parseFloat(entry.credit_amount) || 0;
+    
+    if (dr < 0 || cr < 0) return res.status(400).json({ error: 'Negative amounts are not allowed' });
+    if (dr > 0 && cr > 0) return res.status(400).json({ error: 'An entry cannot have both Debit and Credit' });
+    
+    totalDebit += dr;
+    totalCredit += cr;
   }
 
-  // 1. Resolve the "Other Side" (Party or GL Head)
-  let finalPartyId = null;
-  let finalAccountHead = null;
-  let finalAccountType = null;
-
-  if (party_id && mongoose.Types.ObjectId.isValid(party_id)) {
-    const party = await Party.findOne({ _id: party_id, firm_id: firmId }).lean();
-    if (!party) return res.status(403).json({ error: 'Party does not belong to your firm' });
-    finalPartyId = party._id;
-    finalAccountHead = party.firm;
-    finalAccountType = voucher_type.toUpperCase() === 'RECEIPT' ? 'DEBTOR' : 'CREDITOR';
-  } else if (account_head) {
-    finalAccountHead = account_head;
-    finalAccountType = account_type || 'GENERAL';
-  } else {
-    return res.status(400).json({ error: 'Invalid Party ID' });
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    return res.status(400).json({ error: `Voucher is unbalanced. Total Debit (${totalDebit.toFixed(2)}) != Total Credit (${totalCredit.toFixed(2)})` });
   }
 
-  // 2. Resolve the "Payment Side" (Cash/Bank)
-  let bankAccountName = null;
-  let bankAccountId = null;
-  if (isBankPaymentMode(payment_mode)) {
-    if (!bank_account_id || !mongoose.Types.ObjectId.isValid(bank_account_id)) {
-      return res.status(400).json({ error: 'A valid bank account is required for non-cash vouchers' });
-    }
-    const bankAccount = await BankAccount.findOne({ _id: bank_account_id, firm_id: firmId, status: 'ACTIVE' }).lean();
-    if (!bankAccount) {
-      return res.status(403).json({ error: 'Bank account does not belong to your firm or is inactive' });
-    }
-    bankAccountId = bankAccount._id;
-    bankAccountName = getCanonicalBankName(bankAccount);
+  if (totalDebit === 0) {
+    return res.status(400).json({ error: 'Voucher amount cannot be zero' });
   }
 
+  // 2. Generate Voucher Number
   let voucherNo;
   try {
     voucherNo = await getNextVoucherNumber(firmId, voucher_type.toUpperCase());
@@ -179,59 +164,47 @@ export const createVoucher = async (req, res) => {
     return res.status(500).json({ error: `Failed to generate voucher number: ${err.message}` });
   }
 
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const finalVoucherType     = voucher_type.toUpperCase();
-    const finalTransactionDate = transaction_date || now().split('T')[0];
-    const voucherId            = await getNextVoucherGroupId(firmId);
+    const voucherId = await getNextVoucherGroupId(firmId);
+    const finalTransactionDate = transaction_date || new Date().toISOString().split('T')[0];
 
-    const { accountHead: payHead, accountType: payType } = resolveAccountHead(payment_mode, bankAccountName);
-    
-    const paymentLedger = await resolveLedgerPostingAccount({
-      firmId,
-      accountHead: payHead,
-      fallbackType: payType,
-    });
-
-    const targetLedger = await resolveLedgerPostingAccount({
-      firmId,
-      accountHead: finalAccountHead,
-      fallbackType: finalAccountType,
-      partyId: finalPartyId,
-    });
-
-    const base = {
-      firm_id:          firmId,
+    const ledgerDocs = entries.map(entry => ({
+      firm_id:          new mongoose.Types.ObjectId(firmId),
       voucher_id:       voucherId,
-      voucher_type:     finalVoucherType,
+      voucher_type:     voucher_type.toUpperCase(),
       voucher_no:       voucherNo,
-      party_id:         finalPartyId,
-      bank_account_id:  bankAccountId,
-      payment_mode,
+      account_head:     entry.account_head,
+      account_type:     entry.account_type || 'GENERAL',
+      party_id:         entry.party_id && mongoose.Types.ObjectId.isValid(entry.party_id) ? new mongoose.Types.ObjectId(entry.party_id) : null,
+      bank_account_id:  entry.bank_account_id && mongoose.Types.ObjectId.isValid(entry.bank_account_id) ? new mongoose.Types.ObjectId(entry.bank_account_id) : null,
+      debit_amount:     parseFloat(entry.debit_amount) || 0,
+      credit_amount:    parseFloat(entry.credit_amount) || 0,
+      narration:        entry.narration || narration || `${voucher_type} - ${voucherNo}`,
+      payment_mode:     entry.payment_mode || null,
       transaction_date: finalTransactionDate,
       created_by:       actorUsername,
       ref_type:         'VOUCHER',
-    };
+    }));
 
-    let docs;
-    if (finalVoucherType === 'RECEIPT') {
-      // Dr Cash/Bank, Cr Target
-      docs = [
-        { ...base, account_head: paymentLedger.accountHead, account_type: paymentLedger.accountType, debit_amount: validatedAmount, credit_amount: 0,               narration: narration || `Receipt from ${finalAccountHead} - ${voucherNo}` },
-        { ...base, account_head: targetLedger.accountHead,   account_type: targetLedger.accountType,   debit_amount: 0,               credit_amount: validatedAmount, narration: narration || `Receipt from ${finalAccountHead} - ${voucherNo}` },
-      ];
-    } else {
-      // Dr Target, Cr Cash/Bank
-      docs = [
-        { ...base, account_head: targetLedger.accountHead,   account_type: targetLedger.accountType,   debit_amount: validatedAmount, credit_amount: 0,               narration: narration || `Payment to ${finalAccountHead} - ${voucherNo}` },
-        { ...base, account_head: paymentLedger.accountHead, account_type: paymentLedger.accountType, debit_amount: 0,               credit_amount: validatedAmount, narration: narration || `Payment to ${finalAccountHead} - ${voucherNo}` },
-      ];
-    }
+    await Ledger.insertMany(ledgerDocs, { session });
 
-    await Ledger.insertMany(docs);
-    res.json({ message: `${finalVoucherType} voucher created successfully`, voucherId, voucherNo });
+    await session.commitTransaction();
+    res.json({ 
+      success: true, 
+      message: `${voucher_type} created with ${entries.length} entries`, 
+      voucherId, 
+      voucherNo,
+      total_amount: totalDebit 
+    });
   } catch (err) {
-    console.error('[VOUCHER_CREATE] Error:', err);
-    res.status(500).json({ error: 'Failed to create voucher: ' + err.message });
+    await session.abortTransaction();
+    console.error('[VOUCHER_CREATE_MULTI] Error:', err);
+    res.status(500).json({ error: 'Failed to create balanced voucher: ' + err.message });
+  } finally {
+    session.endSession();
   }
 };
 

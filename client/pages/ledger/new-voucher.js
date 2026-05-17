@@ -2,8 +2,9 @@ import { renderLayout } from '../../components/layout.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { api, fetchWithCSRF } from '../../utils/api.js';
 import { authManager } from '../../utils/auth.js';
-import { fetchBankAccounts, populateBankAccountSelect } from '../../utils/bankAccounts.js';
+import { fetchBankAccounts } from '../../utils/bankAccounts.js';
 import { openAccountHeadModal } from '../../components/ledger/accountHeadModal.js';
+import { createSearchableSelect } from '../../components/searchable-select.js';
 
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -23,186 +24,125 @@ function showToast(message, type = 'success') {
   setTimeout(() => el?.remove(), 4000);
 }
 
-const ACCOUNT_TYPES = [
-  'INCOME', 'EXPENSE', 'COGS', 'GENERAL',
-  'ASSET', 'LIABILITY', 'CASH', 'BANK',
-  'DEBTOR', 'CREDITOR', 'CAPITAL', 'RETAINED_EARNINGS',
-  'LOAN', 'PREPAID_EXPENSE', 'ACCUMULATED_DEPRECIATION',
-  'ALLOWANCE_FOR_DOUBTFUL_DEBTS', 'DISCOUNT_RECEIVED', 'DISCOUNT_GIVEN'
-];
-
 export async function renderNewVoucher(router) {
   const canAccess = await requireAuth(router);
   if (!canAccess) return;
 
   const content = `
-    <div class="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">Accounting</p>
-          <h1 class="mt-0.5 text-2xl font-black tracking-tight text-gray-900">New Voucher</h1>
-          <p class="text-xs text-gray-500 mt-0.5">Create a new payment or receipt voucher</p>
-        </div>
-        <div class="flex gap-2">
-          <a href="/ledger/bank-accounts" data-navigo class="inline-flex items-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-            Bank Accounts
-          </a>
-          <a href="/ledger/vouchers" data-navigo class="inline-flex items-center rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-200 transition">
-            ← Back
-          </a>
-        </div>
-      </div>
+    <div class="max-w-[1400px] mx-auto px-4 py-2 space-y-3">
+      <!-- Tally Style Master Header (Compact) -->
+      <div class="bg-slate-900 rounded-xl shadow-lg border border-slate-800">
+        <div class="px-5 py-3 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <!-- Voucher Type Radios -->
+            <div class="flex flex-col">
+              <span class="text-[8px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Voucher Type</span>
+              <div class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                <label class="cursor-pointer">
+                  <input type="radio" name="voucher_type" value="PAYMENT" required class="peer hidden" checked>
+                  <div class="px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest text-slate-500 peer-checked:bg-red-600 peer-checked:text-white transition-all">Payment</div>
+                </label>
+                <label class="cursor-pointer">
+                  <input type="radio" name="voucher_type" value="RECEIPT" required class="peer hidden">
+                  <div class="px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest text-slate-500 peer-checked:bg-emerald-600 peer-checked:text-white transition-all">Receipt</div>
+                </label>
+              </div>
+            </div>
+            
+            <div class="w-px h-8 bg-slate-800"></div>
 
-      <form id="voucher-form" class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 sm:p-8 space-y-6">
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-4">Voucher Type *</label>
-          <div class="flex gap-8">
-            <label class="flex items-center cursor-pointer group">
-              <input type="radio" name="voucher_type" value="RECEIPT" required class="w-5 h-5 text-emerald-600 bg-gray-100 border-gray-300 focus:ring-emerald-500">
-              <span class="ml-2.5 text-sm font-bold text-gray-700 group-hover:text-emerald-600 transition">Receipt Voucher</span>
-            </label>
-            <label class="flex items-center cursor-pointer group">
-              <input type="radio" name="voucher_type" value="PAYMENT" required class="w-5 h-5 text-red-600 bg-gray-100 border-gray-300 focus:ring-red-500">
-              <span class="ml-2.5 text-sm font-bold text-gray-700 group-hover:text-red-600 transition">Payment Voucher</span>
-            </label>
-          </div>
-        </div>
+            <!-- Date -->
+            <div class="flex flex-col">
+              <span class="text-[8px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Date</span>
+              <input type="date" id="transaction-date" name="transaction_date" required 
+                     class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-[11px] font-bold text-white outline-none focus:border-indigo-500 transition">
+            </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">Transaction Date *</label>
-            <input type="date" id="transaction-date" name="transaction_date" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium">
-          </div>
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">Account Head *</label>
-            <div class="flex gap-2">
-              <div class="relative flex-1">
-                <select id="party-select" name="party_id" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium appearance-none">
-                  <option value="">Select Account Head</option>
-                </select>
-                <div id="party-loading-spinner" class="absolute right-4 top-1/2 -translate-y-1/2">
-                  <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+            <div class="w-px h-8 bg-slate-800"></div>
+
+            <!-- Master Account -->
+            <div class="flex flex-col min-w-[350px]">
+              <span class="text-[8px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Account (Cash / Bank)</span>
+              <div class="flex gap-2">
+                <div id="master-account-container" class="flex-1"></div>
+                <div id="master-balance-chip" class="bg-indigo-950/40 border border-indigo-500/30 px-3 py-1 rounded-lg flex flex-col justify-center items-end min-w-[110px]">
+                  <span id="master-balance-amount" class="text-[10px] font-black text-indigo-300 font-mono">₹0.00</span>
+                  <span id="master-balance-type" class="text-[7px] font-black text-indigo-500 uppercase tracking-tighter">Current Bal</span>
                 </div>
               </div>
-              <button type="button" id="add-new-party-btn" title="Add New Account Head" class="px-4 bg-emerald-50 text-emerald-600 border-2 border-emerald-100 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition flex items-center justify-center shadow-sm">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-              </button>
             </div>
           </div>
-        </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">Amount *</label>
-            <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
-              <input type="number" id="amount" name="amount" step="0.01" min="0.01" required class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-bold" placeholder="0.00">
-            </div>
+          <div class="flex items-center gap-4">
+             <div class="flex flex-col items-end">
+                <span id="grand-total-top" class="text-lg font-black text-white font-mono leading-none">₹0.00</span>
+                <span class="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">Total Value</span>
+             </div>
+             <a href="/ledger/vouchers" data-navigo class="p-2 text-slate-500 hover:text-white transition" title="Close Entry">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path d="M6 18L18 6M6 6l12 12"/></svg>
+             </a>
           </div>
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">Payment Mode *</label>
-            <select id="payment-mode" name="payment_mode" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium">
-              <option value="">Select Payment Mode</option>
-              <option value="Cash">Cash</option>
-              <option value="Cheque">Cheque</option>
-              <option value="NEFT">NEFT</option>
-              <option value="RTGS">RTGS</option>
-              <option value="UPI">UPI</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="bank-account-section" class="hidden">
-          <label class="block text-sm font-bold text-gray-700 mb-2">Bank Account</label>
-          <select id="bank-account-select" name="bank_account_id" class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium">
-            <option value="">Select Bank Account</option>
-          </select>
-        </div>
-
-        <div id="account-balance-section" class="hidden bg-indigo-50 border border-indigo-200 rounded-2xl p-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-black uppercase tracking-widest text-indigo-600">Account Balance</h4>
-            <p id="account-balance-head" class="text-xs font-bold text-indigo-900">-</p>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div class="bg-white rounded-lg p-2 border border-indigo-100">
-              <span class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Type</span>
-              <p id="account-balance-type" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
-            </div>
-            <div class="bg-white rounded-lg p-2 border border-indigo-100">
-              <span class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Balance</span>
-              <p id="account-balance-amount" class="text-xs font-bold text-indigo-600 mt-0.5">₹0.00</p>
-            </div>
-            <div class="bg-white rounded-lg p-2 border border-indigo-100">
-              <span class="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Status</span>
-              <p id="account-balance-status" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
-            </div>
-          </div>
-        </div>
-
-        <div id="bank-account-balance-section" class="hidden bg-purple-50 border border-purple-200 rounded-2xl p-3 space-y-2">
-          <div class="flex items-center justify-between">
-            <h4 class="text-xs font-black uppercase tracking-widest text-purple-600">Bank Balance</h4>
-            <p id="bank-account-balance-name" class="text-xs font-bold text-purple-900">-</p>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div class="bg-white rounded-lg p-2 border border-purple-100">
-              <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider">Bank</span>
-              <p id="bank-account-balance-bank" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
-            </div>
-            <div class="bg-white rounded-lg p-2 border border-purple-100">
-              <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider">Balance</span>
-              <p id="bank-account-balance-amount" class="text-xs font-bold text-purple-600 mt-0.5">₹0.00</p>
-            </div>
-            <div class="bg-white rounded-lg p-2 border border-purple-100">
-              <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider">Status</span>
-              <p id="bank-account-balance-status" class="text-xs font-bold text-gray-900 mt-0.5">-</p>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-sm font-bold text-gray-700 mb-2">Narration</label>
-          <textarea id="narration" name="narration" rows="3" class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition resize-none font-medium" placeholder="Enter voucher description"></textarea>
-        </div>
-
-        <div class="bg-slate-50 rounded-2xl p-5 border border-slate-100">
-          <h4 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Transaction Summary</h4>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div class="space-y-1">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</span>
-              <p id="summary-type" class="text-sm font-bold text-slate-900">-</p>
-            </div>
-            <div class="space-y-1">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Party</span>
-              <p id="summary-party" class="text-sm font-bold text-slate-900 truncate">-</p>
-            </div>
-            <div class="space-y-1">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Amount</span>
-              <p id="summary-amount" class="text-sm font-black text-emerald-600">-</p>
-            </div>
-            <div class="space-y-1">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mode</span>
-              <p id="summary-mode" class="text-sm font-bold text-slate-900">-</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 pt-6 border-t border-gray-100">
-          <a href="/ledger/vouchers" data-navigo class="px-6 py-2.5 rounded-xl bg-gray-100 text-sm font-bold text-gray-700 hover:bg-gray-200 transition">Cancel</a>
-          <button type="submit" id="save-btn" class="px-8 py-2.5 rounded-xl bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition disabled:opacity-50 disabled:cursor-not-allowed">Save Voucher</button>
-        </div>
-      </form>
-
-      <!-- Sub-modal for inline creation -->
-      <div id="sub-modal-backdrop" class="fixed inset-0 bg-black/60 hidden z-[60] flex items-center justify-center backdrop-blur-sm transition-opacity">
-        <div id="sub-modal-content" class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 overflow-hidden animate-modal-up">
         </div>
       </div>
+
+      <form id="voucher-form" class="space-y-3 pb-32">
+        <!-- Allocation Grid -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+          <table class="w-full border-collapse" id="entries-table">
+            <thead>
+              <tr class="text-left bg-slate-50 border-b border-slate-200">
+                <th class="pl-5 pr-3 py-2 text-[8px] font-black uppercase tracking-widest text-slate-400 w-10 text-center">#</th>
+                <th class="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-slate-400">Particulars (Allocation Head)</th>
+                <th class="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-slate-400 w-40 text-right">Amount (₹)</th>
+                <th class="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-slate-400">Row Narration</th>
+                <th class="pl-3 pr-5 py-2 w-12"></th>
+              </tr>
+            </thead>
+            <tbody id="entries-body" class="divide-y divide-slate-100">
+              <!-- Dynamic Rows -->
+            </tbody>
+            <tfoot>
+              <tr class="bg-slate-50 border-t border-slate-200">
+                <td colspan="2" class="pl-5 py-3">
+                  <button type="button" id="add-row-btn" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 hover:border-indigo-500 hover:text-indigo-600 transition text-[9px] font-black uppercase tracking-widest">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                    Add Row (Alt + A)
+                  </button>
+                </td>
+                <td class="px-3 py-3 text-right">
+                  <div class="flex flex-col">
+                    <span id="grand-total" class="text-sm font-black text-slate-900 font-mono">₹0.00</span>
+                    <span class="text-[7px] font-black text-slate-400 uppercase tracking-tighter">Total Allocation</span>
+                  </div>
+                </td>
+                <td colspan="2" class="px-3 py-3">
+                   <input type="text" id="global-narration" name="narration" 
+                          class="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold text-slate-700 focus:border-indigo-500 outline-none transition" 
+                          placeholder="Narration (Alt + N)">
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200">
+           <div class="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              Double-Entry Integrity: <span id="balance-status" class="text-indigo-500 ml-2">Awaiting Entry</span>
+           </div>
+           <div class="flex gap-2">
+             <button type="button" id="keyboard-help-btn" class="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition">Keyboard Shortcuts</button>
+             <button type="submit" id="save-btn" disabled 
+                     class="px-8 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-indigo-100 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none">
+               Save Entry (Ctrl + S)
+             </button>
+           </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Sub-modal for inline creation -->
+    <div id="sub-modal-backdrop" class="fixed inset-0 bg-black/60 hidden z-[60] flex items-center justify-center backdrop-blur-sm transition-opacity p-4">
+      <div id="sub-modal-content" class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-modal-up"></div>
     </div>
   `;
 
@@ -212,389 +152,204 @@ export async function renderNewVoucher(router) {
 
 function initVoucherForm(router) {
   const form = document.getElementById('voucher-form');
-  const transactionDateInput = document.getElementById('transaction-date');
-  const partySelect = document.getElementById('party-select');
-  const partySpinner = document.getElementById('party-loading-spinner');
-  const amountInput = document.getElementById('amount');
-  const paymentModeSelect = document.getElementById('payment-mode');
-  const bankAccountSection = document.getElementById('bank-account-section');
-  const bankAccountSelect = document.getElementById('bank-account-select');
-  const narrationInput = document.getElementById('narration');
+  const entriesBody = document.getElementById('entries-body');
+  const masterContainer = document.getElementById('master-account-container');
+  const masterBalEl = document.getElementById('master-balance-amount');
+  const grandTotalEl = document.getElementById('grand-total');
+  const grandTotalTop = document.getElementById('grand-total-top');
+  const addRowBtn = document.getElementById('add-row-btn');
   const saveBtn = document.getElementById('save-btn');
-  const noTransactionSection = document.getElementById('no-transaction-section');
-  const accountBalanceSection = document.getElementById('account-balance-section');
-  const bankAccountBalanceSection = document.getElementById('bank-account-balance-section');
-  const addNewPartyBtn = document.getElementById('add-new-party-btn');
+  const transactionDateInput = document.getElementById('transaction-date');
+  const balanceStatus = document.getElementById('balance-status');
 
-  let allParties = [];
   let allAccountHeads = [];
-  let allBankAccounts = [];
-  let currentOpeningBalance = null;
+  let masterAccounts = [];
+  let rowCount = 0;
+  let masterSelectInstance = null;
 
-  const today = new Date().toISOString().split('T')[0];
-  transactionDateInput.value = today;
+  transactionDateInput.value = new Date().toISOString().split('T')[0];
 
-  loadAccountHeads();
-  loadBankAccounts();
+  async function loadMetadata() {
+    try {
+      const [coaRes, partRes, leadRes, bankRes] = await Promise.all([
+        api.get('/api/ledger/coa'),
+        api.get('/api/inventory/purchase/parties'),
+        api.get(`/api/pg/labor/leaders?firm_id=${authManager.getUser().firm_id}`),
+        api.get('/api/ledger/bank-accounts')
+      ]);
 
-  addNewPartyBtn.addEventListener('click', () => {
-    openAccountHeadModal(async (newAccount) => {
-      showToast(`Account "${newAccount.firm || newAccount.account_head}" ready!`);
+      const coaList = coaRes.data || [];
+      const parties = Array.isArray(partRes) ? partRes : (partRes.data || []);
+      const leaders = Array.isArray(leadRes) ? leadRes : (leadRes.data || []);
+      const banks = Array.isArray(bankRes) ? bankRes : (bankRes.data || []);
+
+      // 1. Master Accounts (Cash & Bank)
+      masterAccounts = [
+        { 
+          name: 'Cash in Hand', 
+          type: 'CASH', 
+          id: null, 
+          balance: coaList.find(a => a.account_name.toLowerCase() === 'cash in hand')?.closing_balance || 0 
+        },
+        ...banks.map(b => {
+          const canonicalName = `${b.bank_name.trim().toUpperCase()} (A/c ...${String(b.account_number).slice(-4)})`;
+          // Precise Match by ID
+          const coaEntry = coaList.find(a => a.bank_account_id === b._id || a.account_name === canonicalName);
+          return { 
+            name: canonicalName, 
+            type: 'BANK', 
+            id: b._id, 
+            balance: coaEntry ? coaEntry.closing_balance : 0 
+          };
+        })
+      ];
+
+      masterSelectInstance = createSearchableSelect(masterContainer, masterAccounts, 'Select Cash/Bank Account...', (selected) => {
+        masterBalEl.textContent = `₹${Math.abs(selected.balance).toLocaleString('en-IN', {minimumFractionDigits: 2})} ${selected.balance >= 0 ? 'DR' : 'CR'}`;
+        updateTotals();
+      });
+
+      // 2. Allocation Heads
+      const unique = new Map();
       
-      if (newAccount.is_gl) {
-        // Dynamic GL Head addition
-        const option = document.createElement('option');
-        option.value = newAccount.account_head;
-        option.textContent = `${newAccount.account_head} (${newAccount.account_type})`;
-        option.setAttribute('data-head', newAccount.account_head);
-        option.setAttribute('data-type', newAccount.account_type);
-        option.selected = true;
-        partySelect.appendChild(option);
-        partySelect.dispatchEvent(new Event('change'));
+      // Add from COA list (The Source of Truth)
+      coaList.forEach(a => {
+        if (a.account_type !== 'CASH' && a.account_type !== 'BANK') {
+          unique.set(a.account_name.toLowerCase(), {
+            name: a.account_name,
+            type: a.account_type,
+            id: a.party_id || null, 
+            balance: a.closing_balance || 0
+          });
+        }
+      });
+
+      allAccountHeads = Array.from(unique.values()).sort((a,b) => a.name.localeCompare(b.name));
+
+      if (entriesBody.rows.length === 0) addEntryRow();
+    } catch (err) {
+      console.error('Enterprise metadata load failed:', err);
+    }
+  }
+
+  function addEntryRow() {
+    rowCount++;
+    const row = document.createElement('tr');
+    row.className = 'group transition-colors relative z-[1] hover:z-[10]';
+    row.innerHTML = `
+      <td class="pl-5 pr-3 py-1.5 text-[9px] font-black text-slate-300 text-center">${rowCount}</td>
+      <td class="px-3 py-1.5 min-w-[320px]">
+        <div class="row-head-container"></div>
+        <div class="row-balance-display text-[8px] font-black text-slate-400 mt-1 uppercase tracking-tight hidden">
+          Live Bal: <span class="row-bal-val text-indigo-500 font-mono">₹0.00</span>
+        </div>
+      </td>
+      <td class="px-3 py-1.5">
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-[9px]">₹</span>
+          <input type="number" name="amount" step="0.01" min="0.01" required 
+                 class="row-amount-input w-full pl-6 pr-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg focus:bg-white focus:border-indigo-500 outline-none transition font-black text-xs text-right">
+        </div>
+      </td>
+      <td class="px-3 py-1.5">
+        <input type="text" name="row_narration" class="w-full px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg focus:bg-white focus:border-indigo-500 outline-none transition font-bold text-[10px]" placeholder="Remark...">
+      </td>
+      <td class="pl-3 pr-5 py-1.5 text-center">
+        <button type="button" class="row-remove-btn p-1 text-slate-200 hover:text-rose-600 transition opacity-0 group-hover:opacity-100">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </td>
+    `;
+    entriesBody.appendChild(row);
+    
+    let selectedHead = null;
+    const container = row.querySelector('.row-head-container');
+    const balDisplay = row.querySelector('.row-balance-display');
+    const balVal = row.querySelector('.row-bal-val');
+
+    const ss = createSearchableSelect(container, allAccountHeads, 'Select Allocation Head...', (selected) => {
+      selectedHead = selected;
+      if (selected) {
+        balDisplay.classList.remove('hidden');
+        const b = selected.balance || 0;
+        balVal.textContent = `₹${Math.abs(b).toLocaleString('en-IN', {minimumFractionDigits: 2})} ${b >= 0 ? 'DR' : 'CR'}`;
+        balVal.className = `row-bal-val font-mono ${b >= 0 ? 'text-indigo-500' : 'text-rose-500'}`;
       } else {
-        // Business Party - needs refresh to get ID
-        await loadAccountHeads();
-        partySelect.value = newAccount._id || newAccount.id;
-        partySelect.dispatchEvent(new Event('change'));
+        balDisplay.classList.add('hidden');
       }
+      updateTotals();
+    }, () => {
+      openAccountHeadModal(async () => { await loadMetadata(); });
     });
-  });
 
-  const handleKeydown = (e) => {
-    if (e.key === 'Escape') router.navigate('/ledger/vouchers');
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      if (!saveBtn.disabled) handleSubmit(new Event('submit'));
-    }
-  };
-  document.addEventListener('keydown', handleKeydown);
-  const originalNavigate = router.navigate;
-  router.navigate = (...args) => {
-    document.removeEventListener('keydown', handleKeydown);
-    return originalNavigate.apply(router, args);
-  };
-
-  document.querySelectorAll('input[name="voucher_type"]').forEach(radio => {
-    radio.addEventListener('change', updateSummary);
-  });
-
-  partySelect.addEventListener('change', async () => {
-    partySelect.classList.remove('border-red-500', 'ring-red-100');
-    const selectedAccountHead = partySelect.value;
-    if (selectedAccountHead) {
-      await loadAccountBalance();
-    } else {
-      accountBalanceSection.classList.add('hidden');
-    }
-    updateSummary();
-  });
-  
-  amountInput.addEventListener('input', () => {
-    amountInput.classList.remove('border-red-500', 'ring-red-100');
-    updateSummary();
-  });
-
-  paymentModeSelect.addEventListener('change', () => {
-    paymentModeSelect.classList.remove('border-red-500', 'ring-red-100');
-    handlePaymentModeChange();
-  });
-
-  bankAccountSelect.addEventListener('change', async () => {
-    await loadBankAccountBalance();
-  });
-
-  form.addEventListener('submit', handleSubmit);
-
-  async function loadAccountHeads() {
-    try {
-      // Fetch account heads from ledger
-      const accountsResponse = await api.get('/api/ledger/accounts');
-      const accounts = Array.isArray(accountsResponse) ? accountsResponse : (accountsResponse.data || []);
-      
-      // Fetch parties from inventory
-      const partiesResponse = await api.get('/api/inventory/purchase/parties');
-      const parties = Array.isArray(partiesResponse) ? partiesResponse : (partiesResponse.data || []);
-
-      // Fetch labor leaders
-      const leadersResponse = await api.get(`/api/pg/labor/leaders?firm_id=${authManager.getUser().firm_id}`);
-      const leaders = Array.isArray(leadersResponse) ? leadersResponse : (leadersResponse.data || []);
-      
-      // Combine account heads and parties with duplicate prevention
-      const uniqueHeads = new Map();
-      
-      // Add parties first
-      parties.forEach(party => {
-        if (party.firm) {
-          const key = party.firm.toLowerCase().trim();
-          if (!uniqueHeads.has(key)) {
-            uniqueHeads.set(key, {
-              account_head: party.firm,
-              account_type: 'DEBTOR', 
-              source: 'party',
-              party_id: party._id || party.id
-            });
-          }
-        }
-      });
-
-      // Add Labor Leaders
-      leaders.forEach(leader => {
-        if (leader.name) {
-          const key = leader.name.toLowerCase().trim();
-          if (!uniqueHeads.has(key)) {
-            uniqueHeads.set(key, {
-              account_head: leader.name,
-              account_type: 'LABOR_LEADER',
-              source: 'labor',
-              party_id: null // Not a MongoDB Party, uses direct string match
-            });
-          }
-        }
-      });
-
-      // Add account heads (skip if already exists as party)
-      accounts.forEach(account => {
-        if (account.account_head) {
-          const key = account.account_head.toLowerCase().trim();
-          if (!uniqueHeads.has(key)) {
-            uniqueHeads.set(key, {
-              account_head: account.account_head,
-              account_type: account.account_type,
-              source: 'ledger',
-              party_id: null // Not a party, might fail on save with current backend
-            });
-          }
-        }
-      });
-      
-      allAccountHeads = Array.from(uniqueHeads.values()).sort((a, b) => 
-        a.account_head.localeCompare(b.account_head)
-      );
-      
-      partySpinner?.classList.add('hidden');
-      partySelect.innerHTML = '<option value="">Select Account Head</option>' +
-        allAccountHeads.map(account => `
-          <option value="${esc(account.party_id || account.account_head)}" 
-                  data-head="${esc(account.account_head)}"
-                  data-type="${esc(account.account_type)}">
-            ${esc(account.account_head)} (${esc(account.account_type)})
-          </option>`).join('');
-    } catch (error) {
-      console.error('Failed to load account heads:', error);
-      partySpinner?.classList.add('hidden');
-      partySelect.innerHTML = '<option value="">Failed to load account heads</option>';
-    }
+    row.getSelectedHead = () => selectedHead;
+    const amount = row.querySelector('.row-amount-input');
+    amount.oninput = updateTotals;
+    row.querySelector('.row-remove-btn').onclick = () => { if (entriesBody.rows.length > 1) { row.remove(); updateTotals(); } };
   }
 
-  async function loadBankAccounts() {
-    try {
-      const accounts = await fetchBankAccounts(true);
-      allBankAccounts = accounts;
-      const defaultAccount = accounts.find((account) => account.is_default) || accounts[0] || null;
-      populateBankAccountSelect(bankAccountSelect, accounts, defaultAccount?._id || '');
-    } catch (error) {
-      console.error('Failed to load bank accounts:', error);
-      bankAccountSelect.innerHTML = '<option value="">Failed to load bank accounts</option>';
-    }
-  }
-
-  async function loadAccountBalance() {
-    const selectedOption = partySelect.options[partySelect.selectedIndex];
-    const accountHead = selectedOption ? selectedOption.getAttribute('data-head') : '';
+  function updateTotals() {
+    let total = 0;
+    document.querySelectorAll('.row-amount-input').forEach(i => total += (parseFloat(i.value) || 0));
+    const fmt = `₹${total.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+    grandTotalEl.textContent = fmt;
+    grandTotalTop.textContent = fmt;
     
-    if (!accountHead) {
-      accountBalanceSection.classList.add('hidden');
-      return;
-    }
-
-    try {
-      const response = await api.get(`/api/ledger/accounts`);
-      const accounts = Array.isArray(response) ? response : (response.data || []);
-      
-      const accountData = accounts.find(a => 
-        a.account_head && 
-        a.account_head.toLowerCase().trim() === accountHead.toLowerCase().trim()
-      );
-
-      if (accountData) {
-        displayAccountBalance(accountData);
-        accountBalanceSection.classList.remove('hidden');
-      } else {
-        accountBalanceSection.classList.add('hidden');
-      }
-    } catch (error) {
-      console.error('Failed to load account balance:', error);
-      accountBalanceSection.classList.add('hidden');
-    }
+    const masterVal = masterContainer.querySelector('.ss-input').value;
+    const isReady = total > 0 && !!masterVal;
+    saveBtn.disabled = !isReady;
+    balanceStatus.textContent = isReady ? 'Balanced (Single Entry Mode)' : 'Awaiting complete entry...';
+    balanceStatus.className = isReady ? 'text-emerald-600 font-black' : 'text-slate-400 font-black';
   }
 
-  function displayAccountBalance(account) {
-    const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(n || 0)));
-    const balance = (account.total_debit || 0) - (account.total_credit || 0);
-    const status = balance >= 0 ? 'DR' : 'CR';
-    
-    document.getElementById('account-balance-head').textContent = esc(account.account_head);
-    document.getElementById('account-balance-type').textContent = esc(account.account_type || '-');
-    document.getElementById('account-balance-amount').textContent = fmtINR(balance);
-    document.getElementById('account-balance-status').textContent = status;
-  }
+  // Keyboard Shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.key === 'a') { e.preventDefault(); addEntryRow(); }
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); if (!saveBtn.disabled) form.requestSubmit(); }
+  });
 
-  async function loadBankAccountBalance() {
-    const bankAccountId = bankAccountSelect.value;
-    if (!bankAccountId) {
-      bankAccountBalanceSection.classList.add('hidden');
-      return;
-    }
-
-    try {
-      const bankAccount = allBankAccounts.find(b => b._id === bankAccountId);
-      if (!bankAccount) {
-        bankAccountBalanceSection.classList.add('hidden');
-        return;
-      }
-
-      const response = await api.get(`/api/ledger/accounts`);
-      const accounts = Array.isArray(response) ? response : (response.data || []);
-      
-      // Try to find account by account_name first
-      let accountData = accounts.find(a => 
-        a.account_head && 
-        a.account_head.toLowerCase().trim() === (bankAccount.account_name || '').toLowerCase().trim()
-      );
-
-      // If not found, try by bank_name
-      if (!accountData) {
-        accountData = accounts.find(a => 
-          a.account_head && 
-          a.account_head.toLowerCase().trim() === (bankAccount.bank_name || '').toLowerCase().trim()
-        );
-      }
-
-      // If still not found, try to find any BANK type account
-      if (!accountData) {
-        accountData = accounts.find(a => a.account_type === 'BANK');
-      }
-
-      // Display bank account balance (with or without matching ledger account)
-      displayBankAccountBalance(bankAccount, accountData);
-      bankAccountBalanceSection.classList.remove('hidden');
-    } catch (error) {
-      console.error('Failed to load bank account balance:', error);
-      bankAccountBalanceSection.classList.add('hidden');
-    }
-  }
-
-  function displayBankAccountBalance(bankAccount, accountData) {
-    const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(Number(n || 0)));
-    const balance = accountData ? ((accountData.total_debit || 0) - (accountData.total_credit || 0)) : 0;
-    const status = bankAccount.status === 'ACTIVE' ? 'Active' : 'Inactive';
-    
-    document.getElementById('bank-account-balance-name').textContent = esc(bankAccount.account_name || bankAccount.bank_name || '-');
-    document.getElementById('bank-account-balance-bank').textContent = esc(bankAccount.bank_name || '-');
-    document.getElementById('bank-account-balance-amount').textContent = fmtINR(balance);
-    document.getElementById('bank-account-balance-status').textContent = status;
-  }
-
-  function handlePaymentModeChange() {
-    const paymentMode = paymentModeSelect.value;
-    const isBankMode = paymentMode && !paymentMode.toLowerCase().includes('cash');
-    if (isBankMode) {
-      bankAccountSection.classList.remove('hidden');
-      bankAccountSelect.required = true;
-      // Load balance for the currently selected (default) bank account
-      loadBankAccountBalance();
-    } else {
-      bankAccountSection.classList.add('hidden');
-      bankAccountBalanceSection.classList.add('hidden');
-      bankAccountSelect.required = false;
-      bankAccountSelect.value = '';
-    }
-    updateSummary();
-  }
-
-  function updateSummary() {
-    const voucherType = document.querySelector('input[name="voucher_type"]:checked')?.value || '';
-    const selectedOption = partySelect.options[partySelect.selectedIndex];
-    const accountHead = selectedOption ? selectedOption.getAttribute('data-head') : '';
-    const amount = parseFloat(amountInput.value) || 0;
-    const paymentMode = paymentModeSelect.value;
-
-    document.getElementById('summary-type').textContent = voucherType ? voucherType.charAt(0).toUpperCase() + voucherType.slice(1).toLowerCase() : '-';
-    document.getElementById('summary-party').textContent = accountHead || '-';
-    document.getElementById('summary-amount').textContent = amount > 0 ? `₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '-';
-    document.getElementById('summary-mode').textContent = paymentMode || '-';
-  }
-
-  async function handleSubmit(e) {
+  form.onsubmit = async (e) => {
     e.preventDefault();
-    const formData = new FormData(form);
-    const voucherData = Object.fromEntries(formData);
-    let hasError = false;
+    const type = document.querySelector('input[name="voucher_type"]:checked').value;
+    const isPayment = type === 'PAYMENT';
+    const masterAccount = masterAccounts.find(m => m.name === masterContainer.querySelector('.ss-input').value);
+    
+    const finalEntries = [];
+    let totalAmount = 0;
 
-    if (!voucherData.voucher_type) {
-      showToast('Please select voucher type', 'error');
-      hasError = true;
-    }
-    if (!voucherData.party_id) {
-      partySelect.classList.add('border-red-500', 'ring-red-100');
-      hasError = true;
-    }
-    if (!voucherData.amount || parseFloat(voucherData.amount) <= 0) {
-      amountInput.classList.add('border-red-500', 'ring-red-100');
-      hasError = true;
-    }
-    if (!voucherData.payment_mode) {
-      paymentModeSelect.classList.add('border-red-500', 'ring-red-100');
-      hasError = true;
-    }
+    Array.from(entriesBody.rows).forEach(row => {
+      const head = row.getSelectedHead();
+      const amt = parseFloat(row.querySelector('.row-amount-input').value) || 0;
+      if (!head || amt <= 0) return;
+      totalAmount += amt;
+      finalEntries.push({
+        account_head: head.name, account_type: head.type, party_id: head.id || null,
+        debit_amount: isPayment ? amt : 0, credit_amount: isPayment ? 0 : amt,
+        narration: row.querySelector('input[name="row_narration"]').value
+      });
+    });
 
-    const isBankMode = voucherData.payment_mode && !voucherData.payment_mode.toLowerCase().includes('cash');
-    if (isBankMode && !voucherData.bank_account_id) {
-      bankAccountSelect.classList.add('border-red-500', 'ring-red-100');
-      hasError = true;
-    }
-
-    if (hasError) {
-      showToast('Please fill all required fields', 'error');
-      return;
-    }
+    finalEntries.push({
+      account_head: masterAccount.name, account_type: masterAccount.type, bank_account_id: masterAccount.id || null,
+      debit_amount: isPayment ? 0 : totalAmount, credit_amount: isPayment ? totalAmount : 0,
+      payment_mode: masterAccount.name.toLowerCase().includes('cash') ? 'Cash' : 'Bank Transfer'
+    });
 
     try {
       saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-
-      // Determine if this is a Party or a GL Head
-      const selectedOption = partySelect.options[partySelect.selectedIndex];
-      const accountHead = selectedOption.getAttribute('data-head');
-      const accountType = selectedOption.getAttribute('data-type');
-      const isObjectId = /^[0-9a-fA-F]{24}$/.test(voucherData.party_id);
-
-      const submitData = {
-        ...voucherData,
-        party_id: isObjectId ? voucherData.party_id : null,
-        account_head: isObjectId ? null : accountHead,
-        account_type: isObjectId ? null : accountType
-      };
-
-      const response = await fetchWithCSRF('/api/ledger/vouchers', {
-        method: 'POST',
-        body: JSON.stringify(submitData),
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || result.message || 'Failed to create voucher');
-      }
-
-      showToast('Voucher created successfully!');
+      const res = await fetchWithCSRF('/api/ledger/vouchers', { method: 'POST', body: JSON.stringify({
+          voucher_type: type, transaction_date: transactionDateInput.value,
+          narration: document.getElementById('global-narration').value, entries: finalEntries
+      })});
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('Voucher Posted');
       setTimeout(() => router.navigate('/ledger/vouchers'), 1000);
-      
-    } catch (error) {
-      showToast('Error creating voucher: ' + error.message, 'error');
+    } catch (err) {
+      toast.error(err.message);
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Voucher';
     }
-  }
+  };
 
-  updateSummary();
+  addRowBtn.onclick = addEntryRow;
+  loadMetadata();
 }

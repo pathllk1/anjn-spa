@@ -64,11 +64,22 @@ export const getLedgerAccounts = async (req, res) => {
                 ],
               },
               {
-                $concat: [
-                  { $ifNull: [{ $arrayElemAt: ['$bank_account.bank_name', 0] }, '$_id.account_head'] },
-                  ' - ',
-                  { $ifNull: [{ $arrayElemAt: ['$bank_account.account_number', 0] }, 'N/A'] }
-                ]
+                $let: {
+                  vars: {
+                    b: { $arrayElemAt: ['$bank_account', 0] }
+                  },
+                  in: {
+                    $concat: [
+                      { $toUpper: { $ifNull: ['$$b.bank_name', 'Bank'] } },
+                      ' (A/c ...',
+                      { $let: {
+                        vars: { acc: { $ifNull: ['$$b.account_number', '0000'] } },
+                        in: { $substr: ['$$acc', { $subtract: [{ $strLenCP: '$$acc' }, 4] }, 4] }
+                      }},
+                      ')'
+                    ]
+                  }
+                }
               },
               '$_id.account_head',
             ],
