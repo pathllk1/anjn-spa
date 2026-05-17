@@ -9,7 +9,7 @@ const fmtINR = (n) => '₹\u202f' + new Intl.NumberFormat('en-IN', { minimumFrac
 
 const ACCOUNT_TYPES = [
   'INCOME', 'EXPENSE', 'ASSET', 'LIABILITY', 'CASH', 'BANK',
-  'DEBTOR', 'CREDITOR', 'CAPITAL', 'GENERAL', 'PAYABLE'
+  'DEBTOR', 'CREDITOR', 'LABOR_LEADER', 'CAPITAL', 'GENERAL', 'PAYABLE'
 ];
 
 export async function renderChartOfAccounts(router) {
@@ -192,7 +192,8 @@ export async function renderChartOfAccounts(router) {
       BANK: 'bg-indigo-500',
       CASH: 'bg-teal-500',
       DEBTOR: 'bg-blue-400',
-      CREDITOR: 'bg-pink-400'
+      CREDITOR: 'bg-pink-400',
+      LABOR_LEADER: 'bg-orange-500'
     };
     return map[type] || 'bg-slate-300';
   }

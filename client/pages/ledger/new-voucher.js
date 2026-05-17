@@ -1,6 +1,7 @@
 import { renderLayout } from '../../components/layout.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { api, fetchWithCSRF } from '../../utils/api.js';
+import { authManager } from '../../utils/auth.js';
 import { fetchBankAccounts, populateBankAccountSelect } from '../../utils/bankAccounts.js';
 import { openAccountHeadModal } from '../../components/ledger/accountHeadModal.js';
 
@@ -313,11 +314,15 @@ function initVoucherForm(router) {
       // Fetch parties from inventory
       const partiesResponse = await api.get('/api/inventory/purchase/parties');
       const parties = Array.isArray(partiesResponse) ? partiesResponse : (partiesResponse.data || []);
+
+      // Fetch labor leaders
+      const leadersResponse = await api.get(`/api/pg/labor/leaders?firm_id=${authManager.getUser().firm_id}`);
+      const leaders = Array.isArray(leadersResponse) ? leadersResponse : (leadersResponse.data || []);
       
       // Combine account heads and parties with duplicate prevention
       const uniqueHeads = new Map();
       
-      // Add parties first (prioritize parties since they have IDs)
+      // Add parties first
       parties.forEach(party => {
         if (party.firm) {
           const key = party.firm.toLowerCase().trim();
@@ -327,6 +332,21 @@ function initVoucherForm(router) {
               account_type: 'DEBTOR', 
               source: 'party',
               party_id: party._id || party.id
+            });
+          }
+        }
+      });
+
+      // Add Labor Leaders
+      leaders.forEach(leader => {
+        if (leader.name) {
+          const key = leader.name.toLowerCase().trim();
+          if (!uniqueHeads.has(key)) {
+            uniqueHeads.set(key, {
+              account_head: leader.name,
+              account_type: 'LABOR_LEADER',
+              source: 'labor',
+              party_id: null // Not a MongoDB Party, uses direct string match
             });
           }
         }

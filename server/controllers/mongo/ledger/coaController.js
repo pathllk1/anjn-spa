@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { ChartOfAccounts, Ledger, Party, BankAccount } from '../../../models/index.js';
+import { getSql } from '../../../postgres/config/pg.config.js';
 
 /**
  * GET /api/ledger/coa
@@ -171,12 +172,13 @@ export const deleteCOA = async (req, res) => {
 
 /**
  * GET /api/ledger/coa/sync
- * Utility to sync existing Ledger/Party data into COA
+ * Utility to sync existing Ledger/Party/Labor data into COA
  */
 export const syncCOA = async (req, res) => {
   try {
     const firmId = req.user.firm_id;
     const userId = req.user.id;
+    const sql = getSql();
 
     // 1. Get unique account heads from Ledger
     const ledgerHeads = await Ledger.aggregate([
@@ -184,48 +186,58 @@ export const syncCOA = async (req, res) => {
       { $group: { _id: { name: '$account_head', type: '$account_type' } } }
     ]);
 
-    // 2. Get unique firms from Party
+    // 2. Get unique firms from Party (MongoDB)
     const parties = await Party.find({ firm_id: firmId }).select('firm').lean();
+
+    // 3. Get Labor Leaders from PostgreSQL (Resilient check)
+    let leaders = [];
+    if (sql) {
+      try {
+        leaders = await sql`SELECT name FROM labor_leaders WHERE firm_id = ${String(firmId)}`;
+      } catch (pgErr) {
+        console.warn('[COA_SYNC] Postgres lookup failed, skipping labor leaders:', pgErr.message);
+      }
+    }
 
     let created = 0;
     let skipped = 0;
 
+    // Helper to create COA head
+    const createHead = async (name, type) => {
+      if (!name) return;
+      const exists = await ChartOfAccounts.findOne({ firm_id: firmId, account_name: name });
+      if (!exists) {
+        await ChartOfAccounts.create({
+          firm_id: firmId,
+          account_name: name,
+          account_type: type,
+          created_by: userId,
+          updated_by: userId
+        });
+        created++;
+      } else {
+        skipped++;
+      }
+    };
+
     // Sync Ledger Heads
     for (const head of ledgerHeads) {
-      const exists = await ChartOfAccounts.findOne({ firm_id: firmId, account_name: head._id.name });
-      if (!exists) {
-        await ChartOfAccounts.create({
-          firm_id: firmId,
-          account_name: head._id.name,
-          account_type: head._id.type || 'GENERAL',
-          created_by: userId,
-          updated_by: userId
-        });
-        created++;
-      } else {
-        skipped++;
-      }
+      await createHead(head._id.name, head._id.type || 'GENERAL');
     }
 
-    // Sync Parties (as DEBTOR/CREDITOR)
+    // Sync Parties
     for (const party of parties) {
-      const exists = await ChartOfAccounts.findOne({ firm_id: firmId, account_name: party.firm });
-      if (!exists) {
-        await ChartOfAccounts.create({
-          firm_id: firmId,
-          account_name: party.firm,
-          account_type: 'DEBTOR', // Default to debtor, resolveLedgerPostingAccount handles logic
-          created_by: userId,
-          updated_by: userId
-        });
-        created++;
-      } else {
-        skipped++;
-      }
+      await createHead(party.firm, 'DEBTOR');
+    }
+
+    // Sync Labor Leaders
+    for (const leader of leaders) {
+      await createHead(leader.name, 'LABOR_LEADER');
     }
 
     res.json({ success: true, message: `Sync complete. Created: ${created}, Skipped: ${skipped}` });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[COA_SYNC] Error:', err);
+    res.status(500).json({ success: false, error: 'Sync failed: ' + err.message });
   }
 };
