@@ -2,6 +2,7 @@ import { renderLayout } from '../../components/layout.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { api, fetchWithCSRF } from '../../utils/api.js';
 import { fetchBankAccounts, populateBankAccountSelect } from '../../utils/bankAccounts.js';
+import { openAccountHeadModal } from '../../components/ledger/accountHeadModal.js';
 
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -73,16 +74,21 @@ export async function renderNewVoucher(router) {
           </div>
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">Account Head *</label>
-            <div class="relative">
-              <select id="party-select" name="party_id" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium appearance-none">
-                <option value="">Select Account Head</option>
-              </select>
-              <div id="party-loading-spinner" class="absolute right-4 top-1/2 -translate-y-1/2">
-                <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+            <div class="flex gap-2">
+              <div class="relative flex-1">
+                <select id="party-select" name="party_id" required class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition font-medium appearance-none">
+                  <option value="">Select Account Head</option>
+                </select>
+                <div id="party-loading-spinner" class="absolute right-4 top-1/2 -translate-y-1/2">
+                  <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
               </div>
+              <button type="button" id="add-new-party-btn" title="Add New Account Head" class="px-4 bg-emerald-50 text-emerald-600 border-2 border-emerald-100 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition flex items-center justify-center shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -190,6 +196,12 @@ export async function renderNewVoucher(router) {
           <button type="submit" id="save-btn" class="px-8 py-2.5 rounded-xl bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition disabled:opacity-50 disabled:cursor-not-allowed">Save Voucher</button>
         </div>
       </form>
+
+      <!-- Sub-modal for inline creation -->
+      <div id="sub-modal-backdrop" class="fixed inset-0 bg-black/60 hidden z-[60] flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div id="sub-modal-content" class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 overflow-hidden animate-modal-up">
+        </div>
+      </div>
     </div>
   `;
 
@@ -211,6 +223,7 @@ function initVoucherForm(router) {
   const noTransactionSection = document.getElementById('no-transaction-section');
   const accountBalanceSection = document.getElementById('account-balance-section');
   const bankAccountBalanceSection = document.getElementById('bank-account-balance-section');
+  const addNewPartyBtn = document.getElementById('add-new-party-btn');
 
   let allParties = [];
   let allAccountHeads = [];
@@ -222,6 +235,29 @@ function initVoucherForm(router) {
 
   loadAccountHeads();
   loadBankAccounts();
+
+  addNewPartyBtn.addEventListener('click', () => {
+    openAccountHeadModal(async (newAccount) => {
+      showToast(`Account "${newAccount.firm || newAccount.account_head}" ready!`);
+      
+      if (newAccount.is_gl) {
+        // Dynamic GL Head addition
+        const option = document.createElement('option');
+        option.value = newAccount.account_head;
+        option.textContent = `${newAccount.account_head} (${newAccount.account_type})`;
+        option.setAttribute('data-head', newAccount.account_head);
+        option.setAttribute('data-type', newAccount.account_type);
+        option.selected = true;
+        partySelect.appendChild(option);
+        partySelect.dispatchEvent(new Event('change'));
+      } else {
+        // Business Party - needs refresh to get ID
+        await loadAccountHeads();
+        partySelect.value = newAccount._id || newAccount.id;
+        partySelect.dispatchEvent(new Event('change'));
+      }
+    });
+  });
 
   const handleKeydown = (e) => {
     if (e.key === 'Escape') router.navigate('/ledger/vouchers');
@@ -281,7 +317,22 @@ function initVoucherForm(router) {
       // Combine account heads and parties with duplicate prevention
       const uniqueHeads = new Map();
       
-      // Add account heads first
+      // Add parties first (prioritize parties since they have IDs)
+      parties.forEach(party => {
+        if (party.firm) {
+          const key = party.firm.toLowerCase().trim();
+          if (!uniqueHeads.has(key)) {
+            uniqueHeads.set(key, {
+              account_head: party.firm,
+              account_type: 'DEBTOR', 
+              source: 'party',
+              party_id: party._id || party.id
+            });
+          }
+        }
+      });
+
+      // Add account heads (skip if already exists as party)
       accounts.forEach(account => {
         if (account.account_head) {
           const key = account.account_head.toLowerCase().trim();
@@ -289,21 +340,8 @@ function initVoucherForm(router) {
             uniqueHeads.set(key, {
               account_head: account.account_head,
               account_type: account.account_type,
-              source: 'ledger'
-            });
-          }
-        }
-      });
-      
-      // Add parties (will skip if already exists as account head)
-      parties.forEach(party => {
-        if (party.firm) {
-          const key = party.firm.toLowerCase().trim();
-          if (!uniqueHeads.has(key)) {
-            uniqueHeads.set(key, {
-              account_head: party.firm,
-              account_type: 'DEBTOR', // Default type for parties
-              source: 'party'
+              source: 'ledger',
+              party_id: null // Not a party, might fail on save with current backend
             });
           }
         }
@@ -315,7 +353,12 @@ function initVoucherForm(router) {
       
       partySpinner?.classList.add('hidden');
       partySelect.innerHTML = '<option value="">Select Account Head</option>' +
-        allAccountHeads.map(account => `<option value="${esc(account.account_head)}">${esc(account.account_head)} (${esc(account.account_type)})</option>`).join('');
+        allAccountHeads.map(account => `
+          <option value="${esc(account.party_id || account.account_head)}" 
+                  data-head="${esc(account.account_head)}"
+                  data-type="${esc(account.account_type)}">
+            ${esc(account.account_head)} (${esc(account.account_type)})
+          </option>`).join('');
     } catch (error) {
       console.error('Failed to load account heads:', error);
       partySpinner?.classList.add('hidden');
@@ -336,7 +379,9 @@ function initVoucherForm(router) {
   }
 
   async function loadAccountBalance() {
-    const accountHead = partySelect.value;
+    const selectedOption = partySelect.options[partySelect.selectedIndex];
+    const accountHead = selectedOption ? selectedOption.getAttribute('data-head') : '';
+    
     if (!accountHead) {
       accountBalanceSection.classList.add('hidden');
       return;
@@ -449,7 +494,8 @@ function initVoucherForm(router) {
 
   function updateSummary() {
     const voucherType = document.querySelector('input[name="voucher_type"]:checked')?.value || '';
-    const accountHead = partySelect.value || '';
+    const selectedOption = partySelect.options[partySelect.selectedIndex];
+    const accountHead = selectedOption ? selectedOption.getAttribute('data-head') : '';
     const amount = parseFloat(amountInput.value) || 0;
     const paymentMode = paymentModeSelect.value;
 
@@ -497,12 +543,18 @@ function initVoucherForm(router) {
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
 
-      // Convert party_id (account head) to account_head for API
+      // Determine if this is a Party or a GL Head
+      const selectedOption = partySelect.options[partySelect.selectedIndex];
+      const accountHead = selectedOption.getAttribute('data-head');
+      const accountType = selectedOption.getAttribute('data-type');
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(voucherData.party_id);
+
       const submitData = {
         ...voucherData,
-        account_head: voucherData.party_id,
+        party_id: isObjectId ? voucherData.party_id : null,
+        account_head: isObjectId ? null : accountHead,
+        account_type: isObjectId ? null : accountType
       };
-      delete submitData.party_id;
 
       const response = await fetchWithCSRF('/api/ledger/vouchers', {
         method: 'POST',

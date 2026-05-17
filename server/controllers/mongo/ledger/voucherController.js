@@ -122,14 +122,15 @@ export const createVoucher = async (req, res) => {
   const firmId = getFirmId(req, res, 'VOUCHER_CREATE');
   if (!firmId) return;
 
-  const { voucher_type, party_id, amount, payment_mode, narration, transaction_date, bank_account_id } = req.body;
+  const { voucher_type, party_id, amount, payment_mode, narration, transaction_date, bank_account_id, account_head, account_type } = req.body;
 
   if (!voucher_type || !['PAYMENT', 'RECEIPT'].includes(voucher_type.toUpperCase())) {
     return res.status(400).json({ error: 'Valid voucher_type (PAYMENT/RECEIPT) is required' });
   }
 
-  if (!party_id || !mongoose.Types.ObjectId.isValid(party_id)) {
-    return res.status(400).json({ error: 'Valid party_id (MongoDB ObjectId) is required' });
+  // Support either party_id OR account_head
+  if (!party_id && !account_head) {
+    return res.status(400).json({ error: 'Either Party ID or Account Head name is required' });
   }
 
   const validatedAmount = parseFloat(amount);
@@ -137,10 +138,25 @@ export const createVoucher = async (req, res) => {
     return res.status(400).json({ error: 'Valid positive amount is required' });
   }
 
-  // Validate party belongs to firm
-  const party = await Party.findOne({ _id: party_id, firm_id: firmId }).lean();
-  if (!party) return res.status(403).json({ error: 'Party does not belong to your firm' });
+  // 1. Resolve the "Other Side" (Party or GL Head)
+  let finalPartyId = null;
+  let finalAccountHead = null;
+  let finalAccountType = null;
 
+  if (party_id && mongoose.Types.ObjectId.isValid(party_id)) {
+    const party = await Party.findOne({ _id: party_id, firm_id: firmId }).lean();
+    if (!party) return res.status(403).json({ error: 'Party does not belong to your firm' });
+    finalPartyId = party._id;
+    finalAccountHead = party.firm;
+    finalAccountType = voucher_type.toUpperCase() === 'RECEIPT' ? 'DEBTOR' : 'CREDITOR';
+  } else if (account_head) {
+    finalAccountHead = account_head;
+    finalAccountType = account_type || 'GENERAL';
+  } else {
+    return res.status(400).json({ error: 'Invalid Party ID' });
+  }
+
+  // 2. Resolve the "Payment Side" (Cash/Bank)
   let bankAccountName = null;
   let bankAccountId = null;
   if (isBankPaymentMode(payment_mode)) {
@@ -158,7 +174,6 @@ export const createVoucher = async (req, res) => {
   let voucherNo;
   try {
     voucherNo = await getNextVoucherNumber(firmId, voucher_type.toUpperCase());
-    console.log(`[VOUCHER_CREATE] Generated: ${voucherNo}`);
   } catch (err) {
     return res.status(500).json({ error: `Failed to generate voucher number: ${err.message}` });
   }
@@ -166,23 +181,21 @@ export const createVoucher = async (req, res) => {
   try {
     const finalVoucherType     = voucher_type.toUpperCase();
     const finalTransactionDate = transaction_date || now().split('T')[0];
+    const voucherId            = await getNextVoucherGroupId(firmId);
 
-    // FIX: was Math.floor(Date.now()/1000) + Math.floor(Math.random()*1000)
-    // which has collision risk under concurrency. Now uses atomic DB sequence.
-    const voucherId = await getNextVoucherGroupId(firmId);
-
-    const partyName            = party.firm || `Party-${party_id}`;
-    const { accountHead, accountType } = resolveAccountHead(payment_mode, bankAccountName);
+    const { accountHead: payHead, accountType: payType } = resolveAccountHead(payment_mode, bankAccountName);
+    
     const paymentLedger = await resolveLedgerPostingAccount({
       firmId,
-      accountHead,
-      fallbackType: accountType,
+      accountHead: payHead,
+      fallbackType: payType,
     });
-    const partyLedger = await resolveLedgerPostingAccount({
+
+    const targetLedger = await resolveLedgerPostingAccount({
       firmId,
-      accountHead: partyName,
-      fallbackType: finalVoucherType === 'RECEIPT' ? 'DEBTOR' : 'CREDITOR',
-      partyId: party._id,
+      accountHead: finalAccountHead,
+      fallbackType: finalAccountType,
+      partyId: finalPartyId,
     });
 
     const base = {
@@ -190,34 +203,30 @@ export const createVoucher = async (req, res) => {
       voucher_id:       voucherId,
       voucher_type:     finalVoucherType,
       voucher_no:       voucherNo,
-      party_id,
-      bank_account_id:    bankAccountId,
+      party_id:         finalPartyId,
+      bank_account_id:  bankAccountId,
       payment_mode,
       transaction_date: finalTransactionDate,
       created_by:       actorUsername,
       ref_type:         'VOUCHER',
-      bill_id:          null,
-      stock_id:         null,
-      stock_reg_id:     null,
     };
 
     let docs;
     if (finalVoucherType === 'RECEIPT') {
-      // Dr Cash/Bank, Cr Party (debtor reduces on receipt)
+      // Dr Cash/Bank, Cr Target
       docs = [
-        { ...base, account_head: paymentLedger.accountHead, account_type: paymentLedger.accountType, debit_amount: validatedAmount, credit_amount: 0,               narration: narration || `Receipt from ${partyName} - ${voucherNo}` },
-        { ...base, account_head: partyLedger.accountHead,   account_type: partyLedger.accountType,   debit_amount: 0,               credit_amount: validatedAmount, narration: narration || `Receipt from ${partyName} - ${voucherNo}` },
+        { ...base, account_head: paymentLedger.accountHead, account_type: paymentLedger.accountType, debit_amount: validatedAmount, credit_amount: 0,               narration: narration || `Receipt from ${finalAccountHead} - ${voucherNo}` },
+        { ...base, account_head: targetLedger.accountHead,   account_type: targetLedger.accountType,   debit_amount: 0,               credit_amount: validatedAmount, narration: narration || `Receipt from ${finalAccountHead} - ${voucherNo}` },
       ];
     } else {
-      // Dr Party (creditor reduces on payment), Cr Cash/Bank
+      // Dr Target, Cr Cash/Bank
       docs = [
-        { ...base, account_head: partyLedger.accountHead,   account_type: partyLedger.accountType,   debit_amount: validatedAmount, credit_amount: 0,               narration: narration || `Payment to ${partyName} - ${voucherNo}` },
-        { ...base, account_head: paymentLedger.accountHead, account_type: paymentLedger.accountType, debit_amount: 0,               credit_amount: validatedAmount, narration: narration || `Payment to ${partyName} - ${voucherNo}` },
+        { ...base, account_head: targetLedger.accountHead,   account_type: targetLedger.accountType,   debit_amount: validatedAmount, credit_amount: 0,               narration: narration || `Payment to ${finalAccountHead} - ${voucherNo}` },
+        { ...base, account_head: paymentLedger.accountHead, account_type: paymentLedger.accountType, debit_amount: 0,               credit_amount: validatedAmount, narration: narration || `Payment to ${finalAccountHead} - ${voucherNo}` },
       ];
     }
 
     await Ledger.insertMany(docs);
-
     res.json({ message: `${finalVoucherType} voucher created successfully`, voucherId, voucherNo });
   } catch (err) {
     console.error('[VOUCHER_CREATE] Error:', err);
