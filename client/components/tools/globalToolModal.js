@@ -123,7 +123,7 @@ export function initGlobalToolModal() {
                 <div class="w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black uppercase tracking-tighter shadow-sm transition-all ${index === activeIndex ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'}">
                   ${escapeHtml(tool.badge)}
                 </div>
-                <div class="text-[10px] font-black uppercase tracking-[0.2em] transition-all opacity-0 ${index === activeIndex ? 'text-white opacity-100' : 'text-indigo-600 group-hover:opacity-100'}">
+                <div class="text-[10px] font-black uppercase tracking-[0.2em] transition-all lg:opacity-0 ${index === activeIndex ? 'text-white opacity-100' : 'text-indigo-600 lg:group-hover:opacity-100'}">
                   Launch →
                 </div>
               </div>

@@ -107,7 +107,7 @@ export function createNewsToolModal() {
                 <h3 class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 leading-snug line-clamp-2">
                   ${escapeHtml(item.title)}
                 </h3>
-                <div class="mt-auto pt-2 flex items-center gap-1 text-[10px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="mt-auto pt-2 flex items-center gap-1 text-[10px] font-bold text-indigo-500 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                   Read Article <span>→</span>
                 </div>
               </div>

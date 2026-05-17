@@ -745,7 +745,7 @@ function lineRow(head, amount, color) {
     <p class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title="${esc(head)}">${esc(head)}</p>
     <div class="flex flex-shrink-0 items-center gap-1.5">
       <a href="/ledger/account/${encodeURIComponent(head)}" data-navigo
-         class="hidden group-hover:inline-flex items-center rounded-md border border-blue-100 bg-blue-50
+         class="inline-flex lg:hidden lg:group-hover:inline-flex items-center rounded-md border border-blue-100 bg-blue-50
                 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 hover:bg-blue-100 transition">↗</a>
       <span class="w-24 text-right text-xs font-bold tabular-nums ${c.val}">${fmtINR(amount)}</span>
     </div>
@@ -759,7 +759,7 @@ function bsRow(head, amount, color) {
     <p class="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title="${esc(head)}">${esc(head)}</p>
     <div class="flex flex-shrink-0 items-center gap-1.5">
       <a href="/ledger/account/${encodeURIComponent(head)}" data-navigo
-         class="hidden group-hover:inline-flex items-center rounded-md border border-blue-100 bg-blue-50
+         class="inline-flex lg:hidden lg:group-hover:inline-flex items-center rounded-md border border-blue-100 bg-blue-50
                 px-1.5 py-0.5 text-[9px] font-bold text-blue-600 hover:bg-blue-100 transition">↗</a>
       <span class="w-24 text-right text-xs font-bold tabular-nums ${c.val}">${fmtINR(amount)}</span>
     </div>

@@ -49,7 +49,7 @@ function openGstinSelector(party, onSelect) {
                         ${loc.is_primary ? '<span class="text-[9px] font-bold text-green-600 mt-1 inline-block">★ Primary</span>' : ''}
                     </div>
                     <span class="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-full
-                                 opacity-0 group-hover:opacity-100 transition-all ml-3">SELECT →</span>
+                                 lg:opacity-0 lg:group-hover:opacity-100 transition-all ml-3">SELECT →</span>
                 </div>
             `).join('')}
         </div>
@@ -148,7 +148,7 @@ export function openPartyModal(state, callbacks) {
                         </div>
                     </div>
                     <span class="shrink-0 text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2.5 py-1 rounded-full
-                                 opacity-0 group-hover:opacity-100 transition-all ml-3">SELECT →</span>
+                                 lg:opacity-0 lg:group-hover:opacity-100 transition-all ml-3">SELECT →</span>
                 </div>
             `;
         }).join('');
