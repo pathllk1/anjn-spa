@@ -13,7 +13,7 @@
 
 import { Wage, MasterRoll, Advance, WageJob } from '../../models/index.js';
 import { postWageLedger, deleteWageLedger, recalculateWageLedger } from '../../utils/mongo/wagesLedgerHelper.js';
-import { processWageJob } from '../../utils/mongo/wageJobProcessor.js';
+import { processWageJob, initiateWageJob, processWageJobStep } from '../../utils/mongo/wageJobProcessor.js';
 
 /* ── HELPER FUNCTIONS ────────────────────────────────────────────────────── */
 
@@ -484,7 +484,8 @@ export async function updateWage(req, res) {
     // Post new ledger entries if wage was posted
     if (existingWage.status === 'POSTED') {
       try {
-        const voucherId = await postWageLedger(existingWage, session);
+        const emp = await MasterRoll.findById(existingWage.master_roll_id).select('employee_name').lean();
+        const voucherId = await postWageLedger(existingWage, session, emp?.employee_name);
         existingWage.voucher_group_id = voucherId;
         existingWage.posted_date = new Date();
         existingWage.posted_by = userId;
@@ -602,7 +603,8 @@ export async function updateWagesBulk(req, res) {
         // Post new ledger entries if wage was posted
         if (doc.status === 'POSTED') {
           try {
-            const voucherId = await postWageLedger(doc, session);
+            const emp = await MasterRoll.findById(doc.master_roll_id).select('employee_name').lean();
+            const voucherId = await postWageLedger(doc, session, emp?.employee_name);
             doc.voucher_group_id = voucherId;
             doc.posted_date = new Date();
             doc.posted_by = userId;
@@ -920,8 +922,61 @@ export async function getWageJobResults(req, res) {
         error_message: job.error_message,
       },
     });
-  } catch (error) {
+    } catch (error) {
     console.error('Error fetching job results:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
-  }
-}
+    }
+    }
+
+    /* ── INITIATE WAGE JOB (Background/Atomic) ────────────────────────────────── */
+
+    export async function initiateWageJobController(req, res) {
+    try {
+    const { month, wages } = req.body;
+    const userId = req.user.id;
+    const firmId = req.user.firm_id;
+
+    if (!month || !Array.isArray(wages) || wages.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid wage data' });
+    }
+
+    const jobId = await initiateWageJob(firmId, userId, month, wages);
+
+    res.json({
+      success: true,
+      message: 'Wage job initiated',
+      job_id: jobId,
+      total_wages: wages.length
+    });
+    } catch (error) {
+    console.error('[INITIATE_WAGE_JOB] Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+    }
+    }
+
+    /* ── STEP WAGE JOB (Atomic Execution) ─────────────────────────────────────── */
+
+    export async function stepWageJobController(req, res) {
+    try {
+    const { jobId } = req.params;
+    const firmId = req.user.firm_id;
+    const { batchSize } = req.query;
+
+    const job = await processWageJobStep(jobId, firmId, batchSize ? parseInt(batchSize) : 5);
+
+    res.json({
+      success: true,
+      job: {
+        id: job._id,
+        status: job.status,
+        progress: job.progress_percentage,
+        processed: job.processed_wages,
+        failed: job.failed_wages,
+        total: job.total_wages
+      }
+    });
+    } catch (error) {
+    console.error('[STEP_WAGE_JOB] Error:', error);
+    res.status(500).json({ success: false, message: error.message });
+    }
+    }

@@ -5724,6 +5724,13 @@
       }
     }
   }
+  .hover\:border-slate-600 {
+    &:hover {
+      @media (hover: hover) {
+        border-color: var(--color-slate-600);
+      }
+    }
+  }
   .hover\:border-teal-300 {
     &:hover {
       @media (hover: hover) {

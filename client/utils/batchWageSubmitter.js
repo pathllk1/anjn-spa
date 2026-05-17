@@ -1,21 +1,19 @@
 /**
  * Batch Wage Submitter
- * Handles submitting wages in batches of 5 with progress tracking
+ * Optimized for Vercel/Serverless using Atomic Iterator pattern
  */
 
-import { processBatchesSequentially } from './batchProcessor.js';
 import { api } from './api.js';
 
 /**
- * Submit wages in batches
+ * Submit wages using the Atomic Job pattern
  * @param {String} month - Salary month (YYYY-MM)
  * @param {Array} wageRecords - Array of wage objects
  * @param {Object} progressModal - Progress modal instance
  * @returns {Object} Final results
  */
 export async function submitWagesInBatches(month, wageRecords, progressModal) {
-  const BATCH_SIZE = 5;
-  const DELAY_BETWEEN_BATCHES = 800; // ms
+  const BATCH_SIZE = 5; // Safe size for Vercel serverless functions
 
   if (!wageRecords || wageRecords.length === 0) {
     throw new Error('No wage records to submit');
@@ -23,75 +21,62 @@ export async function submitWagesInBatches(month, wageRecords, progressModal) {
 
   // Show progress modal
   progressModal.show();
+  progressModal.updateProgress(0);
 
   try {
-    const results = await processBatchesSequentially(
-      wageRecords,
-      BATCH_SIZE,
-      async (batch, batchNumber) => {
-        // Submit this batch to server
-        const response = await api.post('/api/wages/create', {
-          month,
-          wages: batch,
-        });
+    // 1. INITIATE JOB
+    progressModal.addBatchResult('INIT', { success: true, message: 'Initiating job...' });
+    const initRes = await api.post('/api/wages/job/initiate', {
+      month,
+      wages: wageRecords,
+    });
 
-        return response;
-      },
-      {
-        delayBetweenBatches: DELAY_BETWEEN_BATCHES,
-        onProgress: (progress) => {
-          progressModal.updateProgress(progress);
-        },
-        onBatchComplete: (batchInfo) => {
-          progressModal.addBatchResult(batchInfo.batchNumber, batchInfo.result);
-        },
-        onError: (errorInfo) => {
-          progressModal.setError(
-            `Batch ${errorInfo.batchNumber} failed: ${errorInfo.error}`
-          );
-        },
+    if (!initRes.success) {
+      throw new Error(initRes.message || 'Failed to initiate wage job');
+    }
+
+    const jobId = initRes.job_id;
+    let isCompleted = false;
+    let jobStatus = null;
+
+    // 2. ITERATE STEPS
+    while (!isCompleted) {
+      const stepRes = await api.post(`/api/wages/job/${jobId}/step?batchSize=${BATCH_SIZE}`);
+      
+      if (!stepRes.success) {
+        throw new Error(stepRes.message || 'Error during processing step');
       }
-    );
 
-    // Mark as completed
+      jobStatus = stepRes.job;
+      progressModal.updateProgress(jobStatus.progress);
+      progressModal.addBatchResult(`STEP`, { 
+        success: true, 
+        message: `Processed ${jobStatus.processed}/${jobStatus.total} (${jobStatus.failed} failed)` 
+      });
+
+      if (jobStatus.status === 'COMPLETED' || jobStatus.status === 'FAILED') {
+        isCompleted = true;
+      }
+    }
+
+    // 3. FETCH FINAL RESULTS
+    const finalRes = await api.get(`/api/wages/job/${jobId}/results`);
+    
+    // Transform to expected result format for progressModal.setCompleted
+    const results = {
+      success: finalRes.success,
+      successCount: finalRes.data?.processed_wages || 0,
+      failureCount: finalRes.data?.failed_wages || 0,
+      results: finalRes.data?.results || [],
+      errors: finalRes.data?.status === 'FAILED' ? [{ error: finalRes.data.error_message }] : []
+    };
+
     progressModal.setCompleted(results);
-
     return results;
 
   } catch (error) {
+    console.error('Wage Job Error:', error);
     progressModal.setError(error.message);
     throw error;
   }
-}
-
-/**
- * Format wage records for batch submission
- * @param {Array} employees - Employee list
- * @param {Object} wageData - Wage data by employee ID
- * @param {Object} commonPaymentData - Common payment fields
- * @returns {Array} Formatted wage records
- */
-export function formatWageRecordsForBatch(employees, wageData, commonPaymentData = {}) {
-  return employees
-    .map((emp) => {
-      const wage = wageData[emp._id];
-      if (!wage) return null;
-
-      return {
-        master_roll_id: emp._id,
-        wage_days: parseInt(wage.wage_days) || 26,
-        gross_salary: parseFloat(wage.gross_salary) || 0,
-        epf_deduction: parseFloat(wage.epf_deduction) || 0,
-        esic_deduction: parseFloat(wage.esic_deduction) || 0,
-        other_deduction: parseFloat(wage.other_deduction) || 0,
-        other_benefit: parseFloat(wage.other_benefit) || 0,
-        advance_deduction: parseFloat(wage.advance_deduction) || 0,
-        paid_date: commonPaymentData.paid_date || null,
-        cheque_no: commonPaymentData.cheque_no || null,
-        bank_account_id: commonPaymentData.bank_account_id || null,
-        payment_mode: commonPaymentData.payment_mode || null,
-        remarks: commonPaymentData.remarks || null,
-      };
-    })
-    .filter((wage) => wage !== null);
 }

@@ -291,10 +291,11 @@ export async function getDefaultCashAccount(firmId, userId, session = null) {
  * 
  * @param {Object} wage - Wage document
  * @param {Session} session - MongoDB session for atomic transaction
+ * @param {String} [employeeName] - Employee name for narration
  * @returns {String} voucher_group_id (UUID)
  * @throws {Error} If posting fails
  */
-export async function postWageLedger(wage, session) {
+export async function postWageLedger(wage, session, employeeName = '') {
   // Validate wage
   await validateWageForPosting(wage);
 
@@ -303,6 +304,7 @@ export async function postWageLedger(wage, session) {
   const firmId = wage.firm_id;
   const userId = wage.created_by || wage.updated_by;
   const transactionDate = wage.paid_date || new Date().toISOString().split('T')[0];
+  const nameSuffix = employeeName ? `: ${employeeName}` : '';
 
   try {
     // 1. DEBIT: Salaries & Wages (Expense)
@@ -318,7 +320,7 @@ export async function postWageLedger(wage, session) {
       master_roll_id: wage.master_roll_id,
       voucher_group_id: voucherId,
       transaction_date: transactionDate,
-      narration: `Wages for ${wage.salary_month}`,
+      narration: `Salaries & Wages ${wage.salary_month}${nameSuffix}`,
       is_wage_entry: true,
     });
 
@@ -343,7 +345,7 @@ export async function postWageLedger(wage, session) {
       bank_account_id: wage.bank_account_id || null,
       payment_mode: wage.payment_mode || null,
       transaction_date: transactionDate,
-      narration: `Wages paid - ${wage.salary_month}${wage.cheque_no ? ` - Chq: ${wage.cheque_no}` : ''}`,
+      narration: `Wage Payment ${wage.salary_month}${nameSuffix}${wage.cheque_no ? ` - Chq: ${wage.cheque_no}` : ''}`,
       is_wage_entry: true,
     });
 
@@ -361,7 +363,7 @@ export async function postWageLedger(wage, session) {
         master_roll_id: wage.master_roll_id,
         voucher_group_id: voucherId,
         transaction_date: transactionDate,
-        narration: `EPF Payable - ${wage.salary_month}`,
+        narration: `EPF Deduction ${wage.salary_month}${nameSuffix}`,
         is_wage_entry: true,
       });
     }
@@ -380,7 +382,7 @@ export async function postWageLedger(wage, session) {
         master_roll_id: wage.master_roll_id,
         voucher_group_id: voucherId,
         transaction_date: transactionDate,
-        narration: `ESIC Payable - ${wage.salary_month}`,
+        narration: `ESIC Deduction ${wage.salary_month}${nameSuffix}`,
         is_wage_entry: true,
       });
     }
@@ -399,7 +401,7 @@ export async function postWageLedger(wage, session) {
         master_roll_id: wage.master_roll_id,
         voucher_group_id: voucherId,
         transaction_date: transactionDate,
-        narration: `Other Deductions - ${wage.salary_month}`,
+        narration: `Other Deduction ${wage.salary_month}${nameSuffix}`,
         is_wage_entry: true,
       });
     }
@@ -418,7 +420,7 @@ export async function postWageLedger(wage, session) {
         master_roll_id: wage.master_roll_id,
         voucher_group_id: voucherId,
         transaction_date: transactionDate,
-        narration: `Advance Recovery - ${wage.salary_month}`,
+        narration: `Advance Recovery ${wage.salary_month}${nameSuffix}`,
         is_wage_entry: true,
       });
     }

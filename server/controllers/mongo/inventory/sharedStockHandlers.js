@@ -13,8 +13,10 @@ import {
   normalizeOptionalText,
   normalizeOptionalMultilineText,
   escapeRegex,
+  getNextVoucherNumber,
 } from './billUtils.js';
 import { getStateCode } from '../../../utils/mongo/gstCalculator.js';
+import { postStockAdjustmentLedger } from './inventoryLedgerHelper.js';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    STOCKS
@@ -725,42 +727,84 @@ export const getStockMovementsByStock = async (req, res) => {
 };
 
 export const createStockMovement = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { type, stockId, batch, qty, uom, rate, total, description, referenceNumber } = req.body;
-    if (!type || !stockId || !qty || !uom) return res.status(400).json({ error: 'Type, stockId, qty, and uom are required' });
+    if (!type || !stockId || !qty || !uom) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: 'Type, stockId, qty, and uom are required' });
+    }
     const validTypes = ['RECEIPT', 'TRANSFER', 'ADJUSTMENT', 'OPENING'];
-    if (!validTypes.includes(type)) return res.status(400).json({ error: `Invalid movement type. Must be one of: ${validTypes.join(', ')}` });
+    if (!validTypes.includes(type)) {
+      await session.abortTransaction();
+      return res.status(400).json({ error: `Invalid movement type. Must be one of: ${validTypes.join(', ')}` });
+    }
 
     const actorUsername = getActorUsername(req);
-    if (!actorUsername) return res.status(401).json({ error: 'Unauthorized' });
+    if (!actorUsername) {
+      await session.abortTransaction();
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const firmId = getFirmId(req, res, 'CREATE_STOCK_MOVEMENT');
-    if (!firmId) return;
+    if (!firmId) {
+      await session.abortTransaction();
+      return;
+    }
     const validatedStockId = validateObjectId(stockId, 'stockId', res);
-    if (!validatedStockId) return;
+    if (!validatedStockId) {
+      await session.abortTransaction();
+      return;
+    }
 
-    const stock = await Stock.findOne({ _id: validatedStockId, firm_id: firmId }).lean();
-    if (!stock) return res.status(404).json({ error: 'Stock not found or does not belong to your firm' });
+    const stock = await Stock.findOne({ _id: validatedStockId, firm_id: firmId }).session(session).lean();
+    if (!stock) {
+      await session.abortTransaction();
+      return res.status(404).json({ error: 'Stock not found or does not belong to your firm' });
+    }
 
     const absQty          = Math.abs(parseFloat(qty));
     const calculatedTotal = total || (absQty * (rate || 0));
     const today           = new Date().toISOString().split('T')[0];
 
-    await StockReg.create({
+    const [movement] = await StockReg.create([{
       firm_id: firmId, type, bno: referenceNumber || null, bdate: today,
       item: stock.item, batch: batch || null, hsn: stock.hsn, qty: absQty, uom,
       rate: rate || 0, grate: stock.grate || 0, disc: 0, total: calculatedTotal,
       stock_id: validatedStockId, bill_id: null, user: actorUsername,
-    });
+    }], { session });
 
     const newQty = (stock.qty || 0) + absQty;
     await Stock.findOneAndUpdate(
       { _id: validatedStockId, firm_id: firmId },
-      { $set: { qty: newQty, uom: uom || stock.uom, rate: rate || stock.rate, total: newQty * (rate || stock.rate), user: actorUsername } }
+      { $set: { qty: newQty, uom: uom || stock.uom, rate: rate || stock.rate, total: newQty * (rate || stock.rate), user: actorUsername } },
+      { session }
     );
 
+    // ── LEDGER POSTING ──────────────────────────────────────────────────────
+    const voucherId = await getNextVoucherNumber(firmId);
+    await postStockAdjustmentLedger({
+      firmId,
+      voucherId,
+      type,
+      item: stock.item,
+      qty: absQty,
+      total: calculatedTotal,
+      reference: referenceNumber,
+      actorUsername,
+      stockId: validatedStockId,
+      stockRegId: movement._id,
+      session,
+    });
+
+    await session.commitTransaction();
     res.json({ success: true, message: `Stock movement (${type}) created successfully` });
   } catch (err) {
+    await session.abortTransaction();
+    console.error('[CREATE_STOCK_MOVEMENT] Error:', err.message);
     res.status(400).json({ error: err.message });
+  } finally {
+    session.endSession();
   }
 };
 

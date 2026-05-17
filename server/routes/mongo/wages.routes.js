@@ -11,7 +11,9 @@ import {
   getWageById,
   getWagesHistoryForEmployee,
   getWageJobStatus,
-  getWageJobResults
+  getWageJobResults,
+  initiateWageJobController,
+  stepWageJobController
 } from '../../controllers/mongo/wages.controller.js';
 import { exportWagesToExcel } from '../../controllers/mongo/wageExport.controller.js';
 import { generateBankReport, generateEPFESICReport } from '../../controllers/mongo/wageExportReports.controller.js';
@@ -98,6 +100,14 @@ router.get('/job/:jobId/status', getWageJobStatus);
 // Get job results after completion
 // GET /api/wages/job/:jobId/results
 router.get('/job/:jobId/results', getWageJobResults);
+
+// Initiate a background wage job
+// POST /api/wages/job/initiate
+router.post('/job/initiate', initiateWageJobController);
+
+// Process a single batch step for a job
+// POST /api/wages/job/:jobId/step
+router.post('/job/:jobId/step', stepWageJobController);
 
 /* --------------------------------------------------
    EXPORT REPORTS ROUTES

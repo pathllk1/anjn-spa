@@ -37,6 +37,10 @@ const wageJobSchema = new Schema(
       type: Number,
       default: 0,
     },
+    current_index: {
+      type: Number,
+      default: 0,
+    },
     progress_percentage: {
       type: Number,
       default: 0,

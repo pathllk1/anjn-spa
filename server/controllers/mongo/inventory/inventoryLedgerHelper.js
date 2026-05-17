@@ -333,3 +333,75 @@ export async function postDebitNoteLedger({
   assertBalancedVoucher(docs, 'DEBIT_NOTE', billNo);
   await Ledger.insertMany(docs, ...ins);
 }
+
+/* ─── STOCK ADJUSTMENT (manual movements) ─────────────────────────────────── */
+
+/**
+ * @param {Object} p
+ * @param {string} p.firmId
+ * @param {number} p.voucherId
+ * @param {string} p.type           'RECEIPT', 'ADJUSTMENT', 'OPENING', 'TRANSFER'
+ * @param {string} p.item
+ * @param {number} p.qty            absolute quantity
+ * @param {number} p.total          total value
+ * @param {string} p.reference      optional ref number
+ * @param {string} p.actorUsername
+ * @param {ObjectId} p.stockId
+ * @param {ObjectId} p.stockRegId
+ * @param {mongoose.ClientSession} [p.session]
+ */
+export async function postStockAdjustmentLedger({
+  firmId, voucherId, type, item, qty, total,
+  reference, actorUsername, stockId, stockRegId, session = null,
+}) {
+  const base = {
+    firm_id:          firmId,
+    voucher_id:       voucherId,
+    voucher_type:     'STOCK_ADJUSTMENT',
+    voucher_no:       reference || `SA-${voucherId}`,
+    ref_type:         'STOCK_MOVEMENT',
+    ref_id:           stockRegId,
+    transaction_date: new Date().toISOString().split('T')[0],
+    created_by:       actorUsername,
+    stock_id:         stockId,
+    stock_reg_id:     stockRegId,
+  };
+  const ins = session ? [{ session }] : [];
+  const docs = [];
+
+  // Determine if it's an increase or decrease
+  // Current logic in createStockMovement only supports increase
+  const isIncrease = true;
+
+  if (isIncrease) {
+    // Dr Inventory (Asset)
+    docs.push({
+      ...base,
+      account_head: 'Inventory',
+      account_type: 'ASSET',
+      debit_amount: total,
+      credit_amount: 0,
+      narration: `${type} of ${item}: ${qty} units - ${reference || 'Manual Adjustment'}`,
+    });
+
+    // Cr Adjustment/Opening Account
+    const adjHead = (type === 'OPENING') ? 'Opening Balance' : 'Stock Adjustment';
+    const adjType = (type === 'OPENING') ? 'CAPITAL' : 'GENERAL';
+
+    const adjLedger = await resolveLedgerPostingAccount({
+      firmId, accountHead: adjHead, fallbackType: adjType, session,
+    });
+
+    docs.push({
+      ...base,
+      account_head: adjLedger.accountHead,
+      account_type: adjLedger.accountType,
+      debit_amount: 0,
+      credit_amount: total,
+      narration: `${type} of ${item}: ${qty} units - ${reference || 'Manual Adjustment'}`,
+    });
+  }
+
+  assertBalancedVoucher(docs, 'STOCK_ADJUSTMENT', base.voucher_no);
+  await Ledger.insertMany(docs, ...ins);
+}
