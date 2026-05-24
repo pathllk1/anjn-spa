@@ -38,11 +38,12 @@ CREATE TABLE IF NOT EXISTS labor_workers (
 );
 
 -- 4. Labor Attendance (Daily log)
+-- day_value: 0 = Leave, 0.5 = Half Day, 1 = Full Present, 1.5/2/2.5 = Overtime
 CREATE TABLE IF NOT EXISTS labor_attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     worker_id UUID REFERENCES labor_workers(id) ON DELETE CASCADE,
     attendance_date DATE NOT NULL,
-    status CHAR(1) DEFAULT 'P', -- 'P' for Present, 'L' for Leave
+    day_value DECIMAL(3, 1) DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(worker_id, attendance_date)
 );

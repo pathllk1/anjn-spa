@@ -383,6 +383,15 @@ export const laborController = {
       attSheet.getColumn(2).width = 15;
       attSheet.getColumn(headers.length).width = 20;
 
+      // Helper: convert numeric day_value to display label
+      function dayValueLabel(val) {
+        const v = parseFloat(val);
+        if (isNaN(v) || v === 0) return 'L';
+        if (v === 0.5) return '½';
+        if (v === 1) return 'P';
+        return v.toString();
+      }
+
       // Data Rows
       workers.forEach(w => {
         const rowData = [w.labor_name, Number(w.daily_wage)];
@@ -390,26 +399,35 @@ export const laborController = {
         dateList.forEach(d => {
           const dateStr = d.toISOString().split('T')[0];
           const entry = attendance.find(a => a.worker_id === w.id && new Date(a.attendance_date).toISOString().split('T')[0] === dateStr);
-          rowData.push(entry ? entry.status : '-');
+          rowData.push(entry ? dayValueLabel(entry.day_value) : '-');
         });
 
-        rowData.push(w.total_present_days);
+        rowData.push(Number(w.total_present_days));
         rowData.push(Number(w.total_wages));
 
         const row = attSheet.addRow(rowData);
         row.getCell(2).numFmt = '\"₹\"#,##0';
         row.getCell(headers.length).numFmt = '\"₹\"#,##0';
+        row.getCell(headers.length - 1).numFmt = '0.0';
         
-        // Color code attendance status
+        // Color code attendance by day_value
         row.eachCell((cell, colNumber) => {
           cell.border = borderStyle;
           if (colNumber > 2 && colNumber <= (2 + dateList.length)) {
-            if (cell.value === 'P') {
-              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } }; // Emerald 100
+            const label = cell.value;
+            if (label === 'P') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } }; // Green
               cell.font = { color: { argb: 'FF059669' }, bold: true };
-            } else if (cell.value === 'L') {
-              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Red 100
+            } else if (label === 'L') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Red
               cell.font = { color: { argb: 'FFDC2626' }, bold: true };
+            } else if (label === '½') {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } }; // Amber 50
+              cell.font = { color: { argb: 'FFD97706' }, bold: true };
+            } else if (label !== '-') {
+              // Overtime values (1.5, 2, 2.5, etc.)
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } }; // Purple 50
+              cell.font = { color: { argb: 'FF7C3AED' }, bold: true };
             }
             cell.alignment = { horizontal: 'center' };
           }
@@ -488,21 +506,23 @@ export const laborController = {
             `;
           }
 
-          // Sync Attendance for this worker
+          // Sync Attendance for this worker (supports fractional day_value)
           if (w.attendance && Array.isArray(w.attendance)) {
             let presentDays = 0;
             for (const att of w.attendance) {
+              // Validate and clamp day_value to [0, 3] range
+              const dayValue = Math.min(Math.max(parseFloat(att.day_value) || 0, 0), 3);
               await sql`
-                INSERT INTO labor_attendance (worker_id, attendance_date, status)
-                VALUES (${workerId}, ${att.date}, ${att.status})
+                INSERT INTO labor_attendance (worker_id, attendance_date, day_value)
+                VALUES (${workerId}, ${att.date}, ${dayValue})
                 ON CONFLICT (worker_id, attendance_date) 
-                DO UPDATE SET status = EXCLUDED.status
+                DO UPDATE SET day_value = EXCLUDED.day_value
               `;
-              if (att.status === 'P') presentDays += 1;
+              presentDays += dayValue;
             }
             
-            // Recalculate totals
-            const totalWages = presentDays * w.daily_wage;
+            // Recalculate totals (presentDays is now a decimal sum)
+            const totalWages = parseFloat((presentDays * w.daily_wage).toFixed(2));
             await sql`
               UPDATE labor_workers 
               SET total_present_days = ${presentDays}, total_wages = ${totalWages}
